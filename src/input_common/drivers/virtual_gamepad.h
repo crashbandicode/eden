@@ -33,6 +33,9 @@ public:
         ButtonSR,
         ButtonHome,
         ButtonCapture,
+        // Appended so Android overlay ids 0..19 stay stable.
+        ButtonSLRight,
+        ButtonSRRight,
     };
 
     enum class VirtualStick {
@@ -63,7 +66,7 @@ public:
                           float y_value);
 
     /**
-     * Sets the status of the motion sensor to a specific player index
+     * Sets the same motion sample on both Joy-Con sensors.
      * @param player_index the player number that will take this action
      * @param delta_timestamp time passed since last reading
      * @param gyro_x,gyro_y,gyro_z the gyro sensor readings
@@ -71,6 +74,22 @@ public:
      */
     void SetMotionState(std::size_t player_index, u64 delta_timestamp, float gyro_x, float gyro_y,
                         float gyro_z, float accel_x, float accel_y, float accel_z);
+
+    /**
+     * Sets one motion sensor. sensor 0 is the left IMU and sensor 1 is the right IMU.
+     * Out-of-range player or sensor indices are ignored.
+     */
+    void SetMotionSensor(std::size_t player_index, int sensor, u64 delta_timestamp, float gyro_x,
+                         float gyro_y, float gyro_z, float accel_x, float accel_y, float accel_z);
+
+    /**
+     * GameCube-style analog trigger. trigger 0 is left and 1 is right.
+     * value is clamped to 0..1. Values at or above 0.5 also set the digital bit.
+     */
+    void SetTriggerAxis(std::size_t player_index, int trigger, float value);
+
+    /// Ring-Con flex in -1..1, written as stick X. Stick Y stays at 0.
+    void SetRingAxis(std::size_t player_index, float value);
 
     /// Restores all inputs into the neutral position
     void ResetControllers();

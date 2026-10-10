@@ -16,6 +16,7 @@
 #include "common/assert.h"
 #include "common/atomic_ops.h"
 #include "common/common_types.h"
+#include "common/gpu_write_read_trace.h"
 #include "common/heap_tracker.h"
 #include "common/logging.h"
 #include "common/page_table.h"
@@ -36,6 +37,8 @@
 
 namespace Core::Memory {
 
+namespace ReadTrace = Common::GpuWriteReadTrace;
+
 static inline bool AddressSpaceContains(const Common::PageTable& table, const Common::ProcessAddress addr, const std::size_t size) {
     const Common::ProcessAddress max_addr = 1ULL << table.GetAddressSpaceBits();
     return addr + size >= addr && addr + size <= max_addr;
@@ -46,6 +49,25 @@ static inline bool AddressSpaceContains(const Common::PageTable& table, const Co
 // subsystem without needing to rebuild all files that make use of the memory interface.
 struct Memory::Impl {
     explicit Impl(Core::System& system_) : system{system_} {}
+
+    void TraceRead(const u8* ptr, u64 va, size_t size, ReadTrace::Origin origin) {
+        if (!ReadTrace::Enabled()) {
+            return;
+        }
+        auto access = ReadTrace::context;
+        if (access.origin == ReadTrace::Origin::HostScalar) {
+            access.origin = origin;
+            access.access_va = va;
+            access.access_size = size;
+        }
+        ReadTrace::Get().Read(GetInteger(system.DeviceMemory().GetPhysicalAddr(ptr)), size, va, access);
+    }
+
+    void TraceOverwrite(const u8* ptr, size_t size, const char* reason = "cpu_or_host_overwrite") {
+        if (ReadTrace::Enabled()) {
+            ReadTrace::Get().Retire(GetInteger(system.DeviceMemory().GetPhysicalAddr(ptr)), size, reason);
+        }
+    }
 
     void SetCurrentPageTable(Kernel::KProcess& process) {
         current_page_table = &process.GetPageTable().GetImpl();
@@ -289,12 +311,16 @@ struct Memory::Impl {
         },
         [&](const std::size_t offset, const std::size_t copy_amount, const u8* const ptr) {
             std::memcpy(reinterpret_cast<u8*>(buffer) + offset, ptr, copy_amount);
+            TraceRead(ptr, GetInteger(addr) + offset, copy_amount,
+                      unsafe ? ReadTrace::Origin::HostBlockUnsafe : ReadTrace::Origin::HostBlock);
         },
         [&](const Common::ProcessAddress current_vaddr, const std::size_t offset, const std::size_t copy_amount, const u8* const ptr) {
             if (!unsafe) {
                 HandleRasterizerDownload(GetInteger(current_vaddr), copy_amount);
             }
             std::memcpy(reinterpret_cast<u8*>(buffer) + offset, ptr, copy_amount);
+            TraceRead(ptr, GetInteger(current_vaddr), copy_amount,
+                      unsafe ? ReadTrace::Origin::HostBlockUnsafe : ReadTrace::Origin::HostBlock);
         });
     }
 
@@ -312,12 +338,14 @@ struct Memory::Impl {
         },
         [&](const std::size_t offset, const std::size_t copy_amount, u8* const ptr) {
             std::memcpy(ptr, reinterpret_cast<u8 const*>(buffer) + offset, copy_amount);
+            TraceOverwrite(ptr, copy_amount);
         },
         [&](const Common::ProcessAddress current_vaddr, const std::size_t offset, const std::size_t copy_amount, u8* const ptr) {
             if (!unsafe) {
                 HandleRasterizerWrite(GetInteger(current_vaddr), copy_amount);
             }
             std::memcpy(ptr, reinterpret_cast<u8 const*>(buffer) + offset, copy_amount);
+            TraceOverwrite(ptr, copy_amount);
         });
     }
 
@@ -326,12 +354,14 @@ struct Memory::Impl {
         [addr, size](const std::size_t offset, const std::size_t copy_amount, const Common::ProcessAddress current_vaddr) {
             LOG_ERROR(HW_Memory, "Unmapped @ {:#016x} (start address = {:#016x}, size = {})", GetInteger(current_vaddr), GetInteger(addr), size);
         },
-        [=](const std::size_t offset, const std::size_t copy_amount, u8* const ptr) {
+        [&](const std::size_t offset, const std::size_t copy_amount, u8* const ptr) {
             std::memset(ptr, 0, copy_amount);
+            TraceOverwrite(ptr, copy_amount);
         },
         [&](const Common::ProcessAddress current_vaddr, const std::size_t offset, const std::size_t copy_amount, u8* const ptr) {
             HandleRasterizerWrite(GetInteger(current_vaddr), copy_amount);
             std::memset(ptr, 0, copy_amount);
+            TraceOverwrite(ptr, copy_amount);
         });
     }
 
@@ -541,6 +571,17 @@ struct Memory::Impl {
         const auto end = base + size;
         ASSERT_MSG(end <= page_table.entries.size(), "out of range mapping at {:016X}", base + page_table.entries.size());
 
+        if (ReadTrace::Enabled()) {
+            // Retire old physical backing BEFORE remapping; a reused VA/physical page must not
+            // inherit a prior allocation's write generation. Alias unmaps retire conservatively.
+            for (u64 page = base; page < end; ++page) {
+                if (const u64 pointer = page_table.entries[page].Pointer(true); pointer != 0) {
+                    TraceOverwrite(reinterpret_cast<const u8*>(pointer + (page << YUZU_PAGEBITS)),
+                                   YUZU_PAGESIZE, target ? "cpu_remap" : "cpu_unmap");
+                }
+            }
+        }
+
         if (!target) {
             ASSERT_MSG(type != Common::PageType::Memory,
                        "Mapping memory page without a pointer @ {:016x}", base * YUZU_PAGESIZE);
@@ -632,6 +673,7 @@ struct Memory::Impl {
             // Remember, alignment. memcpy() will deal with all the alignment extremely fast.
             T result{};
             std::memcpy(&result, ptr, sizeof(T));
+            TraceRead(ptr, addr & 0xffffffffffffULL, sizeof(T), ReadTrace::Origin::HostScalar);
             return result;
         }
         return T{};
@@ -645,8 +687,10 @@ struct Memory::Impl {
         const u64 addr = GetInteger(vaddr);
         if (auto const ptr = GetPointerImpl(addr, [addr, data]() {
             LOG_ERROR(HW_Memory, "Unmapped Write{} @ {:#016x} = {:#016x}", sizeof(T) * 8, addr, u64(data));
-        }, [&]() { HandleRasterizerWrite(addr, sizeof(T)); }); ptr) [[likely]]
+        }, [&]() { HandleRasterizerWrite(addr, sizeof(T)); }); ptr) [[likely]] {
             std::memcpy(ptr, &data, sizeof(T));
+            TraceOverwrite(ptr, sizeof(T));
+        }
     }
 
     template <typename T>
@@ -659,7 +703,11 @@ struct Memory::Impl {
             },
             [&]() { HandleRasterizerWrite(GetInteger(vaddr), sizeof(T)); });
         if (ptr) {
-            return Common::AtomicCompareAndSwap(reinterpret_cast<T*>(ptr), data, expected);
+            const bool written = Common::AtomicCompareAndSwap(reinterpret_cast<T*>(ptr), data, expected);
+            if (written) {
+                TraceOverwrite(ptr, sizeof(T), "successful_exclusive_write");
+            }
+            return written;
         }
         return true;
     }
@@ -673,7 +721,11 @@ struct Memory::Impl {
             },
             [&]() { HandleRasterizerWrite(GetInteger(vaddr), sizeof(u128)); });
         if (ptr) {
-            return Common::AtomicCompareAndSwap(reinterpret_cast<u64*>(ptr), data, expected);
+            const bool written = Common::AtomicCompareAndSwap(reinterpret_cast<u64*>(ptr), data, expected);
+            if (written) {
+                TraceOverwrite(ptr, sizeof(u128), "successful_exclusive_write");
+            }
+            return written;
         }
         return true;
     }

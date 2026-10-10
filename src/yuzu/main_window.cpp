@@ -29,6 +29,7 @@
 // Other Yuzu stuff //
 #include "debugger/console.h"
 #include "debugger/controller.h"
+#include "control_server.h"
 
 #include "about_dialog.h"
 #include "data_dialog.h"
@@ -365,8 +366,15 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     this->config = std::make_unique<QtConfig>();
 
     Common::Log::Filter filter;
-    filter.ParseFilterString(Settings::values.log_filter.GetValue());
+    filter.ParseFilterString(qEnvironmentVariableIsSet("EDEN_CONTROL_VERBOSE")
+                                ? qEnvironmentVariable("EDEN_LOG_FILTER", QStringLiteral("*:Debug")).toStdString()
+                                : Settings::values.log_filter.GetValue());
     Common::Log::SetGlobalFilter(filter);
+    if (qEnvironmentVariableIsSet("EDEN_CONTROL_VERBOSE")) {
+        Settings::values.log_flush_line = true;
+        Common::Log::SetColorConsoleBackendEnabled(true);
+        LOG_INFO(Frontend, "Automation diagnostics enabled (Debug logging)");
+    }
 
     if (user_data_migrator.migrated) {
         // Sort-of hack whereby we only move the old dir if it's a subfolder of the user dir
@@ -917,6 +925,15 @@ void MainWindow::WebBrowserRequestExit() {
 
 void MainWindow::InitializeWidgets() {
     render_window = new GRenderWindow(this, input_subsystem);
+    if (ControlServer::BackgroundMode()) {
+        // Install these even while the render widget is a child, before a Vulkan
+        // surface exists. Adding the bottom hint for the first time after boot
+        // makes Qt's xcb plugin recreate the native window on the next show.
+        render_window->setAttribute(Qt::WA_ShowWithoutActivating);
+        render_window->setAttribute(Qt::WA_X11DoNotAcceptFocus);
+        render_window->setWindowFlags((render_window->windowFlags() & ~Qt::WindowStaysOnTopHint) |
+                                      Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnBottomHint);
+    }
     render_window->hide();
 
     game_list = new GameList(QtCommon::vfs, QtCommon::provider.get(), *play_time_manager,
@@ -1409,7 +1426,7 @@ void MainWindow::OnAppFocusStateChanged(Qt::ApplicationState state) {
     if (!emulation_running) {
         return;
     }
-    if (UISettings::values.pause_when_in_background) {
+    if (UISettings::values.pause_when_in_background && !ControlServer::BackgroundMode()) {
         if (QtCommon::emu_thread->IsRunning() &&
             (state & (Qt::ApplicationHidden | Qt::ApplicationInactive))) {
             auto_paused = true;
@@ -3218,6 +3235,11 @@ static QScreen* GuessCurrentScreen(QWidget* window) {
 }
 
 bool MainWindow::UsingExclusiveFullscreen() {
+    // A compositor may raise a fullscreen window regardless of its focus hints.
+    // Background automation uses the borderless path so stacking stays ordinary.
+    if (ControlServer::BackgroundMode()) {
+        return false;
+    }
     return Settings::values.fullscreen_mode.GetValue() == Settings::FullscreenMode::Exclusive ||
            QGuiApplication::platformName() == QStringLiteral("wayland") ||
            QGuiApplication::platformName() == QStringLiteral("wayland-egl");
@@ -3232,9 +3254,12 @@ void MainWindow::ShowFullscreen() {
         window->hide();
         window->setWindowFlags(window->windowFlags() | Qt::FramelessWindowHint);
         const auto screen_geometry = GuessCurrentScreen(window)->geometry();
+        const int extra_height = ControlServer::BackgroundMode() ? 0 : 1;
         window->setGeometry(screen_geometry.x(), screen_geometry.y(), screen_geometry.width(),
-                            screen_geometry.height() + 1);
-        window->raise();
+                            screen_geometry.height() + extra_height);
+        if (!ControlServer::BackgroundMode()) {
+            window->raise();
+        }
         window->showNormal();
     };
 
@@ -3260,7 +3285,9 @@ void MainWindow::HideFullscreen() {
             hide();
             setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
             restoreGeometry(UISettings::values.geometry);
-            raise();
+            if (!ControlServer::BackgroundMode()) {
+                raise();
+            }
             show();
         }
 
@@ -3274,7 +3301,9 @@ void MainWindow::HideFullscreen() {
             render_window->hide();
             render_window->setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
             render_window->restoreGeometry(UISettings::values.renderwindow_geometry);
-            render_window->raise();
+            if (!ControlServer::BackgroundMode()) {
+                render_window->raise();
+            }
             render_window->show();
         }
     }
@@ -3288,14 +3317,26 @@ void MainWindow::ToggleWindowMode() {
         render_window->setFocusPolicy(Qt::StrongFocus);
         if (emulation_running) {
             render_window->setVisible(true);
-            render_window->setFocus();
+            if (!ControlServer::BackgroundMode()) {
+                render_window->setFocus();
+            }
             game_list->hide();
         }
 
     } else {
         // Render in a separate window...
         ui->horizontalLayout->removeWidget(render_window);
-        render_window->setParent(nullptr);
+        if (ControlServer::BackgroundMode()) {
+            // Supply the focus policy during reparenting. A second setWindowFlags
+            // afterward can recreate the native Vulkan surface while it is in use.
+            render_window->setAttribute(Qt::WA_ShowWithoutActivating);
+            render_window->setAttribute(Qt::WA_X11DoNotAcceptFocus);
+            render_window->setParent(nullptr,
+                                    (render_window->windowFlags() & ~Qt::WindowStaysOnTopHint) |
+                                        Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnBottomHint);
+        } else {
+            render_window->setParent(nullptr);
+        }
         render_window->setFocusPolicy(Qt::NoFocus);
         if (emulation_running) {
             render_window->setVisible(true);
@@ -3899,8 +3940,10 @@ void MainWindow::OnPostProcessingShaders() {
     }
 
     post_processing_dialog->show();
-    post_processing_dialog->raise();
-    post_processing_dialog->activateWindow();
+    if (!ControlServer::BackgroundMode()) {
+        post_processing_dialog->raise();
+        post_processing_dialog->activateWindow();
+    }
 }
 #endif
 

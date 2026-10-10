@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <QApplication>
+#include <cstdio>
+#include <cstring>
+#include "control_adapter.h"
+#include "control_server.h"
 #include "startup_checks.h"
 
 #if YUZU_ROOM
@@ -78,6 +82,75 @@ static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 }
 
 int main(int argc, char* argv[]) {
+    QString control_socket;
+    QString control_log;
+    bool control_verbose = false;
+    bool control_background = false;
+    // Remove our flags before both Qt and the legacy game launch parser see them.
+    int kept = 1;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--control-help") == 0) {
+            std::fputs("Eden local automation:\n"
+                       "  --control-socket PATH  Enable a same-user local JSON-lines endpoint\n"
+                       "  --control-log PATH     Write rotating control diagnostics\n"
+                       "  --control-verbose      Enable Debug emulator logs and console output\n"
+                       "  --control-background   Keep agent windows below other apps without desktop input grabs\n"
+                       "Attach: python3 tools/edenctl.py --socket PATH schema\n"
+                       "Bounded run: python3 tools/eden-run.py --output DIR -- /path/to/eden\n", stdout);
+            return 0;
+        }
+        if (std::strcmp(argv[i], "--control-socket") == 0 ||
+            std::strcmp(argv[i], "--control-log") == 0) {
+            const bool socket = std::strcmp(argv[i], "--control-socket") == 0;
+            if (i + 1 >= argc || argv[i + 1][0] == '-') {
+                std::fprintf(stderr, "%s requires a path\n", argv[i]);
+                return 2;
+            }
+            auto& value = socket ? control_socket : control_log;
+            if (!value.isEmpty()) {
+                std::fprintf(stderr, "Duplicate %s\n", argv[i]);
+                return 2;
+            }
+            value = QString::fromLocal8Bit(argv[++i]);
+            if (value.isEmpty()) {
+                std::fputs("Control paths must not be empty\n", stderr);
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--control-verbose") == 0) {
+            control_verbose = true;
+        } else if (std::strcmp(argv[i], "--control-background") == 0) {
+            control_background = true;
+        } else if (std::strncmp(argv[i], "--control-", 10) == 0) {
+            std::fprintf(stderr, "Unknown control option %s; use --control-help\n", argv[i]);
+            return 2;
+        } else {
+            argv[kept++] = argv[i];
+        }
+    }
+    argc = kept;
+    argv[argc] = nullptr;
+    if (!control_log.isEmpty() && control_socket.isEmpty()) {
+        std::fputs("--control-log requires --control-socket\n", stderr);
+        return 2;
+    }
+    if (control_background && control_socket.isEmpty()) {
+        std::fputs("--control-background requires --control-socket\n", stderr);
+        return 2;
+    }
+    if (control_background) {
+        // Popup menus otherwise grab the real keyboard/mouse even when their
+        // windows do not accept focus. Qt's XCB backend reads this at startup.
+        qputenv("QT_XCB_NO_GRAB_SERVER", "1");
+    }
+    if (control_verbose) {
+        qputenv("EDEN_CONTROL_VERBOSE", "1");
+        std::setvbuf(stdout, nullptr, _IOLBF, 0);
+        std::setvbuf(stderr, nullptr, _IONBF, 0);
+    }
+    if (!control_socket.isEmpty()) {
+        // Platform-native dialogs cannot be discovered through the QObject tree.
+        QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+    }
 #if YUZU_ROOM
     bool launch_room = false;
     for (int i = 1; i < argc; i++) {
@@ -180,6 +253,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     QApplication app(argc, argv);
+    app.setProperty("edenControlBackground", control_background);
 
 #ifdef _WIN32
     OverrideWindowsFont();
@@ -200,7 +274,21 @@ int main(int argc, char* argv[]) {
     // generating shaders
     setlocale(LC_ALL, "C");
 
+    std::unique_ptr<ControlServer> control_server;
+    if (!control_socket.isEmpty()) {
+        control_server = std::make_unique<ControlServer>();
+        QString error;
+        if (!control_server->Listen(control_socket, control_log, &error)) {
+            std::fprintf(stderr, "Control server: %s\n", error.toLocal8Bit().constData());
+            return 2;
+        }
+    }
+
     MainWindow main_window{has_broken_vulkan};
+    std::unique_ptr<ControlAdapter> control_adapter;
+    if (control_server) {
+        control_adapter = std::make_unique<ControlAdapter>(main_window, *control_server);
+    }
     // After settings have been loaded by GMainWindow, apply the filter
     main_window.show();
 

@@ -242,6 +242,11 @@ void DeviceMemoryManager<Traits>::Map(DAddr address, VAddr virtual_address, size
 
 template <typename Traits>
 void DeviceMemoryManager<Traits>::Unmap(DAddr address, size_t size) {
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        ForEachTraceMapping(address, size, [](const auto& mapping) {
+            Common::GpuWriteReadTrace::Get().Retire(mapping.physical, mapping.size, "device_unmap");
+        });
+    }
     size_t start_page_d = address >> Memory::YUZU_PAGEBITS;
     size_t num_pages = Common::AlignUp(size, Memory::YUZU_PAGESIZE) >> Memory::YUZU_PAGEBITS;
     device_inter->InvalidateRegion(address, size);

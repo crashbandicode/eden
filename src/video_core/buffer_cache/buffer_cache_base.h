@@ -22,6 +22,7 @@
 
 #include "common/common_types.h"
 #include "common/div_ceil.h"
+#include "common/gpu_write_read_trace.h"
 #include "common/literals.h"
 #include "common/lru_cache.h"
 #include "common/range_sets.h"
@@ -277,7 +278,7 @@ public:
     void UnbindComputeStorageBuffers();
 
     void BindComputeStorageBuffer(size_t ssbo_index, u32 cbuf_index, u32 cbuf_offset,
-                                  bool is_written);
+                                  bool is_written, bool trace_target = false);
 
     void UnbindComputeTextureBuffers();
 
@@ -488,6 +489,11 @@ private:
 
     void ClearDownload(DAddr base_addr, u64 size);
 
+    void TraceRetire(DAddr address, u64 size, const char* reason);
+    void TraceComputeWrite(const Binding& binding, bool multi_range = false);
+    void TraceCapture(DAddr address, u64 size, u64 commit,
+                      std::vector<Common::GpuWriteReadTrace::Snapshot>& snapshot);
+
     void InlineMemoryImplementation(DAddr dest_address, size_t copy_size,
                                     std::span<const u8> inlined_buffer);
 
@@ -520,6 +526,10 @@ private:
     Common::OverlapRangeSet<DAddr> async_downloads;
     std::deque<std::optional<Async_Buffer>> async_buffers;
     std::deque<boost::container::small_vector<BufferCopy, 4>> pending_downloads;
+    std::map<u64, std::vector<Common::GpuWriteReadTrace::Snapshot>> trace_downloads;
+    u64 trace_push_batch{}, trace_pop_batch{};
+    u64 trace_commit{};
+    u32 trace_compute_target_mask{};
     std::optional<Async_Buffer> current_buffer;
 
     std::deque<Async_Buffer> async_buffers_death_ring;

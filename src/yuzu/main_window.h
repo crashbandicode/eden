@@ -162,6 +162,8 @@ private:
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
+    friend class ControlAdapter;
+
     /// Max number of recently loaded items to keep track of
     static const int max_recent_files_item = 10;
 

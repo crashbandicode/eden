@@ -20,6 +20,7 @@ add_executable(tests
     core/internal_network/network.cpp
     video_core/memory_tracker.cpp
     input_common/calibration_configuration_job.cpp
+    input/virtual_gamepad.cpp
 )
 
 create_target_directory_groups(tests)
@@ -28,6 +29,14 @@ target_link_libraries(tests PRIVATE common core input_common video_core)
 target_link_libraries(tests PRIVATE ${PLATFORM_LIBRARIES} Catch2::Catch2WithMain Threads::Threads)
 
 add_test(NAME tests COMMAND tests)
+
+# Small standalone diagnostic test: no emulator, renderer or GPU runtime dependency.
+add_executable(gpu-write-read-trace-tests
+    common/gpu_write_read_trace.cpp
+    ../common/gpu_write_read_trace.cpp)
+target_include_directories(gpu-write-read-trace-tests PRIVATE ..)
+target_link_libraries(gpu-write-read-trace-tests PRIVATE Threads::Threads)
+add_test(NAME gpu-write-read-trace-tests COMMAND gpu-write-read-trace-tests)
 
 # needed for vma
 if (NOT MSVC)

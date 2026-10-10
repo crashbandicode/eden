@@ -229,6 +229,9 @@ void EmulatedController::LoadDevices() {
                            Common::Input::CreateInputDevice);
     std::ranges::transform(virtual_motion_params, virtual_motion_devices.begin(),
                            Common::Input::CreateInputDevice);
+    std::ranges::transform(virtual_trigger_params, virtual_trigger_devices.begin(),
+                           Common::Input::CreateInputDevice);
+    virtual_ring_device = Common::Input::CreateInputDevice(virtual_ring_params);
 }
 
 void EmulatedController::LoadTASParams() {
@@ -332,7 +335,23 @@ void EmulatedController::LoadVirtualGamepadParams() {
     virtual_stick_params[Settings::NativeAnalog::RStick].Set("range", 1.0f);
 
     virtual_motion_params[Settings::NativeMotion::MotionLeft].Set("motion", 0);
-    virtual_motion_params[Settings::NativeMotion::MotionRight].Set("motion", 0);
+    virtual_motion_params[Settings::NativeMotion::MotionRight].Set("motion", 1);
+
+    // Ids must match VirtualGamepad::SetTriggerAxis / SetRingAxis.
+    for (std::size_t index = 0; index < virtual_trigger_params.size(); ++index) {
+        virtual_trigger_params[index] = common_params;
+        virtual_trigger_params[index].Set("button", 32 + static_cast<int>(index));
+        virtual_trigger_params[index].Set("axis", 6 + static_cast<int>(index));
+        virtual_trigger_params[index].Set("deadzone", 0.0f);
+        virtual_trigger_params[index].Set("range", 1.0f);
+        virtual_trigger_params[index].Set("threshold", 0.5f);
+        virtual_trigger_params[index].Set("offset", 0.0f);
+    }
+    virtual_ring_params = common_params;
+    virtual_ring_params.Set("axis_x", 4);
+    virtual_ring_params.Set("axis_y", 5);
+    virtual_ring_params.Set("deadzone", 0.0f);
+    virtual_ring_params.Set("range", 1.0f);
 }
 
 void EmulatedController::ReloadInput() {
@@ -524,6 +543,24 @@ void EmulatedController::ReloadInput() {
                 },
         });
     }
+
+    for (std::size_t index = 0; index < virtual_trigger_devices.size(); ++index) {
+        if (!virtual_trigger_devices[index]) {
+            continue;
+        }
+        virtual_trigger_devices[index]->SetCallback({
+            .on_change =
+                [this, index](const Common::Input::CallbackStatus& callback) {
+                    SetTrigger(callback, index, VIRTUAL_UUID);
+                },
+        });
+    }
+    if (virtual_ring_device) {
+        virtual_ring_device->SetCallback({
+            .on_change =
+                [this](const Common::Input::CallbackStatus& callback) { SetRingAnalog(callback); },
+        });
+    }
     turbo_button_state = 0;
     is_initialized = true;
 }
@@ -566,6 +603,10 @@ void EmulatedController::UnloadInput() {
     for (auto& motion : virtual_motion_devices) {
         motion.reset();
     }
+    for (auto& trigger : virtual_trigger_devices) {
+        trigger.reset();
+    }
+    virtual_ring_device.reset();
     for (auto& camera : camera_devices) {
         camera.reset();
     }
@@ -934,12 +975,14 @@ void EmulatedController::SetStick(const Common::Input::CallbackStatus& callback,
 
     // Only read stick values that have the same uuid or are over the threshold to avoid flapping
     if (controller.stick_values[index].uuid != uuid) {
-        const bool is_tas = uuid == TAS_UUID;
-        if (is_tas && stick_value.x.value == 0 && stick_value.y.value == 0) {
+        // Software input is intentional even below the physical stick's direction
+        // threshold. Otherwise a first virtual deflection of 0.5 or less is lost.
+        const bool precise_input = uuid == TAS_UUID || uuid == VIRTUAL_UUID;
+        if (precise_input && stick_value.x.value == 0 && stick_value.y.value == 0) {
             trigger_guard.Cancel();
             return;
         }
-        if (!is_tas && !stick_value.down && !stick_value.up && !stick_value.left &&
+        if (!precise_input && !stick_value.down && !stick_value.up && !stick_value.left &&
             !stick_value.right) {
             trigger_guard.Cancel();
             return;
@@ -988,9 +1031,11 @@ void EmulatedController::SetTrigger(const Common::Input::CallbackStatus& callbac
     };
     const auto trigger_value = TransformToTrigger(callback);
 
-    // Only read trigger values that have the same uuid or are pressed once
+    // A resting foreign device must not zero the owner. A new source may claim the
+    // trigger with a digital press or any positive analog value.
     if (controller.trigger_values[index].uuid != uuid) {
-        if (!trigger_value.pressed.value) {
+        if (!trigger_value.pressed.value && !(trigger_value.analog.value > 0.0f)) {
+            trigger_guard.Cancel();
             return;
         }
     }

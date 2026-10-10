@@ -7,14 +7,57 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <numeric>
 
+#include "common/logging.h"
 #include "common/range_sets.inc"
+#include "common/settings.h"
 #include "video_core/buffer_cache/buffer_cache_base.h"
 #include "video_core/guest_memory.h"
 #include "video_core/host1x/gpu_device_memory_manager.h"
 #include "video_core/texture_cache/util.h"
+
+// Opt-in DIAGNOSTIC (EDEN_GNW_DEMAND_READBACK=1): fence-time GPU->CPU buffer downloads become
+// demand-driven; GPU-modified intervals in which no CPU read has ever been observed stay resident
+// in gpu_modified_ranges and are fetched synchronously on first CPU read instead. Default
+// behaviour is byte-for-byte unchanged when the variable is unset. See GNW_FABLE.md section 0.8.
+namespace VideoCommon::DemandReadback {
+inline std::atomic<u64> eager_bytes{}, skipped_bytes{}, skipped_ranges{}, sync_downloads{},
+    sync_bytes{};
+
+inline bool Enabled() noexcept {
+    static const bool enabled = [] {
+#if defined(ARCHITECTURE_x86_64)
+        const char* const value = std::getenv("EDEN_GNW_DEMAND_READBACK");
+        const bool on = value != nullptr && value[0] == '1' && !Settings::IsNceEnabled();
+        if (on) {
+            LOG_WARNING(HW_GPU, "EXPERIMENTAL demand-driven GPU->CPU buffer readback enabled "
+                                "(EDEN_GNW_DEMAND_READBACK=1): diagnostic only, not production");
+        }
+        return on;
+#else
+        return false; // NCE/ARM64 hosts: CPU reads do not trap, keep eager downloads unchanged
+#endif
+    }();
+    return enabled;
+}
+
+inline void Report() {
+    static std::chrono::steady_clock::time_point last{};
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last < std::chrono::seconds{5}) {
+        return;
+    }
+    last = now;
+    LOG_INFO(HW_GPU, "demand readback [5 s]: eager {} B, skipped {} B in {} ranges, sync downloads {} ({} B)",
+             eager_bytes.exchange(0), skipped_bytes.exchange(0), skipped_ranges.exchange(0),
+             sync_downloads.exchange(0), sync_bytes.exchange(0));
+}
+} // namespace VideoCommon::DemandReadback
 
 namespace VideoCommon {
 
@@ -27,6 +70,19 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
     void(slot_buffers.insert(runtime, NullBufferParams{}));
     gpu_modified_ranges.Clear();
     inline_buffer_id = NULL_BUFFER_ID;
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        Common::GpuWriteReadTrace::Get().Coverage(
+            "\"renderer\":\"" + std::string(IS_OPENGL ? "OpenGL_unsupported" : "Vulkan") +
+            "\",\"nce\":" + std::to_string(Settings::IsNceEnabled()) +
+            ",\"gpu_accuracy\":" + std::to_string(static_cast<int>(Settings::values.gpu_accuracy.GetValue())) +
+            ",\"effective_gpu_accuracy\":" + std::to_string(static_cast<int>(Settings::values.current_gpu_accuracy)) +
+            ",\"fence_balanced\":" + std::to_string(Settings::IsGPUFenceBehaviorBalanced()) +
+            ",\"fence_accurate\":" + std::to_string(Settings::IsGPUFenceBehaviorAccurate()) +
+            ",\"demand_readback\":false,\"eager_policy\":\"unchanged\"");
+        if (IS_OPENGL || Settings::IsNceEnabled()) {
+            Common::GpuWriteReadTrace::Get().Gap("unsupported_renderer_or_NCE_invalid_coverage");
+        }
+    }
 #ifdef YUZU_LEGACY
     immediately_free = (Settings::values.vram_usage_mode.GetValue() == Settings::VramUsageMode::Aggressive);
 #endif
@@ -51,7 +107,53 @@ BufferCache<P>::BufferCache(Tegra::MaxwellDeviceMemoryManager& device_memory_, R
 }
 
 template <class P>
-BufferCache<P>::~BufferCache() = default;
+BufferCache<P>::~BufferCache() {
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        Common::GpuWriteReadTrace::Get().Retire(0, ~u64{0}, "renderer_destroy");
+        Common::GpuWriteReadTrace::Get().Summary("renderer_destroy", true);
+    }
+}
+
+template <class P>
+void BufferCache<P>::TraceRetire(DAddr address, u64 size, const char* reason) {
+    if (Common::GpuWriteReadTrace::Enabled() && size) {
+        device_memory.ForEachTraceMapping(address, size, [&](const auto& mapping) {
+            Common::GpuWriteReadTrace::Get().Retire(mapping.physical, mapping.size, reason);
+        });
+    }
+}
+
+template <class P>
+void BufferCache<P>::TraceCapture(DAddr address, u64 size, u64 commit,
+                                  std::vector<Common::GpuWriteReadTrace::Snapshot>& snapshot) {
+    device_memory.ForEachTraceMapping(address, size, [&](const auto& mapping) {
+        Common::GpuWriteReadTrace::Get().Capture(mapping.physical, mapping.size, mapping.device,
+                                                commit, snapshot);
+    });
+}
+
+template <class P>
+void BufferCache<P>::TraceComputeWrite(const Binding& binding, bool multi_range) {
+    auto& trace = Common::GpuWriteReadTrace::Get();
+    const u64 generation = trace.NewGeneration();
+    const auto record = [&](DAddr address, u64 size, GPUVAddr gpu) {
+        device_memory.ForEachTraceMapping(address, size, [&](auto mapping) {
+            mapping.gpu = gpu + mapping.device - address;
+            trace.Write(generation, mapping);
+        });
+    };
+    if (multi_range && binding.segment_count >= 2 &&
+        binding.segment_first + binding.segment_count <= compute_segments.size()) {
+        GPUVAddr gpu = binding.gpu_addr;
+        for (u32 i = 0; i < binding.segment_count; ++i) {
+            const auto& segment = compute_segments[binding.segment_first + i];
+            record(segment.device_addr, segment.size, gpu);
+            gpu += segment.size;
+        }
+    } else {
+        record(binding.device_addr, binding.size, binding.gpu_addr);
+    }
+}
 
 template <class P>
 void BufferCache<P>::RunGarbageCollector() {
@@ -73,6 +175,9 @@ void BufferCache<P>::RunGarbageCollector() {
 
 template <class P>
 void BufferCache<P>::TickFrame() {
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        Common::GpuWriteReadTrace::Get().Summary("periodic");
+    }
     // Homebrew console apps don't create or bind any channels, so this will be nullptr.
     if (!channel_state) {
         return;
@@ -154,6 +259,13 @@ bool BufferCache<P>::OnCPUWrite(DAddr device_addr, u64 size) {
         return false;
     }
     if (memory_tracker.IsRegionGpuModified(device_addr, size)) {
+        if (DemandReadback::Enabled()) {
+            // A CPU write into GPU-written memory counts as CPU interest: the interval becomes
+            // eager from the next fence on. This write itself behaves exactly as before.
+            const DAddr start = Common::AlignDown(device_addr, DEVICE_PAGESIZE);
+            memory_tracker.MarkRegionAsPreflushable(
+                start, Common::AlignUp(device_addr + size, DEVICE_PAGESIZE) - start);
+        }
         return true;
     }
     WriteMemory(device_addr, size);
@@ -182,6 +294,10 @@ std::optional<VideoCore::RasterizerDownloadArea> BufferCache<P>::GetFlushArea(DA
 
 template <class P>
 void BufferCache<P>::DownloadMemory(DAddr device_addr, u64 size) {
+    if (DemandReadback::Enabled()) {
+        DemandReadback::sync_downloads.fetch_add(1, std::memory_order_relaxed);
+        DemandReadback::sync_bytes.fetch_add(size, std::memory_order_relaxed);
+    }
     ForEachBufferInRange(device_addr, size, [&](BufferId, Buffer& buffer) {
         DownloadBufferMemory(buffer, device_addr, size);
     });
@@ -210,6 +326,7 @@ bool BufferCache<P>::DMACopy(GPUVAddr src_address, GPUVAddr dest_address, u64 am
     }
 
     ClearDownload(*cpu_dest_address, amount);
+    TraceRetire(*cpu_dest_address, amount, "gpu_dma_copy_destination");
 
     BufferId buffer_a;
     BufferId buffer_b;
@@ -274,6 +391,7 @@ bool BufferCache<P>::DMAClear(GPUVAddr dst_address, u64 amount, u32 value) {
 
     const size_t size = amount * sizeof(u32);
     ClearDownload(*cpu_dst_address, size);
+    TraceRetire(*cpu_dst_address, size, "gpu_dma_clear_destination");
     gpu_modified_ranges.Subtract(*cpu_dst_address, size);
 
     const BufferId buffer = FindBuffer(*cpu_dst_address, static_cast<u32>(size), false);
@@ -482,6 +600,9 @@ void BufferCache<P>::BindGraphicsTextureBuffer(size_t stage, size_t tbo_index, G
 
 template <class P>
 void BufferCache<P>::UnbindComputeStorageBuffers() {
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        trace_compute_target_mask = 0;
+    }
     if constexpr (requires { runtime.ShouldLimitDynamicStorageBuffers(); }) {
         if (runtime.ShouldLimitDynamicStorageBuffers()) {
             channel_state->total_compute_storage_buffers -=
@@ -495,7 +616,7 @@ void BufferCache<P>::UnbindComputeStorageBuffers() {
 
 template <class P>
 void BufferCache<P>::BindComputeStorageBuffer(size_t ssbo_index, u32 cbuf_index, u32 cbuf_offset,
-                                              bool is_written) {
+                                              bool is_written, bool trace_target) {
     if (ssbo_index >= channel_state->compute_storage_buffers.size()) [[unlikely]] {
         LOG_ERROR(HW_GPU, "Storage buffer index {} exceeds maximum storage buffer count",
                   ssbo_index);
@@ -515,6 +636,10 @@ void BufferCache<P>::BindComputeStorageBuffer(size_t ssbo_index, u32 cbuf_index,
         }
     }
     channel_state->enabled_compute_storage_buffers |= 1U << ssbo_index;
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        trace_compute_target_mask &= ~(1U << ssbo_index);
+        trace_compute_target_mask |= (trace_target ? 1U : 0U) << ssbo_index;
+    }
     channel_state->written_compute_storage_buffers |= (is_written ? 1U : 0U) << ssbo_index;
     if constexpr (requires { runtime.ShouldLimitDynamicStorageBuffers(); }) {
         if (runtime.ShouldLimitDynamicStorageBuffers() && !already_enabled) {
@@ -607,10 +732,20 @@ void BufferCache<P>::CommitAsyncFlushesHigh() {
     boost::container::small_vector<std::pair<BufferCopy, BufferId>, 16> downloads;
     u64 total_size_bytes = 0;
     u64 largest_copy = 0;
+    const bool demand_readback = DemandReadback::Enabled();
     for (const Common::RangeSet<DAddr>& range_set : committed_gpu_modified_ranges) {
         range_set.ForEach([&](DAddr interval_lower, DAddr interval_upper) {
             const std::size_t size = interval_upper - interval_lower;
             const DAddr device_addr = interval_lower;
+            if (demand_readback && !memory_tracker.IsRegionPreflushable(device_addr, size)) {
+                // DIAGNOSTIC: no CPU read was ever observed anywhere in this interval. Leave it
+                // in gpu_modified_ranges so the first CPU read flushes it synchronously through
+                // RasterizerVulkan::GetFlushArea -> FlushRegion; once any page is marked
+                // preflushable the whole interval is downloaded eagerly again (conservative).
+                DemandReadback::skipped_bytes.fetch_add(size, std::memory_order_relaxed);
+                DemandReadback::skipped_ranges.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
             ForEachBufferInRange(device_addr, size, [&](BufferId buffer_id, Buffer& buffer) {
                 const DAddr buffer_start = buffer.CpuAddr();
                 const DAddr buffer_end = buffer_start + buffer.SizeBytes();
@@ -645,12 +780,26 @@ void BufferCache<P>::CommitAsyncFlushesHigh() {
         });
     }
     committed_gpu_modified_ranges.clear();
+    if (demand_readback) {
+        DemandReadback::eager_bytes.fetch_add(total_size_bytes, std::memory_order_relaxed);
+        DemandReadback::Report();
+    }
+    // One async_buffers entry per commit is pushed below in both branches, exactly as before.
     if (downloads.empty()) {
         async_buffers.emplace_back(std::optional<Async_Buffer>{});
         return;
     }
     auto download_staging = runtime.DownloadStagingBuffer(total_size_bytes, true);
     boost::container::small_vector<BufferCopy, 4> normalized_copies;
+    std::vector<Common::GpuWriteReadTrace::Snapshot> trace_snapshot;
+    const bool trace = Common::GpuWriteReadTrace::Enabled();
+    const bool capture_trace = trace && trace_downloads.size() < 64;
+    if (trace) {
+        ++trace_commit;
+        if (!capture_trace) {
+            Common::GpuWriteReadTrace::Get().Gap("pending_download_snapshot_capacity");
+        }
+    }
     runtime.PreCopyBarrier();
     for (auto& [copy, buffer_id] : downloads) {
         copy.dst_offset += download_staging.offset;
@@ -659,6 +808,9 @@ void BufferCache<P>::CommitAsyncFlushesHigh() {
         Buffer& buffer = slot_buffers[buffer_id];
         second_copy.src_offset = static_cast<size_t>(buffer.CpuAddr()) + copy.src_offset;
         const DAddr orig_device_addr = static_cast<DAddr>(second_copy.src_offset);
+        if (capture_trace) {
+            TraceCapture(orig_device_addr, copy.size, trace_commit, trace_snapshot);
+        }
         async_downloads.Add(orig_device_addr, copy.size);
         buffer.MarkUsage(copy.src_offset, copy.size);
         runtime.CopyBuffer(download_staging.buffer, buffer, copies, false);
@@ -666,6 +818,12 @@ void BufferCache<P>::CommitAsyncFlushesHigh() {
     }
     runtime.PostCopyBarrier();
     pending_downloads.emplace_back(std::move(normalized_copies));
+    if (trace) {
+        if (!trace_snapshot.empty()) {
+            trace_downloads.emplace(trace_push_batch, std::move(trace_snapshot));
+        }
+        ++trace_push_batch;
+    }
     async_buffers.emplace_back(download_staging);
 }
 
@@ -689,6 +847,8 @@ void BufferCache<P>::PopAsyncBuffers() {
         return;
     }
     auto& downloads = pending_downloads.front();
+    const bool trace = Common::GpuWriteReadTrace::Enabled();
+    const auto trace_it = trace ? trace_downloads.find(trace_pop_batch) : trace_downloads.end();
     auto& async_buffer = async_buffers.front();
     u8* base = async_buffer->mapped_span.data();
     const size_t base_offset = async_buffer->offset;
@@ -699,6 +859,9 @@ void BufferCache<P>::PopAsyncBuffers() {
         async_downloads.ForEachInRange(device_addr, copy.size, [&](DAddr start, DAddr end, s32) {
             device_memory.WriteBlockUnsafe(start, &read_mapped_memory[start - device_addr],
                                            end - start);
+            if (trace && trace_it != trace_downloads.end()) {
+                Common::GpuWriteReadTrace::Get().Deliver(trace_it->second, start, end - start);
+            }
         });
         async_downloads.Subtract(device_addr, copy.size, [&](DAddr start, DAddr end) {
             gpu_modified_ranges.Subtract(start, end - start);
@@ -707,6 +870,12 @@ void BufferCache<P>::PopAsyncBuffers() {
     async_buffers_death_ring.emplace_back(*async_buffer);
     async_buffers.pop_front();
     pending_downloads.pop_front();
+    if (trace) {
+        if (trace_it != trace_downloads.end()) {
+            trace_downloads.erase(trace_it);
+        }
+        ++trace_pop_batch;
+    }
 }
 
 template <class P>
@@ -1222,7 +1391,12 @@ void BufferCache<P>::BindHostComputeStorageBuffers() {
         const Binding& binding = channel_state->compute_storage_buffers[index];
         const bool is_written =
             ((channel_state->written_compute_storage_buffers >> index) & 1) != 0;
+        const bool trace_target = Common::GpuWriteReadTrace::Enabled() && is_written &&
+                                 ((trace_compute_target_mask >> index) & 1) != 0;
         if (BindMultiRangeStorage(binding, is_written, compute_segments)) {
+            if (trace_target) {
+                TraceComputeWrite(binding, true);
+            }
             return;
         }
         Buffer& buffer = slot_buffers[binding.buffer_id];
@@ -1235,6 +1409,9 @@ void BufferCache<P>::BindHostComputeStorageBuffers() {
 
         if (is_written) {
             MarkWrittenBuffer(binding.buffer_id, binding.device_addr, size, true);
+            if (trace_target) {
+                TraceComputeWrite(binding);
+            }
         }
 
         if constexpr (NEEDS_BIND_STORAGE_INDEX) {
@@ -1521,6 +1698,7 @@ void BufferCache<P>::UpdateComputeTextureBuffers() {
 
 template <class P>
 void BufferCache<P>::MarkWrittenBuffer(BufferId buffer_id, DAddr device_addr, u32 size, bool needs_sync) {
+    TraceRetire(device_addr, size, "gpu_buffer_write_replacement");
     if constexpr (!IS_OPENGL) {
         if (needs_sync) {
             Buffer& buffer = slot_buffers[buffer_id];
@@ -1905,6 +2083,13 @@ void BufferCache<P>::DownloadBufferMemory(Buffer& buffer, DAddr device_addr, u64
         return;
     }
 
+    std::vector<Common::GpuWriteReadTrace::Snapshot> trace_snapshot;
+    if (Common::GpuWriteReadTrace::Enabled()) {
+        ++trace_commit;
+        for (const auto& copy : copies) {
+            TraceCapture(buffer.CpuAddr() + copy.src_offset, copy.size, trace_commit, trace_snapshot);
+        }
+    }
     if constexpr (USE_MEMORY_MAPS) {
         auto download_staging = runtime.DownloadStagingBuffer(total_size_bytes);
         const u8* const mapped_memory = download_staging.mapped_span.data();
@@ -1922,6 +2107,9 @@ void BufferCache<P>::DownloadBufferMemory(Buffer& buffer, DAddr device_addr, u64
             const u64 dst_offset = copy.dst_offset - download_staging.offset;
             const u8* copy_mapped_memory = mapped_memory + dst_offset;
             device_memory.WriteBlockUnsafe(copy_device_addr, copy_mapped_memory, copy.size);
+            if (Common::GpuWriteReadTrace::Enabled()) {
+                Common::GpuWriteReadTrace::Get().Deliver(trace_snapshot, copy_device_addr, copy.size);
+            }
         }
     } else {
         const std::span<u8> immediate_buffer = ImmediateBuffer(largest_copy);
@@ -1929,12 +2117,19 @@ void BufferCache<P>::DownloadBufferMemory(Buffer& buffer, DAddr device_addr, u64
             buffer.ImmediateDownload(copy.src_offset, immediate_buffer.subspan(0, copy.size));
             const DAddr copy_device_addr = buffer.CpuAddr() + copy.src_offset;
             device_memory.WriteBlockUnsafe(copy_device_addr, immediate_buffer.data(), copy.size);
+            if (Common::GpuWriteReadTrace::Enabled()) {
+                Common::GpuWriteReadTrace::Get().Deliver(trace_snapshot, copy_device_addr, copy.size);
+            }
         }
     }
 }
 
 template <class P>
 void BufferCache<P>::DeleteBuffer(BufferId buffer_id, bool do_not_mark) {
+    if (!do_not_mark) {
+        const auto& buffer = slot_buffers[buffer_id];
+        TraceRetire(buffer.CpuAddr(), buffer.SizeBytes(), "buffer_delete_or_gc");
+    } // do_not_mark is a cache-buffer merge/copy, not a backing allocation's death.
     if constexpr (requires { runtime.OnBufferDeleted(slot_buffers[buffer_id]); }) {
         runtime.OnBufferDeleted(slot_buffers[buffer_id]);
     }

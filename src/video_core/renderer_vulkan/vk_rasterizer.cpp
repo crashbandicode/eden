@@ -717,6 +717,16 @@ VideoCore::RasterizerDownloadArea RasterizerVulkan::GetFlushArea(DAddr addr, u64
             return *area;
         }
     }
+    if (VideoCommon::DemandReadback::Enabled()) {
+        // DIAGNOSTIC correctness anchor (EDEN_GNW_DEMAND_READBACK=1): consult the buffer cache
+        // like the OpenGL rasterizer does. A first CPU read of a GPU-modified buffer region
+        // returns preemtive=false so GPU::OnCPURead performs a synchronous FlushRegion, and the
+        // region is marked preflushable so later fence-time downloads include it eagerly.
+        std::scoped_lock lock{buffer_cache.mutex};
+        if (auto area = buffer_cache.GetFlushArea(addr, size)) {
+            return *area;
+        }
+    }
     VideoCore::RasterizerDownloadArea new_area{
         .start_address = Common::AlignDown(addr, Core::DEVICE_PAGESIZE),
         .end_address = Common::AlignUp(addr + size, Core::DEVICE_PAGESIZE),

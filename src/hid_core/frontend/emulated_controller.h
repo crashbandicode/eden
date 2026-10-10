@@ -632,6 +632,12 @@ private:
     ButtonDevices virtual_button_devices;
     StickDevices virtual_stick_devices;
     ControllerMotionDevices virtual_motion_devices;
+    // Analog triggers and Ring-Con are extra virtual devices. They do not replace the
+    // user's trigger_params or the two physical ring_params slots.
+    TriggerParams virtual_trigger_params;
+    TriggerDevices virtual_trigger_devices;
+    Common::ParamPackage virtual_ring_params;
+    std::unique_ptr<Common::Input::InputDevice> virtual_ring_device;
 
     mutable std::mutex callback_mutex;
     ::Common::unordered_map<int, ControllerUpdateCallback> callback_list;

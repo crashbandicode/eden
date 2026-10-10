@@ -228,7 +228,7 @@ struct ColorConsoleBackend final : public Backend {
             auto result = fmt::format_to_n(buffer, sizeof(buffer) - 1, "\x1b{}[{:4d}.{:06d}] {} <{}> {}:{}:{}: ", color_str, df.time_seconds, df.time_fractional, df.class_name, df.level_name, entry.filename, entry.line_num, entry.function, entry.message);
             std::fwrite(buffer, 1, (std::min)(sizeof(buffer) - 1, result.size), stdout);
             std::fwrite(entry.message, 1, entry.message_len, stdout);
-            std::fwrite("\x1b[0m\n", 1, sizeof("\x1b[0m\n"), stdout);
+            std::fwrite("\x1b[0m\n", 1, sizeof("\x1b[0m\n") - 1, stdout);
         }
     }
     void Flush() noexcept override {}

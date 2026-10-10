@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bit>
@@ -16,6 +17,7 @@
 #include <span>
 
 #include "common/common_types.h"
+#include "common/gpu_write_read_trace.h"
 #include "common/range_mutex.h"
 #include "common/scratch_buffer.h"
 #include "common/sparse_large_vector.h"
@@ -102,6 +104,50 @@ public:
             return 0;
         }
         return (PAddr(paddr - 1) << page_bits) + subbits;
+    }
+
+    // Research trace only: coalesce canonical backing and its primary CPU mapping under the
+    // device mapping lock. CPU-read matching itself uses physical backing, including VA aliases.
+    template <typename Func>
+    void ForEachTraceMapping(DAddr address, size_t size, Func&& operation) {
+        std::scoped_lock lk(mapping_guard);
+        Common::GpuWriteReadTrace::Mapping run{};
+        bool gap = false;
+        while (size != 0) {
+            const auto amount = std::min<size_t>(page_size - (address & page_mask), size);
+            const auto& entry = tracked_entries[address >> page_bits];
+            if (entry.compressed_physical_ptr != 0) {
+                const PAddr physical = 0x80000000ULL +
+                    (PAddr(entry.compressed_physical_ptr - 1) << page_bits) + (address & page_mask);
+                const auto [asid, cpu] = ExtractCPUBacking(address >> page_bits);
+                const VAddr cpu_address = cpu + (address & page_mask);
+                if (run.size && (run.physical + run.size != physical ||
+                                 run.device + run.size != address || run.cpu + run.size != cpu_address ||
+                                 run.address_space != asid.id)) {
+                    operation(run);
+                    run = {};
+                }
+                if (!run.size) {
+                    run = {.physical = physical, .device = address, .cpu = cpu_address,
+                           .address_space = asid.id};
+                }
+                run.size += amount;
+            } else {
+                if (run.size) {
+                    operation(run);
+                    run = {};
+                }
+                gap = true;
+            }
+            address += amount;
+            size -= amount;
+        }
+        if (run.size) {
+            operation(run);
+        }
+        if (gap) {
+            Common::GpuWriteReadTrace::Get().Gap("unmapped_device_trace_range");
+        }
     }
 
     template <typename T>

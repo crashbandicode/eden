@@ -39,7 +39,7 @@ void CaptureButton::OnUpdate(const Core::Timing::CoreTiming& core_timing) {
     next_state.sampling_number = last_entry.sampling_number + 1;
 
     auto* controller = hid_core.GetEmulatedController(Core::HID::NpadIdType::Player1);
-    next_state.buttons.raw = controller->GetHomeButtons().raw;
+    next_state.buttons.raw = controller->GetCaptureButtons().raw;
 
     shared_memory.capture_lifo.WriteNextEntry(next_state);
 }

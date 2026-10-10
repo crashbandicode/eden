@@ -4,6 +4,10 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
+#include <string_view>
+
+#include "common/gpu_write_read_trace.h"
 #include "common/settings.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
@@ -23,6 +27,14 @@ DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess
 {}
 
 u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
+    const bool trace = Common::GpuWriteReadTrace::Enabled();
+    Common::GpuWriteReadTrace::AccessScope scope{{
+        .origin = Common::GpuWriteReadTrace::Origin::GuestA64,
+        .access_va = vaddr, .access_size = size,
+        .pc = trace ? m_parent.m_jit->GetPC() : 0,
+        .lr = trace ? m_parent.m_jit->GetRegister(30) : 0,
+        .process = trace ? m_process->GetProcessId() : 0,
+        .core = static_cast<u32>(m_parent.m_core_index)}};
     CheckMemoryAccess(vaddr, size, Kernel::DebugWatchpointType::Read);
     switch (size) {
     case sizeof(u64): return m_memory.Read64(vaddr);
@@ -33,11 +45,22 @@ u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
     }
 }
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
+    const bool trace = Common::GpuWriteReadTrace::Enabled();
+    Common::GpuWriteReadTrace::AccessScope scope{{
+        .origin = Common::GpuWriteReadTrace::Origin::GuestA64,
+        .access_va = vaddr, .access_size = 16,
+        .pc = trace ? m_parent.m_jit->GetPC() : 0,
+        .lr = trace ? m_parent.m_jit->GetRegister(30) : 0,
+        .process = trace ? m_process->GetProcessId() : 0,
+        .core = static_cast<u32>(m_parent.m_core_index)}};
     CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read);
     return {m_memory.Read64(vaddr), m_memory.Read64(vaddr + 8)};
 }
 
 std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
+    Common::GpuWriteReadTrace::AccessScope scope{{
+        .origin = Common::GpuWriteReadTrace::Origin::CodeFetch,
+        .access_va = vaddr, .access_size = sizeof(u32)}};
     if (!m_memory.IsValidVirtualAddressRange(vaddr, sizeof(u32)))
         return std::nullopt;
     auto const aligned_vaddr = vaddr & ~Core::Memory::YUZU_PAGEMASK;
@@ -344,6 +367,32 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     if (!Settings::IsFastmemEnabled()) {
         config.fastmem_pointer = std::nullopt;
         config.fastmem_exclusive_access = false;
+    }
+    // Experimental isolation: force the same callback paths without enabling the recorder.
+    const char* callbacks_only_env = std::getenv("EDEN_GNW_CPU_CALLBACKS_ONLY");
+    const bool callbacks_only = callbacks_only_env && std::string_view{callbacks_only_env} == "1";
+    const bool trace_gpu_reads = Common::GpuWriteReadTrace::Enabled();
+    if (trace_gpu_reads || callbacks_only) {
+        // Both shortcuts must be off: a clean page or a second VA alias otherwise bypasses
+        // the callback, even with reactive flushing enabled. Do not change memory/sync policy.
+        config.fastmem_pointer = std::nullopt;
+        config.fastmem_exclusive_access = false;
+        config.page_table = nullptr;
+    }
+    if (callbacks_only) {
+        LOG_WARNING(Core_ARM,
+                    "CPU callbacks-only isolation: fastmem/page-table/exclusive-fastmem disabled; "
+                    "recorder={}, cpu_accuracy={}", trace_gpu_reads,
+                    static_cast<int>(Settings::values.cpu_accuracy.GetValue()));
+    }
+    if (trace_gpu_reads) {
+        Common::GpuWriteReadTrace::Get().Coverage(
+            "\"backend\":\"A64_Dynarmic\",\"fastmem\":false,\"direct_page_table\":false,"
+            "\"fastmem_exclusive\":false,\"data_widths\":[8,16,32,64,128],"
+            "\"exclusive_loads\":\"same_read_callbacks\",\"pc_quality\":\"approximate_unvalidated\","
+            "\"configured_fastmem\":" + std::to_string(Settings::IsFastmemEnabled()) +
+            ",\"reactive_flushing\":" + std::to_string(Settings::values.use_reactive_flushing.GetValue()) +
+            ",\"cpu_accuracy\":" + std::to_string(static_cast<int>(Settings::values.cpu_accuracy.GetValue())));
     }
     m_jit.emplace(config);
 }

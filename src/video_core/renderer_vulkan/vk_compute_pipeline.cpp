@@ -10,6 +10,7 @@
 #include <boost/container/small_vector.hpp>
 #include <fmt/format.h>
 
+#include "common/gpu_write_read_trace.h"
 #include "video_core/renderer_vulkan/pipeline_helper.h"
 #include "video_core/renderer_vulkan/pipeline_statistics.h"
 #include "video_core/renderer_vulkan/vk_buffer_cache.h"
@@ -159,7 +160,10 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
     for (const auto& desc : info.storage_buffers_descriptors) {
         ASSERT(desc.count == 1);
         buffer_cache.BindComputeStorageBuffer(ssbo_index, desc.cbuf_index, desc.cbuf_offset,
-                                              desc.is_written);
+                                              desc.is_written,
+            Common::GpuWriteReadTrace::Enabled() &&
+            shader_hash == Common::GpuWriteReadTrace::TargetHash && desc.cbuf_index == 0 &&
+            desc.cbuf_offset == Common::GpuWriteReadTrace::TargetCbufOffset);
         ++ssbo_index;
     }
 

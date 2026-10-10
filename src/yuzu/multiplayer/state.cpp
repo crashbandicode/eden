@@ -234,8 +234,10 @@ void MultiplayerState::UpdateThemedIcons() {
 
 static void BringWidgetToFront(QWidget* widget) {
     widget->show();
-    widget->activateWindow();
-    widget->raise();
+    if (!qApp->property("edenControlBackground").toBool()) {
+        widget->activateWindow();
+        widget->raise();
+    }
 }
 
 void MultiplayerState::OnViewLobby() {

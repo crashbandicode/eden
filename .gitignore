@@ -66,3 +66,6 @@ vulkansdk*.exe
 
 # Build-time generated external sources
 externals/generated
+
+# Python control tools
+tools/**/__pycache__/

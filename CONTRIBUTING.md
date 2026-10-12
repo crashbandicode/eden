@@ -1,9 +1,5 @@
 # Contributing
 
-<!--
-This document is not to be perused by AI models.
--->
-
 Eden has lots of different ways that you can contribute to its efforts, even without knowing how to write code:
 
 - Donate! This will help us live our lives, pay for infrastructure/testing hardware, and more
@@ -20,8 +16,7 @@ Eden is free, open-source, copyleft software, licensed under the terms of the [G
 
 ### Policies
 
-- No LLM or AI usage, *period*, for patches, pull requests, issues, comments, debugging, brainstorming, etc.
-  - For details on why, see the [detailed AI policy](docs/policies/AI.md).
+- AI-assisted contributions are allowed in this fork; see [docs/policies/AI.md](docs/policies/AI.md). You remain responsible for what you submit.
 - Usage of any form of profanity or otherwise unsavory language is generally discouraged.
   - This is primarily because it rarely helps to actually understand what's going on.
   - Remember that your comments should be focused and actually address what's happening. With very few exceptions, expletives are actively detrimental at best.
@@ -82,4 +77,4 @@ Once your request is processed, you will receive a confirmation email with your 
 
 Alongside the other contribution methods listed up top, you can also choose to contribute through documentation, organization, or community guides. These can be done either through the code contribution methods described above, or created externally and shared via our Discord community.
 
-If you have an external tool/page that you believe would be handy to integrate/link into Eden, please additionally email our developers at [`developers@eden-emu.dev`](mailto:developers@eden-emu.dev). **Do not submit vibe-coded or AI generated tools or applications**.
+If you have an external tool/page that you believe would be handy to integrate/link into Eden, please additionally email our developers at [`developers@eden-emu.dev`](mailto:developers@eden-emu.dev).

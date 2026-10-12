@@ -1,1 +1,1 @@
-AI and LLM use is *strictly* prohibited within our codebase and surrounding community, including issues and comments. This includes using AI or LLMs to write docs/commit messages, debug issues, brainstorm ideas, research concepts, or search the codebase.
+This fork permits AI-assisted work. See [AGENTS.md](AGENTS.md) for worktree instructions and [docs/policies/AI.md](docs/policies/AI.md) for the fork AI policy.

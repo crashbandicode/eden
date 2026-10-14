@@ -144,7 +144,12 @@ int main(int argc, char* argv[]) {
     }
     if (control_verbose) {
         qputenv("EDEN_CONTROL_VERBOSE", "1");
-        std::setvbuf(stdout, nullptr, _IOLBF, 0);
+#ifdef _WIN32
+        // The Windows CRT rejects a zero-sized buffered stream.
+        std::setvbuf(stdout, nullptr, _IONBF, 0);
+#else
+        std::setvbuf(stdout, nullptr, _IOLBF, BUFSIZ);
+#endif
         std::setvbuf(stderr, nullptr, _IONBF, 0);
     }
     if (!control_socket.isEmpty()) {

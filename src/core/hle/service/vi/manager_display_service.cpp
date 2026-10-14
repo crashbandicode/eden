@@ -11,7 +11,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IManagerDisplayService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{200, nullptr, "AllocateProcessHeapBlock"},
         FunctionInfo{201, nullptr, "FreeProcessHeapBlock"},
         FunctionInfo{1102, nullptr, "GetDisplayResolution"},
@@ -93,7 +93,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IManagerDisplayService::Fi
         FunctionInfo{8296, nullptr, "SetDetachedSharedFrameBufferSubImage"},
         FunctionInfo{8297, nullptr, "GetSharedFrameBufferContentParameter"},
         FunctionInfo{8298, nullptr, "ExpandStartupLogoOnSharedFrameBuffer"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

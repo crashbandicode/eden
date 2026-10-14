@@ -84,7 +84,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ISslConnection::SetSocketDescriptor>, "SetSocketDescriptor"},
             FunctionInfo{1, D<&ISslConnection::SetHostName>, "SetHostName"},
             FunctionInfo{2, D<&ISslConnection::SetVerifyOption>, "SetVerifyOption"},
@@ -121,7 +121,7 @@ public:
             FunctionInfo{33, nullptr, "ExportKeyingMaterial"},
             FunctionInfo{34, nullptr, "SetIoTimeout"},
             FunctionInfo{35, nullptr, "GetIoTimeout"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -542,7 +542,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, &ISslContext::SetOption, "SetOption"},
             FunctionInfo{1, &ISslContext::GetOption, "GetOption"},
             FunctionInfo{2, &ISslContext::CreateConnection, "CreateConnection"},
@@ -557,7 +557,7 @@ private:
             FunctionInfo{11, nullptr, "RemoveCrl"},
             FunctionInfo{12, nullptr, "ImportClientCertKeyPki"},
             FunctionInfo{13, nullptr, "GeneratePrivateKeyAndCert"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     SslVersion ssl_version;
@@ -569,7 +569,7 @@ public:
     explicit ISslService(Core::System& system_) : ServiceFramework{system_, "ssl"}, cert_store{system} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, &ISslService::CreateContext, "CreateContext"},
             FunctionInfo{1, nullptr, "GetContextCount"},
             FunctionInfo{2, D<&ISslService::GetCertificates>, "GetCertificates"},
@@ -580,7 +580,7 @@ public:
             FunctionInfo{7, nullptr, "SetDebugOption"},
             FunctionInfo{8, nullptr, "GetDebugOption"},
             FunctionInfo{8, nullptr, "ClearTls12FallbackFlag"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -706,7 +706,7 @@ public:
     };
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ISslServiceForSystem::CreateContext>, "CreateContext"},
             FunctionInfo{1, D<&ISslServiceForSystem::GetContextCount>, "GetContextCount"},
             FunctionInfo{2, D<&ISslServiceForSystem::GetCertificates>, "GetCertificates"},
@@ -721,7 +721,7 @@ public:
             FunctionInfo{101, D<&ISslServiceForSystem::SetThreadCoreMask>, "SetThreadCoreMask"},
             FunctionInfo{102, D<&ISslServiceForSystem::GetThreadCoreMask>, "GetThreadCoreMask"},
             FunctionInfo{103, D<&ISslServiceForSystem::VerifySignature>, "VerifySignature"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };

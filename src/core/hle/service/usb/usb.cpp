@@ -19,7 +19,7 @@ class IDsInterface final : public ServiceFramework<IDsInterface> {
 public:
     explicit IDsInterface(Core::System& system_) : ServiceFramework{system_, "IDsInterface"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "AddEndpoint"},
         FunctionInfo{1, nullptr, "GetSetupEvent"},
         FunctionInfo{2, nullptr, "GetSetupPacket"},
@@ -33,7 +33,7 @@ public:
         FunctionInfo{10, nullptr, "GetCtrlOutUrbReport"},
         FunctionInfo{11, nullptr, "CtrlStall"},
         FunctionInfo{12, nullptr, "AppendConfigurationData"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -43,9 +43,9 @@ class IDsRootSession final : public ServiceFramework<IDsRootSession> {
 public:
     explicit IDsRootSession(Core::System& system_) : ServiceFramework{system_, "usb:ds"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "OpenDsService"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -56,7 +56,7 @@ public:
     explicit IClientEpSession(Core::System& system_)
         : ServiceFramework{system_, "IClientEpSession"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "ReOpen"},
         FunctionInfo{1, nullptr, "Close"},
         FunctionInfo{2, nullptr, "GetCompletionEvent"},
@@ -66,7 +66,7 @@ public:
         FunctionInfo{6, nullptr, "PostBufferMultiAsync"},
         FunctionInfo{7, nullptr, "CreateSmmuSpace"},
         FunctionInfo{8, nullptr, "ShareReportRing"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -77,7 +77,7 @@ public:
     explicit IClientIfSession(Core::System& system_)
         : ServiceFramework{system_, "IClientIfSession"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetStateChangeEvent"},
         FunctionInfo{1, nullptr, "SetInterface"},
         FunctionInfo{2, nullptr, "GetInterface"},
@@ -88,7 +88,7 @@ public:
         FunctionInfo{7, nullptr, "GetCtrlXferReport"},
         FunctionInfo{8, nullptr, "ResetDevice"},
         FunctionInfo{9, nullptr, "OpenUsbEp"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -98,7 +98,7 @@ class IClientRootSession final : public ServiceFramework<IClientRootSession> {
 public:
     explicit IClientRootSession(Core::System& system_) : ServiceFramework{system_, "usb:hs"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "BindClientProcess"},
         FunctionInfo{1, nullptr, "QueryAllInterfaces"},
         FunctionInfo{2, nullptr, "QueryAvailableInterfaces"},
@@ -108,7 +108,7 @@ public:
         FunctionInfo{6, nullptr, "GetInterfaceStateChangeEvent"},
         FunctionInfo{7, nullptr, "AcquireUsbIf"},
         FunctionInfo{8, nullptr, "SetTestMode"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -118,7 +118,7 @@ class IPdSession final : public ServiceFramework<IPdSession> {
 public:
     explicit IPdSession(Core::System& system_) : ServiceFramework{system_, "IPdSession"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "BindNoticeEvent"},
         FunctionInfo{1, nullptr, "UnbindNoticeEvent"},
         FunctionInfo{2, nullptr, "GetStatus"},
@@ -126,7 +126,7 @@ public:
         FunctionInfo{4, nullptr, "EnablePowerRequestNotice"},
         FunctionInfo{5, nullptr, "DisablePowerRequestNotice"},
         FunctionInfo{6, nullptr, "ReplyPowerRequest"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -149,9 +149,9 @@ private:
         rb.PushIpcInterface<IPdSession>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IPdManager::OpenSession, "OpenSession"}
-    );
+    });
 };
 
 class IPdCradleSession final : public ServiceFramework<IPdCradleSession> {
@@ -159,7 +159,7 @@ public:
     explicit IPdCradleSession(Core::System& system_)
         : ServiceFramework{system_, "IPdCradleSession"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "SetCradleVdo"},
         FunctionInfo{1, nullptr, "GetCradleVdo"},
         FunctionInfo{2, nullptr, "ResetCradleUsbHub"},
@@ -169,7 +169,7 @@ public:
         FunctionInfo{6, nullptr, "GetHostPdcDeviceId"},
         FunctionInfo{7, nullptr, "EnableCradleRecovery"},
         FunctionInfo{8, nullptr, "DisableCradleRecovery"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -192,23 +192,23 @@ private:
         rb.PushIpcInterface<IPdCradleSession>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IPdCradleManager::OpenCradleSession, "OpenCradleSession"}
-    );
+    });
 };
 
 class IPmMainService final : public ServiceFramework<IPmMainService> {
 public:
     explicit IPmMainService(Core::System& system_) : ServiceFramework{system_, "usb:pm"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetPowerEvent"},
         FunctionInfo{1, nullptr, "GetPowerState"},
         FunctionInfo{2, nullptr, "GetDataEvent"},
         FunctionInfo{3, nullptr, "GetDataRole"},
         FunctionInfo{4, nullptr, "SetDiagData"},
         FunctionInfo{5, nullptr, "GetDiagData"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -218,9 +218,9 @@ class IPdManufactureManager final : public ServiceFramework<IPdManufactureManage
 public:
     explicit IPdManufactureManager(Core::System& system_) : ServiceFramework{system_, "usb:pd:m"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "OpenManufactureSession"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -230,10 +230,10 @@ class IQdbManager final : public ServiceFramework<IQdbManager> {
 public:
     explicit IQdbManager(Core::System& system_) : ServiceFramework{system_, "usb:qdb"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "ImportQuirkDevices"},
         FunctionInfo{1, nullptr, "HasQuirk"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -243,10 +243,10 @@ class IPmObserverService final : public ServiceFramework<IPmObserverService> {
 public:
     explicit IPmObserverService(Core::System& system_) : ServiceFramework{system_, "usb:obsv"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetTopologyChangeEvent"},
         FunctionInfo{1, nullptr, "GetFlattenedTopology"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

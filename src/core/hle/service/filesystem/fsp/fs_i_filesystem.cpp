@@ -14,7 +14,7 @@
 namespace Service::FileSystem {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IFileSystem::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IFileSystem::CreateFile>, "CreateFile"},
         FunctionInfo{1, D<&IFileSystem::DeleteFile>, "DeleteFile"},
         FunctionInfo{2, D<&IFileSystem::CreateDirectory>, "CreateDirectory"},
@@ -32,7 +32,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IFileSystem::FindRequest(u
         FunctionInfo{14, D<&IFileSystem::GetFileTimeStampRaw>, "GetFileTimeStampRaw"},
         FunctionInfo{15, nullptr, "QueryEntry"},
         FunctionInfo{16, D<&IFileSystem::GetFileSystemAttribute>, "GetFileSystemAttribute"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

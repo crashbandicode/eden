@@ -28,7 +28,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IPlatformServiceManager::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IPlatformServiceManager::RequestLoad>, "RequestLoad"},
         FunctionInfo{1, D<&IPlatformServiceManager::GetLoadState>, "GetLoadState"},
         FunctionInfo{2, D<&IPlatformServiceManager::GetSize>, "GetSize"},
@@ -45,7 +45,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IPlatformServiceManager::F
         FunctionInfo{106, nullptr, "GetFunctionBlackListVersion"},
         FunctionInfo{1000, nullptr, "LoadNgWordDataForPlatformRegionChina"},
         FunctionInfo{1001, nullptr, "GetNgWordDataSizeForPlatformRegionChina"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

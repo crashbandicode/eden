@@ -860,14 +860,14 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0,  C<&RoInterface::MapManualLoadModuleMemory>, "MapManualLoadModuleMemory"},
             FunctionInfo{1,  C<&RoInterface::UnmapManualLoadModuleMemory>, "UnmapManualLoadModuleMemory"},
             FunctionInfo{2,  C<&RoInterface::RegisterModuleInfo>, "RegisterModuleInfo"},
             FunctionInfo{3,  C<&RoInterface::UnregisterModuleInfo>, "UnregisterModuleInfo"},
             FunctionInfo{4,  C<&RoInterface::RegisterProcessHandle>, "RegisterProcessHandle"},
             FunctionInfo{10, C<&RoInterface::RegisterProcessModuleInfo>, "RegisterProcessModuleInfo"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -925,9 +925,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetProcessModuleInfo" }
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

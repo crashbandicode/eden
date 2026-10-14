@@ -11,7 +11,7 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISfServiceMonitor::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&ISfServiceMonitor::Initialize>, "Initialize"},
         FunctionInfo{256, nullptr, "AttachNetworkInterfaceStateChangeEvent"},
         FunctionInfo{264, nullptr, "GetNetworkInterfaceLastError"},
@@ -25,7 +25,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISfServiceMonitor::FindReq
         FunctionInfo{320, nullptr, "GetLinkLevel"},
         FunctionInfo{328, nullptr, "AttachJoinEvent"},
         FunctionInfo{336, nullptr, "GetMembers"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

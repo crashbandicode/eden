@@ -13,7 +13,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IWindowController::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "CreateWindow"},
         FunctionInfo{1,  D<&IWindowController::GetAppletResourceUserId>, "GetAppletResourceUserId"},
         FunctionInfo{2,  D<&IWindowController::GetAppletResourceUserIdOfCallerApplet>, "GetAppletResourceUserIdOfCallerApplet"},
@@ -22,7 +22,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IWindowController::FindReq
         FunctionInfo{12, D<&IWindowController::RejectToChangeIntoBackground>, "RejectToChangeIntoBackground"},
         FunctionInfo{20, D<&IWindowController::SetAppletWindowVisibility>, "SetAppletWindowVisibility"},
         FunctionInfo{21, D<&IWindowController::SetAppletGpuTimeSlice>, "SetAppletGpuTimeSlice"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

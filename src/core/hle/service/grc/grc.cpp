@@ -16,13 +16,13 @@ class GRC final : public ServiceFramework<GRC> {
 public:
     explicit GRC(Core::System& system_) : ServiceFramework{system_, "grc:c"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "OpenContinuousRecorder"},
             FunctionInfo{2, nullptr, "OpenGameMovieTrimmer"},
             FunctionInfo{3, nullptr, "OpenOffscreenRecorder"},
             FunctionInfo{101, nullptr, "CreateMovieMaker"},
             FunctionInfo{9903, nullptr, "SetOffscreenRecordingMarker"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -32,11 +32,11 @@ class GRC_D final : public ServiceFramework<GRC_D> {
 public:
     explicit GRC_D(Core::System& system_) : ServiceFramework{system_, "grc:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "Initialize"},
             FunctionInfo{2, nullptr, "Transfer"},
             FunctionInfo{3, nullptr, "Cmd3"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

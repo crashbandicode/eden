@@ -87,7 +87,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{31, nullptr, "SendKeyboardLockKeyEvent"},
         FunctionInfo{101, nullptr, "AcquireHomeButtonEventHandle"},
         FunctionInfo{111, nullptr, "ActivateHomeButton"},
@@ -328,7 +328,7 @@ private:
         FunctionInfo{1326, nullptr, "SetTouchScreenOffset", MakeVersionGate({21,0,0})},
         FunctionInfo{1420, nullptr, "GetAppletResourceProperty", MakeVersionGate({19,0,0})},
         FunctionInfo{12010, nullptr, "SetButtonConfigLeft", MakeVersionGate({11,0,0}, {17,0,1})}
-    );
+    });
 
     Kernel::KEvent* acquire_connection_trigger_timeout_event;
     Kernel::KEvent* acquire_device_registered_event;

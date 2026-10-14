@@ -70,10 +70,10 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &BootMode::GetBootMode, "GetBootMode"},
         FunctionInfo{1, &BootMode::SetMaintenanceBoot, "SetMaintenanceBoot"}
-    );
+    });
     SystemBootMode boot_mode = SystemBootMode::Normal;
 };
 
@@ -153,7 +153,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetJitDebugProcessIdList"},
         FunctionInfo{1, nullptr, "StartProcess"},
         FunctionInfo{2, &DebugMonitor::GetProcessId, "GetProcessId"},
@@ -163,7 +163,7 @@ private:
         FunctionInfo{6, nullptr, "ClearHook"},
         FunctionInfo{65000, &DebugMonitor::AtmosphereGetProcessInfo, "AtmosphereGetProcessInfo"},
         FunctionInfo{65001, nullptr, "AtmosphereGetCurrentLimitInfo"}
-    );
+    });
 };
 
 class Info final : public ServiceFramework<Info> {
@@ -214,12 +214,12 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &Info::GetProgramId, "GetProgramId"},
         FunctionInfo{65000, &Info::AtmosphereGetProcessId, "AtmosphereGetProcessId"},
         FunctionInfo{65001, nullptr, "AtmosphereHasLaunchedProgram"},
         FunctionInfo{65002, nullptr, "AtmosphereGetProcessInfo"}
-    );
+    });
 };
 
 class Shell final : public ServiceFramework<Shell> {
@@ -237,7 +237,7 @@ private:
         GetApplicationPidGeneric(system.Kernel(), ctx, list);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "LaunchProgram"},
         FunctionInfo{1, nullptr, "TerminateProcess"},
         FunctionInfo{2, nullptr, "TerminateProgram"},
@@ -248,7 +248,7 @@ private:
         FunctionInfo{7, nullptr, "BoostSystemMemoryResourceLimit"},
         FunctionInfo{8, nullptr, "BoostApplicationThreadResourceLimit"},
         FunctionInfo{9, nullptr, "GetBootFinishedEventHandle"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

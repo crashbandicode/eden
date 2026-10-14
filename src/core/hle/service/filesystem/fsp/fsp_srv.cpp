@@ -48,7 +48,7 @@
 namespace Service::FileSystem {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> FSP_SRV::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "OpenFileSystem"},
         FunctionInfo{1, D<&FSP_SRV::SetCurrentProcess>, "SetCurrentProcess"},
         FunctionInfo{2, D<&FSP_SRV::OpenDataFileSystemByCurrentProcess>, "OpenDataFileSystemByCurrentProcess"},
@@ -177,7 +177,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> FSP_SRV::FindRequest(u32 k
         FunctionInfo{1110, nullptr, "CorruptSaveDataFileSystemBySaveDataSpaceId2"},
         FunctionInfo{1200, D<&FSP_SRV::OpenMultiCommitManager>, "OpenMultiCommitManager"},
         FunctionInfo{1300, nullptr, "OpenBisWiper"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

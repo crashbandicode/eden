@@ -27,7 +27,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ARP_R::GetApplicationLaunchProperty, "GetApplicationLaunchProperty"},
         FunctionInfo{1, &ARP_R::GetApplicationLaunchPropertyWithApplicationId, "GetApplicationLaunchPropertyWithApplicationId"},
         FunctionInfo{2, &ARP_R::GetApplicationControlProperty, "GetApplicationControlProperty"},
@@ -38,7 +38,7 @@ private:
         FunctionInfo{7, nullptr, "GetApplicationCertificate"},
         FunctionInfo{9998, nullptr, "GetPreomiaApplicationLaunchProperty"},
         FunctionInfo{9999, nullptr, "GetPreomiaApplicationControlProperty"}
-    );
+    });
     const ARPManager& manager;
 };
 
@@ -54,11 +54,11 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ARP_W::AcquireRegistrar, "AcquireRegistrar"},
         FunctionInfo{1, &ARP_W::UnregisterApplicationInstance , "UnregisterApplicationInstance "},
         FunctionInfo{2, nullptr, "AcquireUpdater"}
-    );
+    });
     ARPManager& manager;
     std::shared_ptr<IRegistrar> registrar;
 };

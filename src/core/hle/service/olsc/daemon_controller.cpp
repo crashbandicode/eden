@@ -10,7 +10,7 @@
 namespace Service::OLSC {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDaemonController::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IDaemonController::GetApplicationAutoTransferSetting>, "GetApplicationAutoTransferSetting"},
         FunctionInfo{1, D<&IDaemonController::SetApplicationAutoTransferSetting>, "SetApplicationAutoTransferSetting"},
         FunctionInfo{2, D<&IDaemonController::GetGlobalAutoUploadSetting>, "GetGlobalAutoUploadSetting"},
@@ -22,7 +22,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IDaemonController::FindReq
         FunctionInfo{11, D<&IDaemonController::StopAutonomyTaskExecution>, "StopAutonomyTaskExecution"},
         FunctionInfo{12, D<&IDaemonController::GetAutonomyTaskStatus>, "GetAutonomyTaskStatus"},
         FunctionInfo{13, nullptr, "Unknown13_20_0_0_Plus", MakeVersionGate({20,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

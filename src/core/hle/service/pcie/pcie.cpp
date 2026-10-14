@@ -17,7 +17,7 @@ class ISession final : public ServiceFramework<ISession> {
 public:
     explicit ISession(Core::System& system_) : ServiceFramework{system_, "ISession"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "QueryFunctions"},
             FunctionInfo{1, nullptr, "AcquireFunction"},
             FunctionInfo{2, nullptr, "ReleaseFunction"},
@@ -42,7 +42,7 @@ public:
             FunctionInfo{21, nullptr, "SetAspmEnable"},
             FunctionInfo{22, nullptr, "SetResetUponResumeEnable"},
             FunctionInfo{23, nullptr, "ResetFunction"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -52,10 +52,10 @@ class PCIE final : public ServiceFramework<PCIE> {
 public:
     explicit PCIE(Core::System& system_) : ServiceFramework{system_, "pcie"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RegisterClassDriver"},
             FunctionInfo{1, nullptr, "QueryFunctionsUnregistered"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -65,10 +65,10 @@ class PCIE_LOG final : public ServiceFramework<PCIE_LOG> {
 public:
     explicit PCIE_LOG(Core::System& system_) : ServiceFramework{system_, "pcie:log"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetLoggedState"},
             FunctionInfo{1, nullptr, "GetLoggedStateEvent"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

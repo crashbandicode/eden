@@ -29,9 +29,9 @@ public:
     explicit IHidTemporaryServer(Core::System& system_)
     : ServiceFramework{system_, "hid:tmp"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetConsoleSixAxisSensorCalibrationValues"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -43,13 +43,13 @@ public:
     explicit AHID_CD(Core::System& system_)
     : ServiceFramework{system_, "ahid:cd"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "AcquireDevice"},
         FunctionInfo{1, nullptr, "ReleaseDevice"},
         FunctionInfo{2, nullptr, "GetCtrlSession"},
         FunctionInfo{3, nullptr, "GetReadSession"},
         FunctionInfo{4, nullptr, "GetWriteSession"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -61,14 +61,14 @@ public:
     explicit AHID_HDR(Core::System& system_)
     : ServiceFramework{system_, "ahid:hdr"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetDeviceEntries"},
         FunctionInfo{1, nullptr, "GetDeviceList"},
         FunctionInfo{2, nullptr, "GetDeviceParameters"},
         FunctionInfo{3, nullptr, "AttachDevice"},
         FunctionInfo{4, nullptr, "DetachDevice"},
         FunctionInfo{5, nullptr, "SetDeviceFilter"}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -209,7 +209,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "DeactivateDebugPad"},
             FunctionInfo{1, nullptr, "SetDebugPadAutoPilotState"},
             FunctionInfo{2, nullptr, "UnsetDebugPadAutoPilotState"},
@@ -368,7 +368,7 @@ public:
             FunctionInfo{2001, nullptr, "SetDigitizerAutoPilotState"},
             FunctionInfo{2002, nullptr, "UnsetDigitizerAutoPilotState"},
             FunctionInfo{3000, nullptr, "ReloadFirmwareDebugSettings"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     std::shared_ptr<ResourceManager> resource_manager;

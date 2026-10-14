@@ -21,7 +21,7 @@
 namespace Service::Audio {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioController::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioController::GetTargetVolume>, "GetTargetVolume"},
         FunctionInfo{1, D<&IAudioController::SetTargetVolume>, "SetTargetVolume"},
         FunctionInfo{2, D<&IAudioController::GetTargetVolumeMin>, "GetTargetVolumeMin"},
@@ -82,7 +82,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioController::FindRequ
         FunctionInfo{50001, nullptr, "OverrideDefaultTargetForDebug", MakeVersionGate({19,0,0}, {19,0,1})},
         FunctionInfo{50003, nullptr, "SetForceOverrideExternalDeviceNameForDebug", MakeVersionGate({19,0,0})},
         FunctionInfo{50004, nullptr, "ClearForceOverrideExternalDeviceNameForDebug", MakeVersionGate({19,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

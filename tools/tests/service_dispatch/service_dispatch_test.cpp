@@ -55,8 +55,7 @@ struct Service : Framework<Service> {
     void B(Context& context) { context.value = 2; }
     void C(Context& context) { context.value = 3; }
 
-    static bool Check() {
-        static EDEN_SERVICE_TABLE auto map = Map({
+    inline static EDEN_SERVICE_TABLE auto map = Map({
             Input{0, &Service::A, "A"}, Input{1, &Service::B, "B"},
             Input{2, &Service::C, "C"}, Input{3, &Service::A, "A"},
             Input{4, nullptr, "null"}, Input{65000, nullptr, "null"},
@@ -64,6 +63,8 @@ struct Service : Framework<Service> {
             Input{65003, nullptr, "null"}, Input{65004, nullptr, "null"},
             Input{65005, nullptr, "null"}, Input{65006, nullptr, "null"},
             Input{65100, &Service::B, "B"}, Input{65101, nullptr, "null"}});
+
+    static bool Check() {
         constexpr u32 expected[]{0, 1, 2, 3, 4, 65000, 65001, 65002, 65003,
                                  65004, 65005, 65006, 65100, 65101};
         std::size_t index{};

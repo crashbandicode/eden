@@ -16,13 +16,13 @@
 namespace Service::Capture {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IScreenShotApplicationService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{32, C<&IScreenShotApplicationService::SetShimLibraryVersion>, "SetShimLibraryVersion"},
         FunctionInfo{201, nullptr, "SaveScreenShot"},
         FunctionInfo{203, C<&IScreenShotApplicationService::SaveScreenShotEx0>, "SaveScreenShotEx0"},
         FunctionInfo{205, C<&IScreenShotApplicationService::SaveScreenShotEx1>, "SaveScreenShotEx1"},
         FunctionInfo{210, nullptr, "SaveScreenShotEx2"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

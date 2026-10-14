@@ -221,7 +221,7 @@ private:
         rb.Push<u64>(write_size);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, &ETicket::ImportTicket, "ImportTicket"},
         FunctionInfo{2, nullptr, "ImportTicketCertificateSet"},
         FunctionInfo{3, nullptr, "DeleteTicket"},
@@ -316,7 +316,7 @@ private:
         FunctionInfo{2601, nullptr, "Unknown2601"},
         FunctionInfo{3001, nullptr, "Unknown3001"},
         FunctionInfo{3002, nullptr, "Unknown3002"}
-    );
+    });
     Core::Crypto::KeyManager& keys = Core::Crypto::KeyManager::Instance();
 };
 
@@ -325,13 +325,13 @@ public:
     explicit NDRM_LU(Core::System& system_)
         : ServiceFramework{system_, "ndrm:lu"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "Cmd1"},
             FunctionInfo{2, nullptr, "Cmd2"},
             FunctionInfo{3, nullptr, "Cmd3"},
             FunctionInfo{1000, nullptr, "Cmd1000"},
             FunctionInfo{8000, nullptr, "Cmd8000"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -342,7 +342,7 @@ public:
     explicit NDRM_LA(Core::System& system_)
         : ServiceFramework{system_, "ndrm:la"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "Cmd1"},
             FunctionInfo{2, nullptr, "Cmd2"},
             FunctionInfo{3, nullptr, "Cmd3"},
@@ -397,7 +397,7 @@ public:
             FunctionInfo{8001, nullptr, "Cmd8001"},
             FunctionInfo{8002, nullptr, "Cmd8002"},
             FunctionInfo{8003, nullptr, "Cmd8003"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

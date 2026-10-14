@@ -15,7 +15,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHomeMenuFunctions::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{10, D<&IHomeMenuFunctions::RequestToGetForeground>, "RequestToGetForeground"},
         FunctionInfo{11, D<&IHomeMenuFunctions::LockForeground>, "LockForeground"},
         FunctionInfo{12, D<&IHomeMenuFunctions::UnlockForeground>, "UnlockForeground"},
@@ -31,7 +31,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IHomeMenuFunctions::FindRe
         FunctionInfo{110, D<&IHomeMenuFunctions::IsForceTerminateApplicationDisabledForDebug>, "IsForceTerminateApplicationDisabledForDebug"},
         FunctionInfo{200, nullptr, "LaunchDevMenu"},
         FunctionInfo{1000, nullptr, "SetLastApplicationExitReason"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

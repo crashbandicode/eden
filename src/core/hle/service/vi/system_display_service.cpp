@@ -13,7 +13,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemDisplayService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1200, nullptr, "GetZOrderCountMin"},
         FunctionInfo{1202, nullptr, "GetZOrderCountMax"},
         FunctionInfo{1203, nullptr, "GetDisplayLogicalResolution"},
@@ -61,7 +61,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemDisplayService::Fin
         FunctionInfo{8257, nullptr, "FillSharedFrameBufferColor"},
         FunctionInfo{8258, C<&ISystemDisplayService::CancelSharedFrameBuffer>, "CancelSharedFrameBuffer"},
         FunctionInfo{9000, nullptr, "GetDp2hdmiController"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

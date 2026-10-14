@@ -13,7 +13,7 @@ namespace Service::Audio {
 using namespace AudioCore::Renderer;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioDevice::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioDevice::ListAudioDeviceName>, "ListAudioDeviceName"},
         FunctionInfo{1, D<&IAudioDevice::SetAudioDeviceOutputVolume>, "SetAudioDeviceOutputVolume"},
         FunctionInfo{2, D<&IAudioDevice::GetAudioDeviceOutputVolume>, "GetAudioDeviceOutputVolume"},
@@ -35,7 +35,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioDevice::FindRequest(
         FunctionInfo{19, D<&IAudioDevice::SetAudioDeviceOutputVolumeAutoTuneEnabled>, "SetAudioDeviceOutputVolumeAutoTuneEnabled", MakeVersionGate({18,0,0})},
         FunctionInfo{20, D<&IAudioDevice::IsAudioDeviceOutputVolumeAutoTuneEnabled>, "IsAudioDeviceOutputVolumeAutoTuneEnabled", MakeVersionGate({18,0,0})},
         FunctionInfo{21, nullptr, "IsActiveOutputDeviceEstimatedLowLatency", MakeVersionGate({21,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

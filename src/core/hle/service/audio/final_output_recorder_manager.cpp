@@ -13,7 +13,7 @@ public:
     explicit IFinalOutputRecorder(Core::System& system_)
         : ServiceFramework{system_, "IFinalOutputRecorder"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetFinalOutputRecorderState"},
             FunctionInfo{1, nullptr, "Start"},
             FunctionInfo{2, nullptr, "Stop"},
@@ -26,7 +26,7 @@ public:
             FunctionInfo{9, nullptr, "GetReleasedFinalOutputRecorderBufferAuto"},
             FunctionInfo{10, nullptr, "FlushFinalOutputRecorderBuffers"},
             FunctionInfo{11, nullptr, "AttachWorkBuffer"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

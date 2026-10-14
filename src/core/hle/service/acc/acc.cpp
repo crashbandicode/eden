@@ -109,7 +109,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, D<&IManagerForSystemService::CheckAvailability>, "CheckAvailability"},
                 FunctionInfo{1, D<&IManagerForSystemService::GetAccountId>, "GetAccountId"},
                 FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
@@ -139,7 +139,7 @@ private:
                 FunctionInfo{161, nullptr, "RequireReauthenticationOfNetworkServiceAccount"},
                 FunctionInfo{170, nullptr, "CreateDeviceHistoryRequest", MakeVersionGate({17,0,0})},
                 FunctionInfo{180, nullptr, "GetRequestForNintendoAccountReauthentication", MakeVersionGate({18,0,0})}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
     Common::UUID account_id;
@@ -153,7 +153,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetSessionId"},
             FunctionInfo{12, nullptr, "GetAccountId"},
             FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
@@ -167,7 +167,7 @@ public:
             FunctionInfo{103, nullptr, "RegisterNetworkServiceAccountWithUidAsync", MakeVersionGate({4,0,0})},
             FunctionInfo{110, nullptr, "SetSystemProgramIdentification"},
             FunctionInfo{111, nullptr, "EnsureIdTokenCacheAsync"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -186,7 +186,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "CheckAvailability"},
                 FunctionInfo{1, nullptr, "GetAccountId"},
                 FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
@@ -237,7 +237,7 @@ private:
                 FunctionInfo{901, nullptr, "ImportAsyncForWin", MakeVersionGate({9,0,0})},
                 FunctionInfo{997, nullptr, "DebugUnlinkNintendoAccountAsync"},
                 FunctionInfo{998, nullptr, "DebugSetAvailabilityErrorDetail"}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -249,14 +249,14 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "GetSessionId"},
                 FunctionInfo{10, nullptr, "InvokeWithoutInteractionAsync"},
                 FunctionInfo{19, nullptr, "IsAuthorized"},
                 FunctionInfo{20, nullptr, "GetAuthorizationCode"},
                 FunctionInfo{21, nullptr, "GetIdToken"},
                 FunctionInfo{22, nullptr, "GetState"}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -267,13 +267,13 @@ public:
         : ServiceFramework{system_, "IOAuthProcedure"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
                 FunctionInfo{3, nullptr, "ApplyResponseAsync"},
                 FunctionInfo{10, nullptr, "Suspend"}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -286,7 +286,7 @@ public:
     {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -297,7 +297,7 @@ public:
                 FunctionInfo{102, nullptr, "GetNickname"},
                 FunctionInfo{103, nullptr, "GetProfileImage"},
                 FunctionInfo{104, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -309,7 +309,7 @@ public:
     {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -323,7 +323,7 @@ public:
                 FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
                 FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
                 FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -334,9 +334,9 @@ public:
         : ServiceFramework{system_, "INotifier"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "GetSystemEvent"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -574,7 +574,7 @@ protected:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IProfileCommon::Get, "Get"},
         FunctionInfo{1, &IProfileCommon::GetBase, "GetBase"},
         FunctionInfo{10, &IProfileCommon::GetImageSize, "GetImageSize"},
@@ -586,7 +586,7 @@ protected:
         FunctionInfo{100, &IProfileCommon::Store, "Store"},
         FunctionInfo{101, &IProfileCommon::StoreWithImage, "StoreWithImage"},
         FunctionInfo{110, &IProfileCommon::Unknown110, "Unknown110"}
-    );
+    });
     ProfileManager& profile_manager;
     Common::UUID user_id{}; ///< The user id this profile refers to.
 };
@@ -611,9 +611,9 @@ public:
         : ServiceFramework{system_, "ISessionObject"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{999, nullptr, "Dummy"}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -624,7 +624,7 @@ public:
         : ServiceFramework{system_, "IGuestLoginRequest"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
                 FunctionInfo{0, nullptr, "GetSessionId"},
                 FunctionInfo{11, nullptr, "Unknown", MakeVersionGate({1,0,0}, {2,3,0})}, // the name is blank on Switchbrew
                 FunctionInfo{12, nullptr, "GetAccountId"},
@@ -633,7 +633,7 @@ public:
                 FunctionInfo{15, nullptr, "GetProfileImage"},
                 FunctionInfo{16, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
                 FunctionInfo{21, nullptr, "LoadIdTokenCache", MakeVersionGate({3,0,0})}
-            );
+            });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -744,7 +744,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IManagerForApplication::CheckAvailability, "CheckAvailability"},
         FunctionInfo{1, &IManagerForApplication::GetAccountId, "GetAccountId"},
         FunctionInfo{2, &IManagerForApplication::EnsureIdTokenCacheAsync, "EnsureIdTokenCacheAsync"},
@@ -755,7 +755,7 @@ private:
         FunctionInfo{150, nullptr, "CreateAuthorizationRequest"},
         FunctionInfo{160, &IManagerForApplication::StoreOpenContext, "StoreOpenContext"},
         FunctionInfo{170, nullptr, "LoadNetworkServiceLicenseKindAsync"}
-    );
+    });
     std::shared_ptr<EnsureTokenIdCacheAsyncInterface> ensure_token_id{};
     std::shared_ptr<ProfileManager> profile_manager;
 };
@@ -768,13 +768,13 @@ public:
         : ServiceFramework{system_, "IAsyncNetworkServiceLicenseKindContext"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetSystemEvent"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "HasDone"},
             FunctionInfo{3, nullptr, "GetResult"},
             FunctionInfo{4, nullptr, "GetNetworkServiceLicenseKind"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -787,7 +787,7 @@ public:
         : ServiceFramework{system_, "IOAuthProcedureForUserRegistration"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "PrepareAsync"},
             FunctionInfo{1, nullptr, "GetRequest"},
             FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -806,7 +806,7 @@ public:
             FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
             FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
             FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -816,7 +816,7 @@ public:
     explicit DAUTH_O(Core::System& system_, Common::UUID) : ServiceFramework{system_, "dauth:o"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
             FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
             FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
@@ -830,7 +830,7 @@ public:
             FunctionInfo{22, nullptr, "LoadApplicationNetworkServiceClientConfigCache"},
             FunctionInfo{23, nullptr, "IsApplicationAuthenticationCacheAvailable"},
             FunctionInfo{24, nullptr, "InvalidateApplicationAuthenticationCache"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -842,12 +842,12 @@ public:
         : ServiceFramework{system_, "IAsyncResult"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetResult"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "IsAvailable"},
             FunctionInfo{3, nullptr, "GetSystemEvent"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1256,13 +1256,13 @@ public:
     }
     ~ACC_AA() override = default;
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "EnsureCacheAsync"},
         FunctionInfo{1, nullptr, "LoadCache"},
         FunctionInfo{2, nullptr, "GetDeviceAccountId"},
         FunctionInfo{50, nullptr, "RegisterNotificationTokenAsync", MakeVersionGate({1,0,0}, {6,2,0})},
         FunctionInfo{51, nullptr, "UnregisterNotificationTokenAsync", MakeVersionGate({1,0,0}, {6,2,0})}
-    );
+    });
 };
 
 class ACC_SU final : public Module::Interface {
@@ -1276,7 +1276,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ACC_SU::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_SU::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_SU::ListAllUsers, "ListAllUsers"},
@@ -1339,7 +1339,7 @@ public:
         FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
         FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
         FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-    );
+    });
 };
 
 class ACC_U0 final : public Module::Interface {
@@ -1352,7 +1352,7 @@ public:
     }
     ~ACC_U0() override = default;
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ACC_U0::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_U0::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_U0::ListAllUsers, "ListAllUsers"},
@@ -1378,7 +1378,7 @@ public:
         FunctionInfo{141, &ACC_U0::ListQualifiedUsers, "ListQualifiedUsers", MakeVersionGate({6,0,0})},
         FunctionInfo{150, &ACC_U0::IsUserAccountSwitchLocked, "IsUserAccountSwitchLocked", MakeVersionGate({6,0,0})},
         FunctionInfo{160, &ACC_U0::InitializeApplicationInfoV2, "InitializeApplicationInfoV2"}
-    );
+    });
 };
 
 class ACC_U1 final : public Module::Interface {
@@ -1391,7 +1391,7 @@ public:
     }
     ~ACC_U1() override = default;
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ACC_U1::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_U1::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_U1::ListAllUsers, "ListAllUsers"},
@@ -1428,7 +1428,7 @@ public:
         FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
         FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
         FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-    );
+    });
 };
 
 class DAUTH_0 final : public ServiceFramework<DAUTH_0> {
@@ -1439,7 +1439,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
         FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
         FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
@@ -1460,7 +1460,7 @@ public:
         FunctionInfo{1000, nullptr, "GetInactiveElicenseUsedEvent"},
         FunctionInfo{9000, nullptr, "ImportVirtualClientCertificate"},
         FunctionInfo{9010, nullptr, "DeleteVirtualClientCertificate"}
-    );
+    });
 };
 
 class ACC_E final : public Module::Interface {
@@ -1469,7 +1469,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},
@@ -1547,7 +1547,7 @@ public:
             FunctionInfo{1100, nullptr, "CreateIUserStateManager"},
             FunctionInfo{10050, nullptr, "IsUserRegistrationRequestPermittedForAccountPolicy"},
             FunctionInfo{10105, nullptr, "CheckNetworkServiceAvailabilityAsyncForAccountPolicy"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1558,7 +1558,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u1") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},
@@ -1590,7 +1590,7 @@ public:
             FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
             FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
             FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1601,7 +1601,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u2") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},
@@ -1640,7 +1640,7 @@ public:
             FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
             FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
             FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };

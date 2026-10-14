@@ -101,13 +101,13 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IReceiver::AddSource>, "AddSource"},
             FunctionInfo{1, D<&IReceiver::RemoveSource>, "RemoveSource"},
             FunctionInfo{2, D<&IReceiver::GetReceiveEventHandle>, "GetReceiveEventHandle"},
             FunctionInfo{3, D<&IReceiver::Receive>, "Receive"},
             FunctionInfo{4, D<&IReceiver::ReceiveWithTick>, "ReceiveWithTick"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -118,9 +118,9 @@ public:
 };
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IReceiverService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IReceiverService::OpenReceiver>, "OpenReceiver"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

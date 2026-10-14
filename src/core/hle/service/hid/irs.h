@@ -172,12 +172,12 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{500, nullptr, "SetAppletResourceUserId"},
         FunctionInfo{501, nullptr, "RegisterAppletResourceUserId"},
         FunctionInfo{502, nullptr, "UnregisterAppletResourceUserId"},
         FunctionInfo{503, nullptr, "EnableAppletToGetInput"}
-    );
+    });
 };
 
 } // namespace Service::IRS

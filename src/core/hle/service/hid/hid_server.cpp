@@ -43,7 +43,7 @@
 namespace Service::HID {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHidServer::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&IHidServer::CreateAppletResource>, "CreateAppletResource"},
         FunctionInfo{1, C<&IHidServer::ActivateDebugPad>, "ActivateDebugPad"},
         FunctionInfo{11, C<&IHidServer::ActivateTouchScreen>, "ActivateTouchScreen"},
@@ -236,7 +236,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IHidServer::FindRequest(u3
         FunctionInfo{3015, nullptr, "SetDebugPadKeyboardMap", MakeVersionGate({21,0,0})},
         FunctionInfo{3150, C<&IHidServer::SetMouseLibraryVersion>, "SetMouseLibraryVersion", MakeVersionGate({21,0,0})}
         // What? -- {12010, nullptr, "SetButtonConfigLeft"},
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

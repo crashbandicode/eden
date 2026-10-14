@@ -10,7 +10,7 @@
 namespace Service::OLSC {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IRemoteStorageController::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetSaveDataArchiveInfoBySaveDataId"},
             FunctionInfo{1, nullptr, "GetSaveDataArchiveInfoByApplicationId"},
             FunctionInfo{3, nullptr, "GetSaveDataArchiveCount"},
@@ -41,7 +41,7 @@ namespace Service::OLSC {
             FunctionInfo{800, nullptr, "Unknown800", MakeVersionGate({20,0,0})},
             FunctionInfo{900, nullptr, "SetLoadedDataMissing"},
             FunctionInfo{901, nullptr, "Unknown901", MakeVersionGate({20,2,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

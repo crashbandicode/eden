@@ -22,7 +22,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{5, &SPL::SetConfig, "SetConfig"},
@@ -30,7 +30,7 @@ public:
         FunctionInfo{11, &SPL::IsDevelopment, "IsDevelopment"},
         FunctionInfo{24, &SPL::SetBootReason, "SetBootReason"},
         FunctionInfo{25, &SPL::GetBootReason, "GetBootReason"}
-    );
+    });
 };
 
 class SPL_MIG final : public Module::Interface {
@@ -41,7 +41,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{2, &SPL::GenerateAesKek, "GenerateAesKek"},
@@ -58,7 +58,7 @@ public:
         FunctionInfo{23, nullptr, "GetAesKeyslotAvailableEvent"},
         FunctionInfo{24, &SPL::SetBootReason, "SetBootReason"},
         FunctionInfo{25, &SPL::GetBootReason, "GetBootReason"}
-    );
+    });
 };
 
 class SPL_FS final : public Module::Interface {
@@ -69,7 +69,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{2, nullptr, "GenerateAesKek"},
@@ -91,7 +91,7 @@ public:
         FunctionInfo{24, &SPL::SetBootReason, "SetBootReason"},
         FunctionInfo{25, &SPL::GetBootReason, "GetBootReason"},
         FunctionInfo{31, nullptr, "GetPackage2Hash"}
-    );
+    });
 };
 
 class SPL_SSL final : public Module::Interface {
@@ -102,7 +102,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{2, nullptr, "GenerateAesKek"},
@@ -122,7 +122,7 @@ public:
         FunctionInfo{25, &SPL::GetBootReason, "GetBootReason"},
         FunctionInfo{26, nullptr, "DecryptAndStoreSslClientCertKey"},
         FunctionInfo{27, nullptr, "ModularExponentiateWithSslClientCertKey"}
-    );
+    });
 };
 
 class SPL_ES final : public Module::Interface {
@@ -133,7 +133,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{2, nullptr, "GenerateAesKek"},
@@ -158,7 +158,7 @@ public:
         FunctionInfo{29, nullptr, "ModularExponentiateWithDrmDeviceCertKey"},
         FunctionInfo{31, nullptr, "PrepareEsArchiveKey"},
         FunctionInfo{32, nullptr, "LoadPreparedAesKey"}
-    );
+    });
 };
 
 class SPL_MANU final : public Module::Interface {
@@ -169,7 +169,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &SPL::GetConfig, "GetConfig"},
         FunctionInfo{1, &SPL::ModularExponentiate, "ModularExponentiate"},
         FunctionInfo{2, nullptr, "GenerateAesKek"},
@@ -188,7 +188,7 @@ public:
         FunctionInfo{24, &SPL::SetBootReason, "SetBootReason"},
         FunctionInfo{25, &SPL::GetBootReason, "GetBootReason"},
         FunctionInfo{30, nullptr, "ReencryptDeviceUniqueData"}
-    );
+    });
 };
 
 } // namespace Service::SPL

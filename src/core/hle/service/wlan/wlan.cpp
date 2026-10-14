@@ -21,7 +21,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
        FunctionInfo{0, nullptr, "OpenMasterMode"},
         FunctionInfo{0, nullptr, "OpenMode_2"},
         FunctionInfo{1, nullptr, "CloseMasterMode"},
@@ -119,7 +119,7 @@ public:
         FunctionInfo{50, nullptr, "Cmd50"},
         FunctionInfo{51, nullptr, "Cmd51"},
         FunctionInfo{52, nullptr, "Cmd52"}
-    );
+    });
 };
 
 class ILocalGetFrame final : public ServiceFramework<ILocalGetFrame> {
@@ -131,9 +131,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetFrameRaw" }
-    );
+    });
 };
 
 class ILocalGetActionFrame final : public ServiceFramework<ILocalGetActionFrame> {
@@ -145,9 +145,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetActionFrame" }
-    );
+    });
 };
 
 class ISocketGetFrame final : public ServiceFramework<ISocketGetFrame> {
@@ -159,9 +159,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetFrameRaw" }
-    );
+    });
 };
 
 class ISocketManager final : public ServiceFramework<ISocketManager> {
@@ -173,7 +173,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "PutFrameRaw_2"},
         FunctionInfo{1, nullptr, "CancelGetFrame_2"},
         FunctionInfo{2, nullptr, "CreateRxEntry_2"},
@@ -187,7 +187,7 @@ public:
         FunctionInfo{10, nullptr, "UnregisterSharedMemory"},
         FunctionInfo{11, nullptr, "EnableSharedMemory"},
         FunctionInfo{12, nullptr, "SetMulticastFilter"}
-    );
+    });
 };
 
 class IDetectManager final : public ServiceFramework<IDetectManager> {
@@ -199,7 +199,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Cmd0"},
         FunctionInfo{1, nullptr, "Cmd1"},
         FunctionInfo{2, nullptr, "Cmd2"},
@@ -228,7 +228,7 @@ public:
         FunctionInfo{25, nullptr, "Cmd25"},
         FunctionInfo{26, nullptr, "Cmd26"},
         FunctionInfo{27, nullptr, "Cmd27"}
-    );
+    });
 };
 
 class IPrivateServiceCreator final : public ServiceFramework<IPrivateServiceCreator> {
@@ -240,10 +240,10 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "CreateWirelessCommunicationService"},
             FunctionInfo{1, nullptr, "CreatePrivateWirelessCommunicationService"}
-    );
+    });
 };
 
 class ISfDriverServiceCreator final : public ServiceFramework<ISfDriverServiceCreator> {
@@ -255,9 +255,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "CreateDriverService" }
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

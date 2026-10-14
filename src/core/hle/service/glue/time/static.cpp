@@ -25,7 +25,7 @@
 namespace Service::Glue::Time {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> StaticService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0,   D<&StaticService::GetStandardUserSystemClock>, "GetStandardUserSystemClock"},
         FunctionInfo{1,   D<&StaticService::GetStandardNetworkSystemClock>, "GetStandardNetworkSystemClock"},
         FunctionInfo{2,   D<&StaticService::GetStandardSteadyClock>, "GetStandardSteadyClock"},
@@ -45,7 +45,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> StaticService::FindRequest
         FunctionInfo{401, D<&StaticService::GetClockSnapshotFromSystemClockContext>, "GetClockSnapshotFromSystemClockContext"},
         FunctionInfo{500, D<&StaticService::CalculateStandardUserSystemClockDifferenceByUser>, "CalculateStandardUserSystemClockDifferenceByUser"},
         FunctionInfo{501, D<&StaticService::CalculateSpanBetween>, "CalculateSpanBetween"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

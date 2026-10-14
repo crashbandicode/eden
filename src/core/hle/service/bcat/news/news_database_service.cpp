@@ -46,7 +46,7 @@ bool UpdateField(NewsRecord& rec, std::string_view column, s32 value, bool addit
 } // namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsDatabaseService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&INewsDatabaseService::GetListV1>, "GetListV1"},
         FunctionInfo{1, D<&INewsDatabaseService::Count>, "Count"},
         FunctionInfo{2, D<&INewsDatabaseService::CountWithKey>, "CountWithKey"},
@@ -54,7 +54,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsDatabaseService::Find
         FunctionInfo{4, D<&INewsDatabaseService::UpdateIntegerValueWithAddition>, "UpdateIntegerValueWithAddition"},
         FunctionInfo{5, D<&INewsDatabaseService::UpdateStringValue>, "UpdateStringValue"},
         FunctionInfo{1000, D<&INewsDatabaseService::GetList>, "GetList"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

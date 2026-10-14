@@ -36,12 +36,12 @@ protected:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IAsyncContext::GetSystemEvent, "GetSystemEvent"},
         FunctionInfo{1, &IAsyncContext::Cancel, "Cancel"},
         FunctionInfo{2, &IAsyncContext::HasDone, "HasDone"},
         FunctionInfo{3, &IAsyncContext::GetResult, "GetResult"}
-    );
+    });
 
     KernelHelpers::ServiceContext service_context;
 

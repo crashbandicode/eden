@@ -12,12 +12,12 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IReadOnlyApplicationRecordInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IReadOnlyApplicationRecordInterface::HasApplicationRecord>, "HasApplicationRecord"},
         FunctionInfo{1, nullptr, "NotifyApplicationFailure"},
         FunctionInfo{2, D<&IReadOnlyApplicationRecordInterface::IsDataCorruptedResult>, "IsDataCorruptedResult"},
         FunctionInfo{3, D<&IReadOnlyApplicationRecordInterface::ListApplicationRecord>, "ListApplicationRecord"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

@@ -22,14 +22,14 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetAutoPowerDownEvent"},
         FunctionInfo{1, nullptr, "IsAutoPowerDownRequested"},
         FunctionInfo{2, nullptr, "Unknown2"},
         FunctionInfo{3, nullptr, "SetHandlingContext"},
         FunctionInfo{4, nullptr, "LoadAndApplySettings"},
         FunctionInfo{5, nullptr, "ReportUserIsActive"}
-    );
+    });
 };
 
 } // namespace Service::OMM

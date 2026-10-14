@@ -32,7 +32,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &PSM::GetBatteryChargePercentage, "GetBatteryChargePercentage"},
         FunctionInfo{1, &PSM::GetChargerType, "GetChargerType"},
         FunctionInfo{2, nullptr, "EnableBatteryCharging"},
@@ -52,7 +52,7 @@ private:
         FunctionInfo{16, nullptr, "GetBatteryChargeInfoEvent"},
         FunctionInfo{17, &PSM::GetBatteryChargeInfoFields, "GetBatteryChargeInfoFields"},
         FunctionInfo{18, nullptr, "GetBatteryChargeCalibratedEvent"}
-    );
+    });
 };
 
 } // namespace Service::PTM

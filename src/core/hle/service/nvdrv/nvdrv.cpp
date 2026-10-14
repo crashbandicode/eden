@@ -55,7 +55,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "GetEventHandle"},
         FunctionInfo{2, nullptr, "ControlNotification"},
@@ -64,7 +64,7 @@ public:
         FunctionInfo{5, nullptr, "GetAruid"},
         FunctionInfo{6, nullptr, "Reset"},
         FunctionInfo{7, nullptr, "GetAruid2"}
-    );
+    });
 };
 
 class NVGEM_CD final : public ServiceFramework<NVGEM_CD> {
@@ -76,13 +76,13 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "GetAruid"},
         FunctionInfo{2, nullptr, "ReadNextBlock"},
         FunctionInfo{3, nullptr, "GetNextBlockSize"},
         FunctionInfo{4, nullptr, "ReadNextBlock2"}
-    );
+    });
 };
 
 class NVDBG_D final : public ServiceFramework<NVDBG_D> {
@@ -94,7 +94,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Open"},
         FunctionInfo{1, nullptr, "Ioctl"},
         FunctionInfo{2, nullptr, "Close"},
@@ -104,7 +104,7 @@ public:
         FunctionInfo{11, nullptr, "Ioctl2"},
         FunctionInfo{12, nullptr, "Ioctl3"},
         FunctionInfo{13, nullptr, "SetConfiguration"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

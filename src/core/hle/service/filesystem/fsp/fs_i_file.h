@@ -32,7 +32,7 @@ private:
     Result GetSize(Out<s64> out_size);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IFile::Read>, "Read"},
             FunctionInfo{1, D<&IFile::Write>, "Write"},
             FunctionInfo{2, D<&IFile::Flush>, "Flush"},
@@ -40,7 +40,7 @@ private:
             FunctionInfo{4, D<&IFile::GetSize>, "GetSize"},
             FunctionInfo{5, nullptr, "OperateRange"},
             FunctionInfo{6, nullptr, "OperateRangeWithBuffer"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };

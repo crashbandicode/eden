@@ -19,7 +19,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationAccessor::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IApplicationAccessor::GetAppletStateChangedEvent>, "GetAppletStateChangedEvent"},
         FunctionInfo{1, nullptr, "IsCompleted"},
         FunctionInfo{10, D<&IApplicationAccessor::Start>, "Start"},
@@ -46,7 +46,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationAccessor::Find
         FunctionInfo{190, nullptr, "PushToNotificationStorageChannel"},
         FunctionInfo{200, nullptr, "RequestApplicationSoftReset"},
         FunctionInfo{201, nullptr, "RestartApplicationTimer"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

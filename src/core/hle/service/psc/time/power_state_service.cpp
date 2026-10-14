@@ -10,10 +10,10 @@
 namespace Service::PSC::Time {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IPowerStateRequestHandler::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IPowerStateRequestHandler::GetPowerStateRequestEventReadableHandle>, "GetPowerStateRequestEventReadableHandle"},
         FunctionInfo{1, D<&IPowerStateRequestHandler::GetAndClearPowerStateRequest>, "GetAndClearPowerStateRequest"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

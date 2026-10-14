@@ -38,9 +38,9 @@ private:
         rb.Push(0);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IContextRegistrar::Complete, "Complete"}
-    );
+    });
 };
 
 ECTX_W::ECTX_W(Core::System& system_) : ServiceFramework{system_, "ectx:w"} {

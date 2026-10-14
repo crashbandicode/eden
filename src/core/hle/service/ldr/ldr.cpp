@@ -14,11 +14,11 @@ class DebugMonitor final : public ServiceFramework<DebugMonitor> {
 public:
     explicit DebugMonitor(Core::System& system_) : ServiceFramework{system_, "ldr:dmnt"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "SetProgramArgument"},
             FunctionInfo{1, nullptr, "FlushArguments"},
             FunctionInfo{2, nullptr, "GetProcessModuleInfo"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -28,13 +28,13 @@ class ProcessManager final : public ServiceFramework<ProcessManager> {
 public:
     explicit ProcessManager(Core::System& system_) : ServiceFramework{system_, "ldr:pm"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "CreateProcess"},
             FunctionInfo{1, nullptr, "GetProgramInfo"},
             FunctionInfo{2, nullptr, "PinProgram"},
             FunctionInfo{3, nullptr, "UnpinProgram"},
             FunctionInfo{4, nullptr, "SetEnabledProgramVerification"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -44,10 +44,10 @@ class Shell final : public ServiceFramework<Shell> {
 public:
     explicit Shell(Core::System& system_) : ServiceFramework{system_, "ldr:shel"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "SetProgramArgument"},
             FunctionInfo{1, nullptr, "FlushArguments"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

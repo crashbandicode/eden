@@ -321,13 +321,13 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IScanRequest::Submit, "Submit"},
         FunctionInfo{1, &IScanRequest::IsProcessing, "IsProcessing"},
         FunctionInfo{2, &IScanRequest::GetResult, "GetResult"},
         FunctionInfo{3, &IScanRequest::GetSystemEventReadableHandle, "GetSystemEventReadableHandle"},
         FunctionInfo{4, &IScanRequest::SetChannels, "SetChannels"}
-    );
+    });
     std::vector<Network::ScanData> scan_results;
     KernelHelpers::ServiceContext svc_ctx;
 
@@ -467,7 +467,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IRequest::GetRequestState, "GetRequestState"},
         FunctionInfo{1, &IRequest::GetResult, "GetResult"},
         FunctionInfo{2, &IRequest::GetSystemEventReadableHandles, "GetSystemEventReadableHandles"},
@@ -494,7 +494,7 @@ private:
         FunctionInfo{24, nullptr, "RegisterSocketDescriptor"},
         FunctionInfo{25, nullptr, "UnregisterSocketDescriptor"},
         FunctionInfo{26, nullptr, "GetNetworkAccessStatus", MakeVersionGate({21,0,0})}
-    );
+    });
     KernelHelpers::ServiceContext service_context;
 
     RequestState state;
@@ -514,11 +514,11 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Update"},
         FunctionInfo{1, nullptr, "PersistOld"},
         FunctionInfo{2, nullptr, "Persist"}
-    );
+    });
 };
 
 void IGeneralService::GetClientId(HLERequestContext& ctx) {
@@ -1054,7 +1054,7 @@ void IGeneralService::GetCurrentAccessPoint(HLERequestContext& ctx) {
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IGeneralService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, &IGeneralService::GetClientId, "GetClientId"},
         FunctionInfo{2, &IGeneralService::CreateScanRequest, "CreateScanRequest"},
         FunctionInfo{4, &IGeneralService::CreateRequest, "CreateRequest"},
@@ -1104,7 +1104,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IGeneralService::FindReque
         FunctionInfo{50, nullptr, "IsRewriteFeatureEnabled", MakeVersionGate({18,0,0})},
         FunctionInfo{51, nullptr, "CreateRewriteRule", MakeVersionGate({18,0,0})},
         FunctionInfo{52, nullptr, "DestroyRewriteRule", MakeVersionGate({18,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 
@@ -1138,10 +1138,10 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{4, &NetworkInterface::CreateGeneralServiceOld, "CreateGeneralServiceOld"},
         FunctionInfo{5, &NetworkInterface::CreateGeneralService, "CreateGeneralService"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

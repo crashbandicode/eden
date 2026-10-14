@@ -11,11 +11,11 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISfMonitorService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&ISfMonitorService::Initialize>, "Initialize"},
         FunctionInfo{288, C<&ISfMonitorService::GetGroupInfo>, "GetGroupInfo"},
         FunctionInfo{320, nullptr, "GetLinkLevel"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

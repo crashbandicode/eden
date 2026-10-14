@@ -11,7 +11,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemUpdateInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&ISystemUpdateInterface::GetBackgroundNetworkUpdateState>, "GetBackgroundNetworkUpdateState"},
         FunctionInfo{1, D<&ISystemUpdateInterface::OpenSystemUpdateControl>, "OpenSystemUpdateControl"},
         FunctionInfo{2, nullptr, "NotifyExFatDriverRequired"},
@@ -29,7 +29,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemUpdateInterface::Fi
         FunctionInfo{16, nullptr, "DestroySystemUpdateTask"},
         FunctionInfo{17, nullptr, "RequestSendSystemUpdate"},
         FunctionInfo{18, nullptr, "GetSendSystemUpdateProgress"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

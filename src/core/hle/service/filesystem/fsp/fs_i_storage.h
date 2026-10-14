@@ -24,14 +24,14 @@ private:
     Result GetSize(Out<u64> out_size);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IStorage::Read>, "Read"},
             FunctionInfo{1, nullptr, "Write"},
             FunctionInfo{2, nullptr, "Flush"},
             FunctionInfo{3, nullptr, "SetSize"},
             FunctionInfo{4, D<&IStorage::GetSize>, "GetSize"},
             FunctionInfo{5, nullptr, "OperateRange"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     FileSys::VirtualFile backend;

@@ -19,11 +19,11 @@ public:
     explicit PSM_MANU(Core::System& system_)
         : ServiceFramework{system_, "psm:manu"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "EnableVdd50StateControl"},
             FunctionInfo{1, nullptr, "DisableVdd50StateControl"},
             FunctionInfo{2, nullptr, "SetVdd50State"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -34,9 +34,9 @@ public:
     explicit POWCTL(Core::System& system_)
         : ServiceFramework{system_, "powctl"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "OpenSession"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

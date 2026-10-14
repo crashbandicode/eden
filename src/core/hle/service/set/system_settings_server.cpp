@@ -115,7 +115,7 @@ Result GetFirmwareVersionImpl(FirmwareVersionFormat& out_firmware, Core::System&
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemSettingsServer::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&ISystemSettingsServer::SetLanguageCode>, "SetLanguageCode"},
         FunctionInfo{1, nullptr, "SetNetworkSettings"},
         FunctionInfo{2, nullptr, "GetNetworkSettings"},
@@ -341,7 +341,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemSettingsServer::Fin
         FunctionInfo{319, C<&ISystemSettingsServer::GetAccountUserSettings>, "GetAccountUserSettings", MakeVersionGate({21,0,0})},
         FunctionInfo{320, nullptr, "SetAccountUserSettings", MakeVersionGate({21,0,0})},
         FunctionInfo{321, C<&ISystemSettingsServer::GetDefaultAccountUserSettings>, "GetDefaultAccountUserSettings", MakeVersionGate({21,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

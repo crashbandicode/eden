@@ -27,11 +27,11 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &APM::OpenSession, "OpenSession"},
         FunctionInfo{1, &APM::GetPerformanceMode, "GetPerformanceMode"},
         FunctionInfo{6, &APM::IsCpuOverclockEnabled, "IsCpuOverclockEnabled"}
-    );
+    });
     std::shared_ptr<Module> apm;
     Controller& controller;
 };
@@ -50,7 +50,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "RequestPerformanceMode"},
         FunctionInfo{1, &APM_Sys::GetPerformanceEvent, "GetPerformanceEvent"},
         FunctionInfo{2, nullptr, "GetThrottlingState"},
@@ -59,7 +59,7 @@ private:
         FunctionInfo{5, nullptr, "LoadAndApplySettings"},
         FunctionInfo{6, &APM_Sys::SetCpuBoostMode, "SetCpuBoostMode"},
         FunctionInfo{7, &APM_Sys::GetCurrentPerformanceConfiguration, "GetCurrentPerformanceConfiguration"}
-    );
+    });
     Controller& controller;
 };
 

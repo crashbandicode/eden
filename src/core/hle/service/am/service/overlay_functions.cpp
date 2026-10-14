@@ -9,7 +9,7 @@
 
 namespace Service::AM {
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IOverlayFunctions::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IOverlayFunctions::BeginToWatchShortHomeButtonMessage>, "BeginToWatchShortHomeButtonMessage"},
             FunctionInfo{1, D<&IOverlayFunctions::EndToWatchShortHomeButtonMessage>, "EndToWatchShortHomeButtonMessage"},
             FunctionInfo{2, D<&IOverlayFunctions::GetApplicationIdForLogo>, "GetApplicationIdForLogo"},
@@ -30,7 +30,7 @@ namespace Service::AM {
             FunctionInfo{70, D<&IOverlayFunctions::Unknown70>, "Unknown70"},
             FunctionInfo{90, nullptr, "SetRequiresGpuResourceUse"},
             FunctionInfo{101, nullptr, "BeginToObserveHidInputForDevelop"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

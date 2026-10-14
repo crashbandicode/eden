@@ -21,19 +21,19 @@ constexpr inline std::size_t MaxAlarms = 8;
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServicesForApplication::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{500, D<&INotificationServicesForApplication::RegisterAlarmSetting>, "RegisterAlarmSetting"},
         FunctionInfo{510, D<&INotificationServicesForApplication::UpdateAlarmSetting>, "UpdateAlarmSetting"},
         FunctionInfo{520, D<&INotificationServicesForApplication::ListAlarmSettings>, "ListAlarmSettings"},
         FunctionInfo{530, D<&INotificationServicesForApplication::LoadApplicationParameter>, "LoadApplicationParameter"},
         FunctionInfo{540, D<&INotificationServicesForApplication::DeleteAlarmSetting>, "DeleteAlarmSetting"},
         FunctionInfo{1000, D<&INotificationServicesForApplication::Initialize>, "Initialize"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServices::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{500, D<&INotificationServices::RegisterAlarmSetting>, "RegisterAlarmSetting"},
         FunctionInfo{510, D<&INotificationServices::UpdateAlarmSetting>, "UpdateAlarmSetting"},
         FunctionInfo{520, D<&INotificationServices::ListAlarmSettings>, "ListAlarmSettings"},
@@ -54,7 +54,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServices::Fin
         FunctionInfo{8010, nullptr, "UnregisterAppletResourceUserId"},
         FunctionInfo{8999, nullptr, "GetCurrentTime"},
         FunctionInfo{9000, nullptr, "GetAlarmSettingNextNotificationTime"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 
@@ -208,9 +208,9 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&INotificationSystemEventAccessor::GetSystemEvent>, "GetSystemEvent"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

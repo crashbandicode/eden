@@ -23,9 +23,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{100, &BGTC_T::OpenTaskService, "OpenTaskService"}
-    );
+    });
 };
 
 class ITaskService final : public ServiceFramework<ITaskService> {
@@ -36,7 +36,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, nullptr, "NotifyTaskStarting"},
         FunctionInfo{2, nullptr, "NotifyTaskFinished"},
         FunctionInfo{3, nullptr, "GetTriggerEvent"},
@@ -53,7 +53,7 @@ public:
         FunctionInfo{102, nullptr, "WillDisconnectNetworkWhenEnteringSleep"},
         FunctionInfo{103, nullptr, "WillStayHalfAwakeInsteadSleep"},
         FunctionInfo{200, nullptr, "Unknown200"}
-    );
+    });
 };
 
 class BGTC_SC final : public ServiceFramework<BGTC_SC> {
@@ -64,13 +64,13 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, nullptr, "GetState"},
         FunctionInfo{2, nullptr, "GetStateChangedEvent"},
         FunctionInfo{3, nullptr, "NotifyEnteringHalfAwake"},
         FunctionInfo{4, nullptr, "NotifyLeavingHalfAwake"},
         FunctionInfo{5, nullptr, "SetIsUsingSleepUnsupportedDevices"}
-    );
+    });
 };
 
 } // namespace Service::Glue

@@ -25,7 +25,7 @@ static u64 GetCurrentBuildID(const Core::System::CurrentBuildProcessID& id) {
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IBcatService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{10100, D<&IBcatService::RequestSyncDeliveryCache>, "RequestSyncDeliveryCache"},
         FunctionInfo{10101, D<&IBcatService::RequestSyncDeliveryCacheWithDirectoryName>, "RequestSyncDeliveryCacheWithDirectoryName"},
         FunctionInfo{10200, nullptr, "CancelSyncDeliveryCacheRequest"},
@@ -52,7 +52,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IBcatService::FindRequest(
         FunctionInfo{90202, nullptr, "ClearDeliveryTaskSubscriptionStatus"},
         FunctionInfo{90300, nullptr, "GetPushNotificationLog"},
         FunctionInfo{90301, nullptr, "GetDeliveryCacheStorageUsage", MakeVersionGate({11,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

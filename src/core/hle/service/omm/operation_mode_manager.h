@@ -22,7 +22,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetOperationMode"},
         FunctionInfo{1, nullptr, "GetOperationModeChangeEvent"},
         FunctionInfo{2, nullptr, "EnableAudioVisual"},
@@ -52,7 +52,7 @@ public:
         FunctionInfo{26, nullptr, "GetOperationModeSystemInfo"},
         FunctionInfo{27, nullptr, "GetAppletFullAwakingSystemEvent"},
         FunctionInfo{28, nullptr, "CreateCradleFirmwareUpdater"}
-    );
+    });
 };
 
 } // namespace Service::OMM

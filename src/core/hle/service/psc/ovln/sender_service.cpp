@@ -26,18 +26,18 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ISender::Send>, "Send"},
             FunctionInfo{1, nullptr, "GetUnreceivedMessageCount"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISenderService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&ISenderService::OpenSender>, "OpenSender"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

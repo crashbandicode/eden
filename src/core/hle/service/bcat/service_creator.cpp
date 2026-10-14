@@ -14,13 +14,13 @@
 namespace Service::BCAT {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IServiceCreator::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IServiceCreator::CreateBcatService>, "CreateBcatService"},
         FunctionInfo{1, D<&IServiceCreator::CreateDeliveryCacheStorageService>, "CreateDeliveryCacheStorageService"},
         FunctionInfo{2, D<&IServiceCreator::CreateDeliveryCacheStorageServiceWithApplicationId>, "CreateDeliveryCacheStorageServiceWithApplicationId"},
         FunctionInfo{3, nullptr, "CreateDeliveryCacheProgressService"},
         FunctionInfo{4, nullptr, "CreateDeliveryCacheProgressServiceWithApplicationId"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

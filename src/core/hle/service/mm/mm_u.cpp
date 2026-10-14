@@ -201,7 +201,7 @@ private:
         rb.Push<u32>(0);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &MM_U::InitializeOld, "InitializeOld"},
         FunctionInfo{1, &MM_U::FinalizeOld, "FinalizeOld"},
         FunctionInfo{2, &MM_U::SetAndWaitOld, "SetAndWaitOld"},
@@ -210,7 +210,7 @@ private:
         FunctionInfo{5, &MM_U::Finalize, "Finalize"},
         FunctionInfo{6, &MM_U::SetAndWait, "SetAndWait"},
         FunctionInfo{7, &MM_U::Get, "Get"}
-    );
+    });
     std::vector<Session> sessions;
     u32 request_id{1};
 };

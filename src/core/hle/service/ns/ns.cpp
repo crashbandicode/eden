@@ -21,7 +21,7 @@ class INotifyService final : public ServiceFramework<INotifyService> {
 public:
     explicit INotifyService(Core::System& system_) : ServiceFramework{system_, "pdm:ntfy"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "NotifyAppletEvent" },
         FunctionInfo{2, nullptr, "NotifyOperationModeChangeEvent" },
         FunctionInfo{3, nullptr, "NotifyPowerStateChangeEvent" },
@@ -35,7 +35,7 @@ public:
         FunctionInfo{30, nullptr, "Cmd30" },
         FunctionInfo{100, nullptr, "Cmd100" },
         FunctionInfo{101, nullptr, "Cmd101" }
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -48,14 +48,14 @@ public:
         : ServiceFramework{system_, "ns:vm"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1200, D<&IVulnerabilityManagerInterface::NeedsUpdateVulnerability>, "NeedsUpdateVulnerability"},
             FunctionInfo{1201, nullptr, "UpdateSafeSystemVersionForDebug"},
             FunctionInfo{1202, nullptr, "GetSafeSystemVersion"},
             FunctionInfo{3100, D<&IVulnerabilityManagerInterface::GetSafeSystemVersionCheckInfo>, "GetSafeSystemVersionCheckInfo"},
             FunctionInfo{3101, nullptr, "RequestUpdateSafeSystemVersionCheckInfo"},
             FunctionInfo{3102, D<&IVulnerabilityManagerInterface::ResetSafeSystemVersionCheckInfo>, "ResetSafeSystemVersionCheckInfo"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     ~IVulnerabilityManagerInterface() override = default;

@@ -18,7 +18,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationDisplayService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{100, C<&IApplicationDisplayService::GetRelayService>, "GetRelayService"},
         FunctionInfo{101, C<&IApplicationDisplayService::GetSystemDisplayService>, "GetSystemDisplayService"},
         FunctionInfo{102, C<&IApplicationDisplayService::GetManagerDisplayService>, "GetManagerDisplayService"},
@@ -41,7 +41,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationDisplayService
         FunctionInfo{2460, C<&IApplicationDisplayService::GetIndirectLayerImageRequiredMemoryInfo>, "GetIndirectLayerImageRequiredMemoryInfo"},
         FunctionInfo{5202, C<&IApplicationDisplayService::GetDisplayVsyncEvent>, "GetDisplayVsyncEvent"},
         FunctionInfo{5203, nullptr, "GetDisplayVsyncEventForDebug"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

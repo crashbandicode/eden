@@ -325,12 +325,12 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ILogger::Log, "Log"},
         FunctionInfo{1, &ILogger::SetDestination, "SetDestination"},
         FunctionInfo{2, nullptr, "TransmitHashedLog", MakeVersionGate({20,0,0})},
         FunctionInfo{3, nullptr, "DevNotify", MakeVersionGate({20,0,0})}
-    );
+    });
     ::Common::unordered_map<LogPacketHeaderEntry, std::vector<u8>> entries{};
     LogDestination destination{LogDestination::All};
 };
@@ -352,9 +352,9 @@ private:
         rb.PushIpcInterface<ILogger>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &LM::OpenLogger, "OpenLogger"}
-    );
+    });
 };
 
 class LM_GET final : public ServiceFramework<LM_GET> {
@@ -365,12 +365,12 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "StartLogging"},
         FunctionInfo{1, nullptr, "StopLogging"},
         FunctionInfo{2, nullptr, "GetLog"},
         FunctionInfo{100, nullptr, "CreateDevNotificationReceiver"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

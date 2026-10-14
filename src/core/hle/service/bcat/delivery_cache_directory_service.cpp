@@ -28,11 +28,11 @@ static BcatDigest DigestFile(const FileSys::VirtualFile& file) {
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDeliveryCacheDirectoryService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IDeliveryCacheDirectoryService::Open>, "Open"},
         FunctionInfo{1, D<&IDeliveryCacheDirectoryService::Read>, "Read"},
         FunctionInfo{2, D<&IDeliveryCacheDirectoryService::GetCount>, "GetCount"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

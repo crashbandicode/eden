@@ -12,7 +12,7 @@ namespace Service::Audio {
 using namespace AudioCore::AudioIn;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioIn::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioIn::GetAudioInState>, "GetAudioInState"},
         FunctionInfo{1, D<&IAudioIn::Start>, "Start"},
         FunctionInfo{2, D<&IAudioIn::Stop>, "Stop"},
@@ -28,7 +28,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioIn::FindRequest(u32 
         FunctionInfo{12, D<&IAudioIn::SetDeviceGain>, "SetDeviceGain"},
         FunctionInfo{13, D<&IAudioIn::GetDeviceGain>, "GetDeviceGain"},
         FunctionInfo{14, D<&IAudioIn::FlushAudioInBuffers>, "FlushAudioInBuffers"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

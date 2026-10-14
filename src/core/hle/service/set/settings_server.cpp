@@ -90,7 +90,7 @@ LanguageCode GetLanguageCodeFromIndex(std::size_t index) {
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISettingsServer::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&ISettingsServer::GetLanguageCode>, "GetLanguageCode"},
         FunctionInfo{1, C<&ISettingsServer::GetAvailableLanguageCodes>, "GetAvailableLanguageCodes"},
         FunctionInfo{2, C<&ISettingsServer::MakeLanguageCode>, "MakeLanguageCode"},
@@ -104,7 +104,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISettingsServer::FindReque
         FunctionInfo{10, nullptr, "GetFirmwareVersionForDebug"},
         FunctionInfo{11, C<&ISettingsServer::GetDeviceNickName>, "GetDeviceNickName"},
         FunctionInfo{12, C<&ISettingsServer::GetKeyCodeMapByPort>, "GetKeyCodeMapByPort"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

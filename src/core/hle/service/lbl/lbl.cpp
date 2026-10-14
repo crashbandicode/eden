@@ -302,7 +302,7 @@ private:
         rb.Push<u8>(auto_brightness_supported);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &LBL::SaveCurrentSetting, "SaveCurrentSetting"},
         FunctionInfo{1, &LBL::LoadCurrentSetting, "LoadCurrentSetting"},
         FunctionInfo{2, &LBL::SetCurrentBrightnessSetting, "SetCurrentBrightnessSetting"},
@@ -333,7 +333,7 @@ private:
         FunctionInfo{27, &LBL::DisableVrMode, "DisableVrMode"},
         FunctionInfo{28, &LBL::IsVrModeEnabled, "IsVrModeEnabled"},
         FunctionInfo{29, &LBL::IsAutoBrightnessControlSupported, "IsAutoBrightnessControlSupported"}
-    );
+    });
     bool vr_mode_enabled = false;
     float current_brightness = 1.0f;
     float ambient_light_value = 0.0f;

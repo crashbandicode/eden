@@ -11,7 +11,7 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IMonitorService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&IMonitorService::GetStateForMonitor>, "GetStateForMonitor"},
         FunctionInfo{1, nullptr, "GetNetworkInfoForMonitor"},
         FunctionInfo{2, nullptr, "GetIpv4AddressForMonitor"},
@@ -20,7 +20,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IMonitorService::FindReque
         FunctionInfo{5, nullptr, "GetNetworkConfigForMonitor"},
         FunctionInfo{100, C<&IMonitorService::InitializeMonitor>, "InitializeMonitor"},
         FunctionInfo{101, C<&IMonitorService::FinalizeMonitor>, "FinalizeMonitor"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

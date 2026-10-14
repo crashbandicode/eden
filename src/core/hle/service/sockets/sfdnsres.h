@@ -30,7 +30,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "SetDnsAddressesPrivateRequest"},
         FunctionInfo{1, nullptr, "GetDnsAddressPrivateRequest"},
         FunctionInfo{2, &SFDNSRES::GetHostByNameRequest, "GetHostByNameRequest"},
@@ -47,7 +47,7 @@ private:
         FunctionInfo{13, nullptr, "GetNameInfoRequestWithOptions"},
         FunctionInfo{14, &SFDNSRES::ResolverSetOptionRequest, "ResolverSetOptionRequest"},
         FunctionInfo{15, nullptr, "ResolverGetOptionRequest"}
-    );
+    });
 };
 
 class DNS_PRIV final : public ServiceFramework<DNS_PRIV> {
@@ -58,11 +58,11 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Cmd0"},
         FunctionInfo{1, nullptr, "Cmd1"},
         FunctionInfo{2, nullptr, "Cmd2"}
-    );
+    });
 };
 
 } // namespace Service::Sockets

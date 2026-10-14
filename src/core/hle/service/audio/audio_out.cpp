@@ -16,7 +16,7 @@ namespace Service::Audio {
 using namespace AudioCore::AudioOut;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioOut::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioOut::GetAudioOutState>, "GetAudioOutState"},
         FunctionInfo{1, D<&IAudioOut::Start>, "Start"},
         FunctionInfo{2, D<&IAudioOut::Stop>, "Stop"},
@@ -31,7 +31,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioOut::FindRequest(u32
         FunctionInfo{11, D<&IAudioOut::FlushAudioOutBuffers>, "FlushAudioOutBuffers"},
         FunctionInfo{12, D<&IAudioOut::SetAudioOutVolume>, "SetAudioOutVolume"},
         FunctionInfo{13, D<&IAudioOut::GetAudioOutVolume>, "GetAudioOutVolume"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

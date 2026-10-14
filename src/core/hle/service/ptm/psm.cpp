@@ -105,13 +105,13 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IPsmSession::BindStateChangeEvent, "BindStateChangeEvent"},
         FunctionInfo{1, &IPsmSession::UnbindStateChangeEvent, "UnbindStateChangeEvent"},
         FunctionInfo{2, &IPsmSession::SetChargerTypeChangeEventEnabled, "SetChargerTypeChangeEventEnabled"},
         FunctionInfo{3, &IPsmSession::SetPowerSupplyChangeEventEnabled, "SetPowerSupplyChangeEventEnabled"},
         FunctionInfo{4, &IPsmSession::SetBatteryVoltageStateChangeEventEnabled, "SetBatteryVoltageStateChangeEventEnabled"}
-    );
+    });
 
     KernelHelpers::ServiceContext service_context;
     bool should_signal_charger_type{};

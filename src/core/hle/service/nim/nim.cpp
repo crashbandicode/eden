@@ -30,14 +30,14 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IShopServiceAsync::Cancel>, "Cancel"},
             FunctionInfo{1, D<&IShopServiceAsync::GetSize>, "GetSize"},
             FunctionInfo{2, D<&IShopServiceAsync::Read>, "Read"},
             FunctionInfo{3, D<&IShopServiceAsync::GetErrorCode>, "GetErrorCode"},
             FunctionInfo{4, D<&IShopServiceAsync::Request>, "Request"},
             FunctionInfo{5, D<&IShopServiceAsync::Prepare>, "Prepare"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -155,9 +155,9 @@ private:
         rb.PushIpcInterface<IShopServiceAsync>(ctx, std::move(async_interface));
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IShopServiceAccessor::CreateAsyncInterface, "CreateAsyncInterface"}
-    );
+    });
 };
 
 class IShopServiceAccessServer final : public ServiceFramework<IShopServiceAccessServer> {
@@ -177,16 +177,16 @@ private:
         rb.PushIpcInterface<IShopServiceAccessor>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IShopServiceAccessServer::CreateAccessorInterface, "CreateAccessorInterface"}
-    );
+    });
 };
 
 class NIM final : public ServiceFramework<NIM> {
 public:
     explicit NIM(Core::System& system_) : ServiceFramework{system_, "nim"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "CreateSystemUpdateTask"},
         FunctionInfo{1, nullptr, "DestroySystemUpdateTask"},
         FunctionInfo{2, nullptr, "ListSystemUpdateTask"},
@@ -410,7 +410,7 @@ public:
         FunctionInfo{2051, nullptr, "Unknown2051", MakeVersionGate({20,0,0})},
         FunctionInfo{3000, nullptr, "RequestLatestApplicationIcon", MakeVersionGate({17,0,0})},
         FunctionInfo{3001, nullptr, "RequestDownloadIdbeLatestIconFile", MakeVersionGate({17,0,0})}
-    );
+    });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -452,21 +452,21 @@ private:
         rb.PushIpcInterface<IShopServiceAccessServer>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &NIM_ECA::CreateServerInterface, "CreateServerInterface"},
         FunctionInfo{1, nullptr, "RefreshDebugAvailability"},
         FunctionInfo{2, nullptr, "ClearDebugResponse"},
         FunctionInfo{3, nullptr, "RegisterDebugResponse"},
         FunctionInfo{4, &NIM_ECA::IsLargeResourceAvailable, "IsLargeResourceAvailable"},
         FunctionInfo{5, &NIM_ECA::CreateServerInterface2, "CreateServerInterface2", MakeVersionGate({17,0,0})}
-    );
+    });
 };
 
 class NIM_SHP final : public ServiceFramework<NIM_SHP> {
 public:
     explicit NIM_SHP(Core::System& system_) : ServiceFramework{system_, "nim:shp"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestDeviceAuthenticationToken"},
             FunctionInfo{1, nullptr, "RequestCachedDeviceAuthenticationToken"},
             FunctionInfo{2, nullptr, "RequestEdgeToken"},
@@ -495,7 +495,7 @@ public:
             FunctionInfo{503, nullptr, "RequestSyncTicket"},
             FunctionInfo{504, nullptr, "RequestDownloadTicketForPrepurchasedContents2"},
             FunctionInfo{505, nullptr, "RequestDownloadTicketForPrepurchasedContentsForAccount"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -567,14 +567,14 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IEnsureNetworkClockAvailabilityService::StartTask, "StartTask"},
         FunctionInfo{1, &IEnsureNetworkClockAvailabilityService::GetFinishNotificationEvent, "GetFinishNotificationEvent"},
         FunctionInfo{2, &IEnsureNetworkClockAvailabilityService::GetResult, "GetResult"},
         FunctionInfo{3, &IEnsureNetworkClockAvailabilityService::Cancel, "Cancel"},
         FunctionInfo{4, &IEnsureNetworkClockAvailabilityService::IsProcessing, "IsProcessing"},
         FunctionInfo{5, &IEnsureNetworkClockAvailabilityService::GetServerTime, "GetServerTime"}
-    );
+    });
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* finished_event;
 };
@@ -611,21 +611,21 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &NTC::OpenEnsureNetworkClockAvailabilityService, "OpenEnsureNetworkClockAvailabilityService"},
         FunctionInfo{100, &NTC::SuspendAutonomicTimeCorrection, "SuspendAutonomicTimeCorrection"},
         FunctionInfo{101, &NTC::ResumeAutonomicTimeCorrection, "ResumeAutonomicTimeCorrection"}
-    );
+    });
 };
 
 class NIM_ECAS final : public ServiceFramework<NIM_ECAS> {
 public:
     explicit NIM_ECAS(Core::System& system_) : ServiceFramework{system_, "nim:ecas"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RegisterSpecialClient"},
             FunctionInfo{1, nullptr, "UnregisterSpecialClient"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

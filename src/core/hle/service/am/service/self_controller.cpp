@@ -18,7 +18,7 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ISelfController::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ISelfController::Exit>, "Exit"},
             FunctionInfo{1, D<&ISelfController::LockExit>, "LockExit"},
             FunctionInfo{2, D<&ISelfController::UnlockExit>, "UnlockExit"},
@@ -69,7 +69,7 @@ namespace Service::AM {
             FunctionInfo{230, D<&ISelfController::Unknown230>, "Unknown230"},
             FunctionInfo{240, D<&ISelfController::Unknown240>, "Unknown240"},
             FunctionInfo{1000, nullptr, "GetDebugStorageChannel"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

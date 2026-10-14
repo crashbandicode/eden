@@ -216,11 +216,11 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IRegistrar::Issue, "Issue"},
         FunctionInfo{1, &IRegistrar::SetApplicationLaunchProperty, "SetApplicationLaunchProperty"},
         FunctionInfo{2, &IRegistrar::SetApplicationControlProperty, "SetApplicationControlProperty"}
-    );
+    });
     IssuerFn issue_process_id;
     bool issued = false;
     ApplicationLaunchProperty launch{};

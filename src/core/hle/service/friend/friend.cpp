@@ -25,11 +25,11 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &Friend::CreateFriendService, "CreateFriendService"},
         FunctionInfo{1, &Friend::CreateNotificationService, "CreateNotificationService"},
         FunctionInfo{2, nullptr, "CreateDaemonSuspendSessionService"}
-    );
+    });
 };
 
 class IFriendService final : public ServiceFramework<IFriendService> {
@@ -266,7 +266,7 @@ private:
         rb.Push(0);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IFriendService::GetCompletionEvent, "GetCompletionEvent"},
         FunctionInfo{1, &IFriendService::Cancel, "Cancel"},
         FunctionInfo{10100, nullptr, "GetFriendListIds"},
@@ -379,7 +379,7 @@ private:
         FunctionInfo{40100, nullptr, "DeleteFriendListCache"},
         FunctionInfo{40400, nullptr, "DeleteBlockedUserListCache"},
         FunctionInfo{49900, nullptr, "DeleteNetworkServiceAccountCache"}
-    );
+    });
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* completion_event;
 };
@@ -471,11 +471,11 @@ private:
         bool has_received_friend_request;
     };
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &INotificationService::GetEvent, "GetEvent"},
         FunctionInfo{1, &INotificationService::Clear, "Clear"},
         FunctionInfo{2, &INotificationService::Pop, "Pop"}
-    );
+    });
     Common::UUID uuid;
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* notification_event;
@@ -517,10 +517,10 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetReceivableNeighborInfoCountMax"},
         FunctionInfo{10, nullptr, "IsNeighborDetectionEnabled"}
-    );
+    });
 };
 
 class IServiceForSystem final : public ServiceFramework<IServiceForSystem> {
@@ -533,7 +533,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetReceivableNeighborInfoCountMax"},
         FunctionInfo{10, nullptr, "IsNeighborDetectionEnabled"},
         FunctionInfo{200, nullptr, "SetSystemData"},
@@ -571,7 +571,7 @@ public:
         FunctionInfo{310, nullptr, "SetApplicationDataForDebug"},
         FunctionInfo{400, nullptr, "GetNetworkUserId"},
         FunctionInfo{401, nullptr, "DeleteNetworkUserId"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

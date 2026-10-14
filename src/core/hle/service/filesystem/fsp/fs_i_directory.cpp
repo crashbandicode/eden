@@ -12,10 +12,10 @@
 namespace Service::FileSystem {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDirectory::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IDirectory::Read>, "Read"},
         FunctionInfo{1, D<&IDirectory::GetEntryCount>, "GetEntryCount"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

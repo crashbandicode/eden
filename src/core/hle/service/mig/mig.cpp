@@ -20,7 +20,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Unknown0", MakeVersionGate({19,0,0})},
         FunctionInfo{1, nullptr, "Unknown1", MakeVersionGate({20,0,0})},
         FunctionInfo{2, nullptr, "Unknown2", MakeVersionGate({20,0,0})},
@@ -57,7 +57,7 @@ public:
         FunctionInfo{2310, nullptr, "Unknown2310", MakeVersionGate({20,0,0})},
         FunctionInfo{2400, nullptr, "Unknown2400", MakeVersionGate({20,0,0})},
         FunctionInfo{2420, nullptr, "Unknown2420", MakeVersionGate({20,0,0})}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

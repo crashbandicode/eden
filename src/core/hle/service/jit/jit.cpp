@@ -48,12 +48,12 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IJitEnvironment::GenerateCode>, "GenerateCode"},
             FunctionInfo{1, C<&IJitEnvironment::Control>, "Control"},
             FunctionInfo{1000, C<&IJitEnvironment::LoadPlugin>, "LoadPlugin"},
             FunctionInfo{1001, C<&IJitEnvironment::GetCodeAddress>, "GetCodeAddress"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -261,9 +261,9 @@ public:
     explicit JITU(Core::System& system_) : ServiceFramework{system_, "jit:u"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&JITU::CreateJitEnvironment>, "CreateJitEnvironment"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

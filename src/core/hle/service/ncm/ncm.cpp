@@ -26,7 +26,7 @@ public:
     explicit ILocationResolver(Core::System& system_, FileSys::StorageId id)
         : ServiceFramework{system_, "ILocationResolver"}, storage{id} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "ResolveProgramPath"},
             FunctionInfo{1, nullptr, "RedirectProgramPath"},
             FunctionInfo{2, nullptr, "ResolveApplicationControlPath"},
@@ -47,7 +47,7 @@ public:
             FunctionInfo{17, nullptr, "RedirectProgramPathForDebug"},
             FunctionInfo{18, nullptr, "RedirectApplicationProgramPathForDebug"},
             FunctionInfo{19, nullptr, "EraseProgramRedirectionForDebug"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -61,7 +61,7 @@ public:
     explicit IRegisteredLocationResolver(Core::System& system_)
         : ServiceFramework{system_, "IRegisteredLocationResolver"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "ResolveProgramPath"},
             FunctionInfo{1, nullptr, "RegisterProgramPath"},
             FunctionInfo{2, nullptr, "UnregisterProgramPath"},
@@ -72,7 +72,7 @@ public:
             FunctionInfo{7, nullptr, "RedirectHtmlDocumentPath"},
             FunctionInfo{8, nullptr, "Refresh"},
             FunctionInfo{9, nullptr, "RefreshExcluding"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -83,13 +83,13 @@ public:
     explicit IAddOnContentLocationResolver(Core::System& system_)
         : ServiceFramework{system_, "IAddOnContentLocationResolver"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "ResolveAddOnContentPath"},
             FunctionInfo{1, nullptr, "RegisterAddOnContentStorage"},
             FunctionInfo{2, nullptr, "UnregisterAllAddOnContentPath"},
             FunctionInfo{3, nullptr, "RefreshApplicationAddOnContent"},
             FunctionInfo{4, nullptr, "UnregisterApplicationAddOnContent"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -240,14 +240,14 @@ private:
         rb.Push(succeeded ? ResultSuccess : ResultUnknown);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IContentStorage::GeneratePlaceHolderId, "GeneratePlaceHolderId"},
         FunctionInfo{1, &IContentStorage::CreatePlaceHolder, "CreatePlaceHolder"},
         FunctionInfo{2, &IContentStorage::DeletePlaceHolder, "DeletePlaceHolder"},
         FunctionInfo{4, &IContentStorage::WritePlaceHolder, "WritePlaceHolder"},
         FunctionInfo{5, &IContentStorage::Register, "Register"},
         FunctionInfo{6, &IContentStorage::Delete, "Delete"}
-    );
+    });
     FileSys::StorageId storage;
 };
 
@@ -345,12 +345,12 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IContentMetaDatabase::Set, "Set"},
         FunctionInfo{2, &IContentMetaDatabase::Remove, "Remove"},
         FunctionInfo{8, &IContentMetaDatabase::Has, "Has"},
         FunctionInfo{15, &IContentMetaDatabase::Commit, "Commit"}
-    );
+    });
     FileSys::StorageId storage;
     std::vector<ContentMetaKey> entries;
 };
@@ -359,12 +359,12 @@ class LR final : public ServiceFramework<LR> {
 public:
     explicit LR(Core::System& system_) : ServiceFramework{system_, "lr"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "OpenLocationResolver"},
             FunctionInfo{1, nullptr, "OpenRegisteredLocationResolver"},
             FunctionInfo{2, nullptr, "RefreshLocationResolver"},
             FunctionInfo{3, nullptr, "OpenAddOnContentLocationResolver"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -401,7 +401,7 @@ private:
         rb.PushIpcInterface<IContentMetaDatabase>(ctx, system, storage_id);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "CreateContentStorage"},
         FunctionInfo{1, nullptr, "CreateContentMetaDatabase"},
         FunctionInfo{2, nullptr, "VerifyContentStorage"},
@@ -418,7 +418,7 @@ private:
         FunctionInfo{13, nullptr, "InvalidateRightsIdCache"},
         FunctionInfo{14, nullptr, "GetMemoryReport"},
         FunctionInfo{15, nullptr, "ActivateFsContentStorage"}
-    );
+    });
 };
 
 class NCM_V final : public ServiceFramework<NCM_V> {
@@ -430,9 +430,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetSystemVersion"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

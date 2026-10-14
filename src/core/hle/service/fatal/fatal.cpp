@@ -173,10 +173,10 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetFatalEvent"},
         FunctionInfo{10, nullptr, "GetFatalContext"}
-    );
+    });
 };
 
 class Fatal_U final : public Module::Interface {
@@ -187,11 +187,11 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &Fatal_U::ThrowFatal, "ThrowFatal"},
         FunctionInfo{1, &Fatal_U::ThrowFatalWithPolicy, "ThrowFatalWithPolicy"},
         FunctionInfo{2, &Fatal_U::ThrowFatalWithCpuContext, "ThrowFatalWithCpuContext"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

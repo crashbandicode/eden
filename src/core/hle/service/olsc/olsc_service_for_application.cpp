@@ -10,7 +10,7 @@
 namespace Service::OLSC {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IOlscServiceForApplication::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IOlscServiceForApplication::Initialize>, "Initialize"},
         FunctionInfo{10, nullptr, "VerifySaveDataBackupLicenseAsync"},
         FunctionInfo{13, D<&IOlscServiceForApplication::GetSaveDataBackupSetting>, "GetSaveDataBackupSetting"},
@@ -33,7 +33,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IOlscServiceForApplication
         FunctionInfo{9022, nullptr, "DeleteSaveDataBackupAsyncForDebug"},
         FunctionInfo{9025, nullptr, "ListDownloadableSaveDataBackupInfoAsyncForDebug"},
         FunctionInfo{9026, nullptr, "DownloadSaveDataBackupAsyncForDebug"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

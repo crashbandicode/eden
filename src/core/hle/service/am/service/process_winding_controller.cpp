@@ -14,7 +14,7 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IProcessWindingController::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IProcessWindingController::GetLaunchReason>, "GetLaunchReason"},
             FunctionInfo{11, D<&IProcessWindingController::OpenCallingLibraryApplet>, "OpenCallingLibraryApplet"},
             FunctionInfo{21, D<&IProcessWindingController::PushContext>, "PushContext"},
@@ -23,7 +23,7 @@ namespace Service::AM {
             FunctionInfo{30, D<&IProcessWindingController::WindAndDoReserved>, "WindAndDoReserved"},
             FunctionInfo{40, D<&IProcessWindingController::ReserveToStartAndWaitAndUnwindThis>, "ReserveToStartAndWaitAndUnwindThis"},
             FunctionInfo{41, D<&IProcessWindingController::ReserveToStartAndWait>, "ReserveToStartAndWait"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

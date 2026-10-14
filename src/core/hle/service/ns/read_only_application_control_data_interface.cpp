@@ -74,7 +74,7 @@ void SanitizeJPEGImageSize(std::vector<u8>& image) {
 } // namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IReadOnlyApplicationControlDataInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IReadOnlyApplicationControlDataInterface::GetApplicationControlData>, "GetApplicationControlData"},
         FunctionInfo{1, D<&IReadOnlyApplicationControlDataInterface::GetApplicationDesiredLanguage>, "GetApplicationDesiredLanguage"},
         FunctionInfo{2, D<&IReadOnlyApplicationControlDataInterface::ConvertApplicationLanguageToLanguageCode>, "ConvertApplicationLanguageToLanguageCode"},
@@ -85,7 +85,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IReadOnlyApplicationContro
         FunctionInfo{13, &IReadOnlyApplicationControlDataInterface::ListApplicationTitle, "ListApplicationTitle"},
         FunctionInfo{19, D<&IReadOnlyApplicationControlDataInterface::GetApplicationControlData3>, "GetApplicationControlData"},
         FunctionInfo{23, D<&IReadOnlyApplicationControlDataInterface::GetApplicationControlData3>, "GetApplicationControlData", MakeVersionGate({23,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 
@@ -132,12 +132,12 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IAsyncValue::GetSize>, "GetSize"},
             FunctionInfo{1, D<&IAsyncValue::Get>, "Get"},
             FunctionInfo{2, D<&IAsyncValue::Cancel>, "Cancel"},
             FunctionInfo{3, D<&IAsyncValue::GetErrorContext>, "GetErrorContext"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     KernelHelpers::ServiceContext service_context;

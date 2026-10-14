@@ -17,7 +17,7 @@ public:
     explicit IUser(Core::System& system_) : Interface(system_, "NFP:IUser") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IUser>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IUser>({
             FunctionInfoTyped<IUser>{0, &IUser::Initialize, "Initialize"},
             FunctionInfoTyped<IUser>{1, &IUser::Finalize, "Finalize"},
             FunctionInfoTyped<IUser>{2, &IUser::ListDevices, "ListDevices"},
@@ -44,7 +44,7 @@ public:
             FunctionInfoTyped<IUser>{23, &IUser::AttachAvailabilityChangeEvent, "AttachAvailabilityChangeEvent"},
             FunctionInfoTyped<IUser>{24, &IUser::RecreateApplicationArea, "RecreateApplicationArea"},
             FunctionInfoTyped<IUser>{25, &IUser::StartDetection, "StartDetectionWithFilter"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -54,7 +54,7 @@ public:
     explicit ISystem(Core::System& system_) : Interface(system_, "NFP:ISystem") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<ISystem>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<ISystem>({
             FunctionInfoTyped<ISystem>{0, &ISystem::InitializeSystem, "InitializeSystem"},
             FunctionInfoTyped<ISystem>{1, &ISystem::FinalizeSystem, "FinalizeSystem"},
             FunctionInfoTyped<ISystem>{2, &ISystem::ListDevices, "ListDevices"},
@@ -83,7 +83,7 @@ public:
             FunctionInfoTyped<ISystem>{104, &ISystem::DeleteRegisterInfo, "DeleteRegisterInfo"},
             FunctionInfoTyped<ISystem>{105, &ISystem::DeleteApplicationArea, "DeleteApplicationArea"},
             FunctionInfoTyped<ISystem>{106, &ISystem::ExistsApplicationArea, "ExistsApplicationArea"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -93,7 +93,7 @@ public:
     explicit IDebug(Core::System& system_) : Interface(system_, "NFP:IDebug") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IDebug>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IDebug>({
             FunctionInfoTyped<IDebug>{0, &IDebug::InitializeDebug, "InitializeDebug"},
             FunctionInfoTyped<IDebug>{1, &IDebug::FinalizeDebug, "FinalizeDebug"},
             FunctionInfoTyped<IDebug>{2, &IDebug::ListDevices, "ListDevices"},
@@ -134,7 +134,7 @@ public:
             FunctionInfoTyped<IDebug>{204, &IDebug::ReadBackupData, "ReadBackupData"},
             FunctionInfoTyped<IDebug>{205, &IDebug::WriteBackupData, "WriteBackupData"},
             FunctionInfoTyped<IDebug>{206, &IDebug::WriteNtf, "WriteNtf"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -155,9 +155,9 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IUserManager::CreateUserInterface, "CreateUserInterface"}
-    );
+    });
 };
 
 class ISystemManager final : public ServiceFramework<ISystemManager> {
@@ -177,9 +177,9 @@ private:
         rb.PushIpcInterface<ISystem>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &ISystemManager::CreateSystemInterface, "CreateSystemInterface"}
-    );
+    });
 };
 
 class IDebugManager final : public ServiceFramework<IDebugManager> {
@@ -199,9 +199,9 @@ private:
         rb.PushIpcInterface<IDebug>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IDebugManager::CreateDebugInterface, "CreateDebugInterface"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

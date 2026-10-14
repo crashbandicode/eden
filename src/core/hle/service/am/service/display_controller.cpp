@@ -13,7 +13,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDisplayController::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetLastForegroundCaptureImage"},
         FunctionInfo{1, nullptr, "UpdateLastForegroundCaptureImage"},
         FunctionInfo{2, nullptr, "GetLastApplicationCaptureImage"},
@@ -42,7 +42,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IDisplayController::FindRe
         FunctionInfo{26, D<&IDisplayController::AcquireCallerAppletCaptureSharedBuffer>, "AcquireCallerAppletCaptureSharedBuffer"},
         FunctionInfo{27, D<&IDisplayController::ReleaseCallerAppletCaptureSharedBuffer>, "ReleaseCallerAppletCaptureSharedBuffer"},
         FunctionInfo{28, nullptr, "TakeScreenShotOfOwnLayerEx"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

@@ -13,7 +13,7 @@
 namespace Service::News {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{10100, D<&INewsService::PostLocalNews>, "PostLocalNews"},
         FunctionInfo{20100, D<&INewsService::SetPassphrase>, "SetPassphrase"},
         FunctionInfo{30100, D<&INewsService::GetSubscriptionStatus>, "GetSubscriptionStatus"},
@@ -33,7 +33,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsService::FindRequest(
         FunctionInfo{40200, D<&INewsService::ClearStorage>, "ClearStorage"},
         FunctionInfo{40201, D<&INewsService::ClearSubscriptionStatusAll>, "ClearSubscriptionStatusAll"},
         FunctionInfo{90100, D<&INewsService::GetNewsDatabaseDump>, "GetNewsDatabaseDump"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

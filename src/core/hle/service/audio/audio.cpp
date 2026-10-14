@@ -23,14 +23,14 @@ public:
     explicit IAudioOutManagerForApplet(Core::System& system_)
         : ServiceFramework{system_, "audout:a"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"},
             FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
             FunctionInfo{3, nullptr, "SetProcessMasterVolume"},
             FunctionInfo{4, nullptr, "GetProcessRecordVolume"},
             FunctionInfo{5, nullptr, "SetProcessRecordVolume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -41,13 +41,13 @@ public:
     explicit IAudioSnoopManager(Core::System& system_)
         : ServiceFramework{system_, "auddev"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetDspStatistics"},
             FunctionInfo{1, nullptr, "GetAppletStateSummaries"},
             FunctionInfo{2, nullptr, "SetDspStatisticsParameter"},
             FunctionInfo{3, nullptr, "GetDspStatisticsParameter"},
             FunctionInfo{6, nullptr, "GetDspUsage"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -58,12 +58,12 @@ public:
     explicit IAudioInManagerForApplet(Core::System& system_)
         : ServiceFramework{system_, "audin:a"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"},
             FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
             FunctionInfo{3, nullptr, "SetProcessMasterVolume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -74,7 +74,7 @@ public:
     explicit IAudioRendererManagerForApplet(Core::System& system_)
         : ServiceFramework{system_, "audren:a"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"},
             FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
@@ -83,7 +83,7 @@ public:
             FunctionInfo{5, nullptr, "UnregisterAppletResourceUserId"},
             FunctionInfo{6, nullptr, "GetProcessRecordVolume"},
             FunctionInfo{7, nullptr, "SetProcessRecordVolume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -94,10 +94,10 @@ public:
     explicit IAudioOutManagerForDebugger(Core::System& system_)
         : ServiceFramework{system_, "audout:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -108,10 +108,10 @@ public:
     explicit IAudioInManagerForDebugger(Core::System& system_)
         : ServiceFramework{system_, "audin:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -122,10 +122,10 @@ public:
     explicit IFinalOutputRecorderManagerForDebugger(Core::System& system_)
         : ServiceFramework{system_, "audrec:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -136,10 +136,10 @@ public:
     explicit IAudioRendererManagerForDebugger(Core::System& system_)
         : ServiceFramework{system_, "audren:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspend"},
             FunctionInfo{1, nullptr, "RequestResume"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -150,7 +150,7 @@ public:
     explicit IAudioSystemManagerForApplet(Core::System& system_)
         : ServiceFramework{system_, "aud:a"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RegisterAppletResourceUserId"},
             FunctionInfo{1, nullptr, "UnregisterAppletResourceUserId"},
             FunctionInfo{2, nullptr, "RequestSuspendAudio"},
@@ -162,7 +162,7 @@ public:
             FunctionInfo{8, nullptr, "GetAudioOutputProcessRecordVolume"},
             FunctionInfo{9, nullptr, "SetAudioOutputProcessRecordVolume"},
             FunctionInfo{10, nullptr, "GetAppletStateSummaries"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -173,10 +173,10 @@ public:
     explicit IAudioSystemManagerForDebugger(Core::System& system_)
         : ServiceFramework{system_, "aud:d"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestSuspendAudioForDebug"},
             FunctionInfo{1, nullptr, "RequestResumeAudioForDebug"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

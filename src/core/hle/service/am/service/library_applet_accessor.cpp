@@ -46,7 +46,7 @@ static void ReplaceEmptyUuidWithCurrentUser(const std::shared_ptr<LibraryAppletS
 }
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ILibraryAppletAccessor::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ILibraryAppletAccessor::GetAppletStateChangedEvent>, "GetAppletStateChangedEvent"},
             FunctionInfo{1, D<&ILibraryAppletAccessor::IsCompleted>, "IsCompleted"},
             FunctionInfo{10, D<&ILibraryAppletAccessor::Start>, "Start"},
@@ -70,7 +70,7 @@ static void ReplaceEmptyUuidWithCurrentUser(const std::shared_ptr<LibraryAppletS
             FunctionInfo{150, nullptr, "RequestForAppletToGetForeground"},
             FunctionInfo{160, D<&ILibraryAppletAccessor::GetIndirectLayerConsumerHandle>, "GetIndirectLayerConsumerHandle", MakeVersionGate({2,0,0})},
             FunctionInfo{170, D<&ILibraryAppletAccessor::Unknown170>, "Unknown170", MakeVersionGate({22,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

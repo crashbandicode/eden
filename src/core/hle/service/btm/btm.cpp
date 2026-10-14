@@ -119,7 +119,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IBtmSystemCore::StartGamepadPairing>, "StartGamepadPairing"},
             FunctionInfo{1, C<&IBtmSystemCore::CancelGamepadPairing>, "CancelGamepadPairing"},
             FunctionInfo{2, nullptr, "ClearGamepadPairingDatabase"},
@@ -144,7 +144,7 @@ public:
             FunctionInfo{21, nullptr, "RemoveAudioDevicePairing"},
             FunctionInfo{22, C<&IBtmSystemCore::RequestAudioDeviceConnectionRejection>, "RequestAudioDeviceConnectionRejection"},
             FunctionInfo{23, C<&IBtmSystemCore::CancelAudioDeviceConnectionRejection>, "CancelAudioDeviceConnectionRejection"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     KernelHelpers::ServiceContext service_context;
@@ -166,9 +166,9 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IBtmSystem::GetCore>, "GetCore"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -227,7 +227,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IBtmUserCore::AcquireBleScanEvent>, "AcquireBleScanEvent"},
             FunctionInfo{1, nullptr, "GetBleScanFilterParameter"},
             FunctionInfo{2, nullptr, "GetBleScanFilterParameter2"},
@@ -260,7 +260,7 @@ public:
             FunctionInfo{35, nullptr, "GetBleMtu"},
             FunctionInfo{36, nullptr, "RegisterBleGattDataPath"},
             FunctionInfo{37, nullptr, "UnregisterBleGattDataPath"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     KernelHelpers::ServiceContext service_context;
@@ -283,9 +283,9 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IBtmUser::GetCore>, "GetCore"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -297,7 +297,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "AcquireDiscoveryEvent"},
         FunctionInfo{1, nullptr, "StartDiscovery"},
         FunctionInfo{2, nullptr, "CancelDiscovery"},
@@ -316,14 +316,14 @@ public:
         FunctionInfo{15, nullptr, "SleepTest", MakeVersionGate({15,0,0})},
         FunctionInfo{16, nullptr, "MinimumAwakeTest", MakeVersionGate({15,0,0})},
         FunctionInfo{17, nullptr, "ForceEnableBtm", MakeVersionGate({15,0,0})}
-    );
+    });
 };
 
 class IBtm final : public ServiceFramework<IBtm> {
 public:
     explicit IBtm(Core::System& system_) : ServiceFramework{system_, "btm"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetState"},
             FunctionInfo{1, nullptr, "GetHostDeviceProperty"},
             FunctionInfo{2, nullptr, "AcquireDeviceConditionEvent"},
@@ -411,7 +411,7 @@ public:
             FunctionInfo{115, nullptr, "GetShortenedDeviceCondition", MakeVersionGate({14,0,0})},
             FunctionInfo{116, nullptr, "SetAudioSinkVolume", MakeVersionGate({15,0,0})},
             FunctionInfo{117, nullptr, "GetAudioSinkVolume", MakeVersionGate({15,0,0})}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

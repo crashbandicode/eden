@@ -21,9 +21,9 @@ public:
     explicit IClientProcessMonitor(Core::System& system_) : ServiceFramework{system_, "IClientProcessMonitor"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IClientProcessMonitor::RegisterClient>, "RegisterClient"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     ~IClientProcessMonitor() override = default;
@@ -41,9 +41,9 @@ public:
     explicit IMonitorServiceCreator(Core::System& system_) : ServiceFramework{system_, "ldn:m"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&IMonitorServiceCreator::CreateMonitorService>, "CreateMonitorService"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 private:
@@ -62,10 +62,10 @@ public:
     explicit ISystemServiceCreator(Core::System& system_) : ServiceFramework{system_, "ldn:s"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&ISystemServiceCreator::CreateSystemLocalCommunicationService>, "CreateSystemLocalCommunicationService"},
             FunctionInfo{1, C<&ISystemServiceCreator::CreateClientProcessMonitor>, "CreateClientProcessMonitor", MakeVersionGate({18,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 private:
@@ -93,10 +93,10 @@ public:
     explicit IUserServiceCreator(Core::System& system_) : ServiceFramework{system_, "ldn:u"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IUserServiceCreator::CreateUserLocalCommunicationService>, "CreateUserLocalCommunicationService"},
             FunctionInfo{1, D<&IUserServiceCreator::CreateClientProcessMonitor>, "CreateClientProcessMonitor", MakeVersionGate({18,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 private:
@@ -127,7 +127,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{256, nullptr, "AttachNetworkInterfaceStateChangeEvent"},
         FunctionInfo{264, nullptr, "GetNetworkInterfaceLastError"},
@@ -146,7 +146,7 @@ public:
         FunctionInfo{1544, nullptr, "RecvFromOtherGroup"},
         FunctionInfo{1552, nullptr, "AddAcceptableGroupId"},
         FunctionInfo{1560, nullptr, "ClearAcceptableGroupId"}
-    );
+    });
 };
 
 class ISfServiceCreator final : public ServiceFramework<ISfServiceCreator> {
@@ -154,10 +154,10 @@ public:
     explicit ISfServiceCreator(Core::System& system_, bool is_system_, const char* name_) : ServiceFramework{system_, name_}, is_system{is_system_} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&ISfServiceCreator::CreateNetworkService>, "CreateNetworkService"},
             FunctionInfo{8, C<&ISfServiceCreator::CreateNetworkServiceMonitor>, "CreateNetworkServiceMonitor"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 private:
@@ -187,9 +187,9 @@ public:
     explicit ISfMonitorServiceCreator(Core::System& system_) : ServiceFramework{system_, "lp2p:m"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, C<&ISfMonitorServiceCreator::CreateMonitorService>, "CreateMonitorService"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 private:

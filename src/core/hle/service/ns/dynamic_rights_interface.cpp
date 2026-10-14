@@ -10,7 +10,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDynamicRightsInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "RequestApplicationRightsOnServer"},
         FunctionInfo{1, nullptr, "RequestAssignRights"},
         FunctionInfo{4, nullptr, "DeprecatedRequestAssignRightsToResume"},
@@ -40,7 +40,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IDynamicRightsInterface::F
         FunctionInfo{28, nullptr, "Unknown28", MakeVersionGate({20,0,0})},
         FunctionInfo{29, nullptr, "Unknown29", MakeVersionGate({21,0,0})},
         FunctionInfo{30, nullptr, "Unknown30", MakeVersionGate({21,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

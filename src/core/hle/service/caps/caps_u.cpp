@@ -14,7 +14,7 @@
 namespace Service::Capture {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAlbumApplicationService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{32, C<&IAlbumApplicationService::SetShimLibraryVersion>, "SetShimLibraryVersion"},
         FunctionInfo{102, C<&IAlbumApplicationService::GetAlbumFileList0AafeAruidDeprecated>, "GetAlbumFileList0AafeAruidDeprecated"},
         FunctionInfo{103, nullptr, "DeleteAlbumFileByAruid"},
@@ -29,7 +29,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAlbumApplicationService::
         FunctionInfo{143, nullptr, "GetAlbumFileList4AaeUidAruid"},
         FunctionInfo{144, nullptr, "GetAllAlbumFileList3AaeAruid"},
         FunctionInfo{60002, nullptr, "OpenAccessorSessionForApplication"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

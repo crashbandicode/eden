@@ -14,7 +14,7 @@
 namespace Service::PSC::Time {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ServiceManager::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0,   D<&ServiceManager::GetStaticServiceAsUser>, "GetStaticServiceAsUser"},
             FunctionInfo{5,   D<&ServiceManager::GetStaticServiceAsAdmin>, "GetStaticServiceAsAdmin"},
             FunctionInfo{6,   D<&ServiceManager::GetStaticServiceAsRepair>, "GetStaticServiceAsRepair"},
@@ -33,7 +33,7 @@ namespace Service::PSC::Time {
             FunctionInfo{200, D<&ServiceManager::GetClosestAlarmUpdatedEvent>, "GetClosestAlarmUpdatedEvent"},
             FunctionInfo{201, D<&ServiceManager::CheckAndSignalAlarms>, "CheckAndSignalAlarms"},
             FunctionInfo{202, D<&ServiceManager::GetClosestAlarmInfo>, "GetClosestAlarmInfo "}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

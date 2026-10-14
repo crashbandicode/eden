@@ -29,7 +29,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{5, nullptr, "GetSettingUrl"},
         FunctionInfo{10, nullptr, "GetSettingName"},
         FunctionInfo{11, &NSD::GetEnvironmentIdentifier, "GetEnvironmentIdentifier"},
@@ -56,7 +56,7 @@ private:
         FunctionInfo{100, &NSD::GetApplicationServerEnvironmentType, "GetApplicationServerEnvironmentType"},
         FunctionInfo{101, nullptr, "SetApplicationServerEnvironmentType"},
         FunctionInfo{102, nullptr, "DeleteApplicationServerEnvironmentType"}
-    );
+    });
 };
 
 } // namespace Service::Sockets

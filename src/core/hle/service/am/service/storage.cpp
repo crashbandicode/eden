@@ -34,11 +34,11 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IStorageAccessor::GetSize>, "GetSize"},
             FunctionInfo{10, D<&IStorageAccessor::Write>, "Write"},
             FunctionInfo{11, D<&IStorageAccessor::Read>, "Read"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -64,10 +64,10 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ITransferStorageAccessor::GetSize>, "GetSize"},
             FunctionInfo{1, D<&ITransferStorageAccessor::GetHandle>, "GetHandle"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -75,10 +75,10 @@ public:
 };
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IStorage::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IStorage::Open>, "Open"},
         FunctionInfo{1, D<&IStorage::OpenTransferStorage>, "OpenTransferStorage"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

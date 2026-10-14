@@ -117,10 +117,10 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &IAlarmService::CreateWakeupAlarm, "CreateWakeupAlarm"},
         FunctionInfo{1, &IAlarmService::CreateBackgroundTaskAlarm, "CreateBackgroundTaskAlarm"}
-    );
+    });
     Alarms& m_alarms;
 };
 
@@ -138,14 +138,14 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0,  &ISteadyClockAlarm::GetAlarmEvent, "GetAlarmEvent"},
         FunctionInfo{1,  &ISteadyClockAlarm::Enable, "Enable"},
         FunctionInfo{2,  &ISteadyClockAlarm::Disable, "Disable"},
         FunctionInfo{3,  &ISteadyClockAlarm::IsEnabled, "IsEnabled"},
         FunctionInfo{10, nullptr, "CreateWakeLock"},
         FunctionInfo{11, nullptr, "DestroyWakeLock"}
-    );
+    });
     KernelHelpers::ServiceContext m_ctx;
     Alarms& m_alarms;
     Alarm m_alarm;

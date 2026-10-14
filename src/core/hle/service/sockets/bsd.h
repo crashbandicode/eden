@@ -193,7 +193,7 @@ protected:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &BSD_USA::RegisterClient, "RegisterClient"},
         FunctionInfo{1, &BSD_USA::StartMonitoring, "StartMonitoring"},
         FunctionInfo{2, &BSD_USA::Socket, "Socket"},
@@ -240,7 +240,7 @@ protected:
         FunctionInfo{43, nullptr, "Unknown43", MakeVersionGate({21,0,0})},
         FunctionInfo{200, nullptr, "SetThreadCoreMask", MakeVersionGate({15,0,0})},
         FunctionInfo{201, nullptr, "GetThreadCoreMask", MakeVersionGate({15,0,0})}
-    );
+    });
     bool is_user = false;
 };
 
@@ -252,7 +252,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "SetIfUp"},
         FunctionInfo{1, nullptr, "SetIfUpWithEvent"},
         FunctionInfo{2, nullptr, "CancelIf"},
@@ -269,7 +269,7 @@ public:
         FunctionInfo{13, nullptr, "Unknown13"},
         FunctionInfo{14, nullptr, "Unknown14"},
         FunctionInfo{15, nullptr, "Unknown15"}
-    );
+    });
 };
 
 class BSD_NU final : public ServiceFramework<BSD_NU> {
@@ -280,9 +280,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "CreateUserService"}
-    );
+    });
 };
 
 } // namespace Service::Sockets

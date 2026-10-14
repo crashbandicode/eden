@@ -15,10 +15,10 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemRootService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, C<&ISystemRootService::GetDisplayService>, "GetDisplayService"},
         FunctionInfo{3, nullptr, "GetDisplayServiceWithProxyNameExchange"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

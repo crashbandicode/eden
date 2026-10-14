@@ -15,9 +15,9 @@
 namespace Service::HID {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IActiveVibrationDeviceList::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, C<&IActiveVibrationDeviceList::ActivateVibrationDevice>, "ActivateVibrationDevice"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

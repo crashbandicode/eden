@@ -24,13 +24,13 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetTemperatureRange"},
         FunctionInfo{1, &TS::GetTemperature, "GetTemperature"},
         FunctionInfo{2, nullptr, "SetMeasurementMode"},
         FunctionInfo{3, &TS::GetTemperatureMilliC, "GetTemperatureMilliC"},
         FunctionInfo{4, &TS::OpenSession, "OpenSession"}
-    );
+    });
 };
 
 } // namespace Service::PTM

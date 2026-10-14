@@ -11,7 +11,7 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IGlobalStateController::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "RequestToEnterSleep"},
             FunctionInfo{1, nullptr, "EnterSleep"},
             FunctionInfo{2, nullptr, "StartSleepSequence"},
@@ -25,7 +25,7 @@ namespace Service::AM {
             FunctionInfo{14, D<&IGlobalStateController::ShouldSleepOnBoot>, "ShouldSleepOnBoot"},
             FunctionInfo{15, D<&IGlobalStateController::GetHdcpAuthenticationFailedEvent>, "GetHdcpAuthenticationFailedEvent"},
             FunctionInfo{30, D<&IGlobalStateController::OpenCradleFirmwareUpdater>, "OpenCradleFirmwareUpdater"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

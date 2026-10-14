@@ -136,14 +136,14 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &Controller::ConvertCurrentObjectToDomain, "ConvertCurrentObjectToDomain"},
         FunctionInfo{1, nullptr, "CopyFromCurrentDomain"},
         FunctionInfo{2, &Controller::CloneCurrentObject, "CloneCurrentObject"},
         FunctionInfo{3, &Controller::QueryPointerBufferSize, "QueryPointerBufferSize"},
         FunctionInfo{4, &Controller::CloneCurrentObjectEx, "CloneCurrentObjectEx"},
         FunctionInfo{5, &Controller::SetPointerBufferSize, "SetPointerBufferSize"} //TODO: where does this come from
-    );
+    });
 };
 
 ServiceManager::ServiceManager(Kernel::KernelCore& kernel_) : kernel{kernel_} {
@@ -250,7 +250,7 @@ private:
     void RegisterServiceImpl(HLERequestContext& ctx, std::string name, u32 max_session_count, bool is_light);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, &SM::Initialize, "Initialize"},
             FunctionInfo{1, &SM::GetServiceCmif, "GetService"},
             FunctionInfo{2, &SM::RegisterServiceCmif, "RegisterService"},
@@ -265,11 +265,11 @@ private:
             FunctionInfo{65006, nullptr, "AtmosphereDeclareFutureMitm"},
             FunctionInfo{65100, &SM::AtmosphereHasService, "AtmosphereHasService"},
             FunctionInfo{65101, nullptr, "AtmosphereWaitService"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     std::optional<FunctionInfoBase> FindRequestTipc(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, &SM::Initialize, "Initialize"},
             FunctionInfo{1, &SM::GetServiceTipc, "GetService"},
             FunctionInfo{2, &SM::RegisterServiceTipc, "RegisterService"},
@@ -284,7 +284,7 @@ private:
             FunctionInfo{65006, nullptr, "AtmosphereDeclareFutureMitm"},
             FunctionInfo{65100, &SM::AtmosphereHasService, "AtmosphereHasService"},
             FunctionInfo{65101, nullptr, "AtmosphereWaitService"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

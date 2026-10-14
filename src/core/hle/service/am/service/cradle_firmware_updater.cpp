@@ -10,14 +10,14 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ICradleFirmwareUpdater::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ICradleFirmwareUpdater::StartUpdate>, "StartUpdate"},
             FunctionInfo{1, D<&ICradleFirmwareUpdater::FinishUpdate>, "FinishUpdate"},
             FunctionInfo{2, D<&ICradleFirmwareUpdater::GetCradleDeviceInfo>, "GetCradleDeviceInfo"},
             FunctionInfo{3, D<&ICradleFirmwareUpdater::GetCradleDeviceInfoChangeEvent>, "GetCradleDeviceInfoChangeEvent"},
             FunctionInfo{4, nullptr, "GetUpdateProgressInfo"},
             FunctionInfo{5, nullptr, "GetLastInternalResult"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

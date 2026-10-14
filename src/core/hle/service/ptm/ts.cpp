@@ -34,11 +34,11 @@ private:
         rb.Push(temperature);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetTemperatureRange"},
         FunctionInfo{2, nullptr, "SetMeasurementMode"},
         FunctionInfo{4, &ISession::GetTemperature, "GetTemperature"}
-    );
+    });
 };
 
 TS::TS(Core::System& system_) : ServiceFramework{system_, "ts"} {

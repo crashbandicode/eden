@@ -35,24 +35,24 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &MNPP_APP::Cmd0, "Cmd0"},
         FunctionInfo{1, &MNPP_APP::Cmd1, "Cmd1"}
-    );
+    });
 };
 
 class MNPP_SYS final : public ServiceFramework<MNPP_SYS> {
 public:
     explicit MNPP_SYS(Core::System& system_) : ServiceFramework{system_, "mnpp:sys"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "Cmd0"},
             FunctionInfo{10, nullptr, "Cmd10"},
             FunctionInfo{100, nullptr, "Cmd100"},
             FunctionInfo{200, nullptr, "Cmd200"},
             FunctionInfo{300, nullptr, "Cmd300"},
             FunctionInfo{400, nullptr, "Cmd400"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -62,13 +62,13 @@ class MNPP_WEB final : public ServiceFramework<MNPP_WEB> {
 public:
     explicit MNPP_WEB(Core::System& system_) : ServiceFramework{system_, "mnpp:web"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "Cmd0"},
             FunctionInfo{1, nullptr, "Cmd1"},
             FunctionInfo{10, nullptr, "Cmd10"},
             FunctionInfo{20, nullptr, "Cmd20"},
             FunctionInfo{100, nullptr, "Cmd100"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

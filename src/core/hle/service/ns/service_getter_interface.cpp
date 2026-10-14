@@ -21,7 +21,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IServiceGetterInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{7988, D<&IServiceGetterInterface::GetDynamicRightsInterface>, "GetDynamicRightsInterface"},
         FunctionInfo{7989, D<&IServiceGetterInterface::GetReadOnlyApplicationControlDataInterface>, "GetReadOnlyApplicationControlDataInterface"},
         FunctionInfo{7991, D<&IServiceGetterInterface::GetReadOnlyApplicationRecordInterface>, "GetReadOnlyApplicationRecordInterface"},
@@ -33,7 +33,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IServiceGetterInterface::F
         FunctionInfo{7997, D<&IServiceGetterInterface::GetDownloadTaskInterface>, "GetDownloadTaskInterface"},
         FunctionInfo{7998, D<&IServiceGetterInterface::GetContentManagementInterface>, "GetContentManagementInterface"},
         FunctionInfo{7999, D<&IServiceGetterInterface::GetDocumentInterface>, "GetDocumentInterface"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

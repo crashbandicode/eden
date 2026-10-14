@@ -22,12 +22,12 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "Set"},
         FunctionInfo{2, nullptr, "Get"},
         FunctionInfo{3, nullptr, "Cancel"}
-    );
+    });
 };
 
 class FGM final : public ServiceFramework<FGM> {
@@ -47,9 +47,9 @@ private:
         rb.PushIpcInterface<IRequest>(ctx, system);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &FGM::Initialize, "Initialize"}
-    );
+    });
 };
 
 class FGM_DBG final : public ServiceFramework<FGM_DBG> {
@@ -60,11 +60,11 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "Read"},
         FunctionInfo{2, nullptr, "Cancel"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

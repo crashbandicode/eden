@@ -9,7 +9,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IFactoryResetInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{100, nullptr, "ResetToFactorySettings"},
         FunctionInfo{101, nullptr, "ResetToFactorySettingsWithoutUserSaveData"},
         FunctionInfo{102, nullptr, "ResetToFactorySettingsForRefurbishment"},
@@ -17,7 +17,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IFactoryResetInterface::Fi
         FunctionInfo{104, nullptr, "ResetToFactorySettingsWithPlatformRegionAuthentication"},
         FunctionInfo{105, nullptr, "RequestResetToFactorySettingsSecurely"},
         FunctionInfo{106, nullptr, "RequestResetToFactorySettingsWithPlatformRegionAuthenticationSecurely"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

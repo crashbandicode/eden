@@ -10,7 +10,7 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemLocalCommunicationService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetState"},
         FunctionInfo{1, nullptr, "GetNetworkInfo"},
         FunctionInfo{2, nullptr, "GetIpv4Address"},
@@ -41,7 +41,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemLocalCommunicationS
         FunctionInfo{401, nullptr, "FinalizeSystem"},
         FunctionInfo{402, nullptr, "SetOperationMode"},
         FunctionInfo{403, C<&ISystemLocalCommunicationService::InitializeSystem2>, "InitializeSystem2"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

@@ -22,7 +22,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, nullptr, "CaptureRawImage"},
         FunctionInfo{2, nullptr, "CaptureRawImageWithTimeout"},
         FunctionInfo{3, nullptr, "AttachSharedBuffer"},
@@ -43,7 +43,7 @@ public:
         FunctionInfo{1202, nullptr, "CloseRawScreenShotReadStream"},
         FunctionInfo{1203, nullptr, "ReadRawScreenShotReadStream"},
         FunctionInfo{1204, nullptr, "Unknown1204"}
-    );
+    });
 };
 
 } // namespace Service::Capture

@@ -450,7 +450,7 @@ public:
     };
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, D<&IParentalControlService::Initialize>, "Initialize"},
             FunctionInfo{1001, D<&IParentalControlService::CheckFreeCommunicationPermission>, "CheckFreeCommunicationPermission"},
             FunctionInfo{1002, D<&IParentalControlService::ConfirmLaunchApplicationPermission>, "ConfirmLaunchApplicationPermission"},
@@ -575,7 +575,7 @@ public:
             FunctionInfo{3001, nullptr, "GetErrorContextChangedEvent", MakeVersionGate({20,0,0})},
             FunctionInfo{145601, D<&IParentalControlService::GetPlayTimerSettings>, "GetPlayTimerSettings", MakeVersionGate({18,0,0})},
             FunctionInfo{195101, D<&IParentalControlService::SetPlayTimerSettings>, "SetPlayTimerSettingsForDebug", MakeVersionGate({18,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     States states{};
@@ -617,10 +617,10 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IParentalControlServiceFactory::CreateService>, "CreateService"},
             FunctionInfo{1, D<&IParentalControlServiceFactory::CreateServiceWithoutInitialize>, "CreateServiceWithoutInitialize"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     Capability capability{};

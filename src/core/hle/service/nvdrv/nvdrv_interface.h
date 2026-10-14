@@ -41,7 +41,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &NVDRV::Open, "Open"},
         FunctionInfo{1, &NVDRV::Ioctl1, "Ioctl"},
         FunctionInfo{2, &NVDRV::Close, "Close"},
@@ -57,7 +57,7 @@ private:
         FunctionInfo{12, &NVDRV::Ioctl3, "Ioctl3"},
         FunctionInfo{13, &NVDRV::SetGraphicsFirmwareMemoryMarginEnabled,
          "SetGraphicsFirmwareMemoryMarginEnabled"}
-    );
+    });
     std::shared_ptr<Module> nvdrv;
     u64 pid{};
     bool is_initialized{};

@@ -69,7 +69,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "NotifyMessageToHomeMenuForDebug"},
         FunctionInfo{1, nullptr, "OpenMainApplication"},
         FunctionInfo{10, nullptr, "PerformSystemButtonPressing"},
@@ -93,7 +93,7 @@ public:
         FunctionInfo{200, nullptr, "CreateFloatingLibraryAppletAccepterForDebug"},
         FunctionInfo{300, nullptr, "TerminateAllRunningApplicationsForDebug"},
         FunctionInfo{900, nullptr, "GetGrcProcessLaunchedSystemEvent"}
-    );
+    });
 };
 
 class IApplicationProxy final : public ServiceFramework<IApplicationProxy> {
@@ -172,7 +172,7 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IApplicationProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&IApplicationProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&IApplicationProxy::GetWindowController>, "GetWindowController"},
@@ -182,7 +182,7 @@ private:
             FunctionInfo{11, D<&IApplicationProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
             FunctionInfo{20, D<&IApplicationProxy::GetApplicationFunctions>, "GetApplicationFunctions"},
             FunctionInfo{1000, D<&IApplicationProxy::GetDebugFunctions>, "GetDebugFunctions"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -219,9 +219,9 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -277,7 +277,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "SetTerminateResult"},
             FunctionInfo{10, nullptr, "ReadThemeStorage"},
             FunctionInfo{11, nullptr, "WriteThemeStorage"},
@@ -302,7 +302,7 @@ public:
             FunctionInfo{320, D<&IAppletCommonFunctions::SetGpuTimeSliceBoost>, "SetGpuTimeSliceBoost", MakeVersionGate({19,0,0})},
             FunctionInfo{321, nullptr, "SetGpuTimeSliceBoostDueToApplication", MakeVersionGate({19,0,0})},
             FunctionInfo{350, D<&IAppletCommonFunctions::Unknown350>, "Unknown350", MakeVersionGate({20,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     const std::shared_ptr<Applet> applet;
@@ -404,7 +404,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ISystemAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&ISystemAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&ISystemAppletProxy::GetWindowController>, "GetWindowController"},
@@ -417,7 +417,7 @@ public:
             FunctionInfo{22, D<&ISystemAppletProxy::GetApplicationCreator>, "GetApplicationCreator"},
             FunctionInfo{23, D<&ISystemAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
             FunctionInfo{1000, D<&ISystemAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -689,7 +689,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ILibraryAppletSelfAccessor::PopInData>, "PopInData"},
             FunctionInfo{1, D<&ILibraryAppletSelfAccessor::PushOutData>, "PushOutData"},
             FunctionInfo{2, D<&ILibraryAppletSelfAccessor::PopInteractiveInData>, "PopInteractiveInData"},
@@ -726,7 +726,7 @@ public:
             FunctionInfo{140, nullptr, "SetApplicationMemoryReservation"},
             FunctionInfo{150, D<&ILibraryAppletSelfAccessor::ShouldSetGpuTimeSliceManually>, "ShouldSetGpuTimeSliceManually"},
             FunctionInfo{160, D<&ILibraryAppletSelfAccessor::GetLibraryAppletInfoEx>, "GetLibraryAppletInfoEx"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     const std::shared_ptr<Applet> m_applet;
@@ -830,7 +830,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ILibraryAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&ILibraryAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&ILibraryAppletProxy::GetWindowController>, "GetWindowController"},
@@ -843,7 +843,7 @@ public:
             FunctionInfo{22, D<&ILibraryAppletProxy::GetHomeMenuFunctions>, "GetHomeMenuFunctions"},
             FunctionInfo{23, D<&ILibraryAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
             FunctionInfo{1000, D<&ILibraryAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -940,7 +940,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IOverlayAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&IOverlayAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&IOverlayAppletProxy::GetWindowController>, "GetWindowController"},
@@ -952,7 +952,7 @@ public:
             FunctionInfo{21, D<&IOverlayAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
             FunctionInfo{23, D<&IOverlayAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
             FunctionInfo{1000, D<&IOverlayAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -1209,7 +1209,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&ILibraryAppletCreator::CreateLibraryApplet>, "CreateLibraryApplet"},
             FunctionInfo{1, nullptr, "TerminateAllLibraryApplets"},
             FunctionInfo{2, nullptr, "AreAnyLibraryAppletsLeft"},
@@ -1217,7 +1217,7 @@ public:
             FunctionInfo{10, D<&ILibraryAppletCreator::CreateStorage>, "CreateStorage"},
             FunctionInfo{11, D<&ILibraryAppletCreator::CreateTransferMemoryStorage>, "CreateTransferMemoryStorage"},
             FunctionInfo{12, D<&ILibraryAppletCreator::CreateHandleStorage>, "CreateHandleStorage"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;
@@ -1320,7 +1320,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{100, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxy"},
             FunctionInfo{110, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxyEx"},
             FunctionInfo{200, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxyOld>, "OpenLibraryAppletProxyOld"},
@@ -1332,7 +1332,7 @@ public:
             FunctionInfo{450, D<&IAllSystemAppletProxiesService::GetSystemProcessCommonFunctions>, "GetSystemProcessCommonFunctions", MakeVersionGate({19,0,0})},
             FunctionInfo{460, D<&IAllSystemAppletProxiesService::GetAppletAlternativeFunctions>, "GetAppletAlternativeFunctions", MakeVersionGate({20,0,0})},
             FunctionInfo{1000, nullptr, "GetDebugFunctions"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
     WindowSystem& m_window_system;

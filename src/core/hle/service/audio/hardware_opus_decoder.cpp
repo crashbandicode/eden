@@ -12,7 +12,7 @@ namespace Service::Audio {
 using namespace AudioCore::OpusDecoder;
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IHardwareOpusDecoder::FindRequest(u32 key) {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IHardwareOpusDecoder::DecodeInterleavedOld>, "DecodeInterleavedOld"},
             FunctionInfo{1, D<&IHardwareOpusDecoder::SetContext>, "SetContext"},
             FunctionInfo{2, D<&IHardwareOpusDecoder::DecodeInterleavedForMultiStreamOld>, "DecodeInterleavedForMultiStreamOld"},
@@ -23,7 +23,7 @@ using namespace AudioCore::OpusDecoder;
             FunctionInfo{7, D<&IHardwareOpusDecoder::DecodeInterleavedForMultiStreamWithPerfAndResetOld>, "DecodeInterleavedForMultiStreamWithPerfAndResetOld"},
             FunctionInfo{8, D<&IHardwareOpusDecoder::DecodeInterleaved>, "DecodeInterleaved"},
             FunctionInfo{9, D<&IHardwareOpusDecoder::DecodeInterleavedForMultiStream>, "DecodeInterleavedForMultiStream"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

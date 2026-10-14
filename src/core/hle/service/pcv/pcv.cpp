@@ -17,7 +17,7 @@ class PCV final : public ServiceFramework<PCV> {
 public:
     explicit PCV(Core::System& system_) : ServiceFramework{system_, "pcv"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "SetPowerEnabled"},
             FunctionInfo{1, nullptr, "SetClockEnabled"},
             FunctionInfo{2, nullptr, "SetClockRate"},
@@ -48,7 +48,7 @@ public:
             FunctionInfo{27, nullptr, "GetDramId"},
             FunctionInfo{28, nullptr, "IsPoweredOn"},
             FunctionInfo{29, nullptr, "GetVoltage"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -58,9 +58,9 @@ class PCV_ARB final : public ServiceFramework<PCV_ARB> {
 public:
     explicit PCV_ARB(Core::System& system_) : ServiceFramework{system_, "pcv:arb"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "ReleaseControl"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -70,9 +70,9 @@ class PCV_IMM final : public ServiceFramework<PCV_IMM> {
 public:
     explicit PCV_IMM(Core::System& system_) : ServiceFramework{system_, "pcv:imm"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "SetClockRate"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -105,7 +105,7 @@ private:
         rb.Push<u32>(clock_rate);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "SetClockEnabled"},
         FunctionInfo{1, nullptr, "SetClockDisabled"},
         FunctionInfo{2, nullptr, "SetResetAsserted"},
@@ -118,7 +118,7 @@ private:
         FunctionInfo{9, nullptr, "SetMinVClockRate"},
         FunctionInfo{10, nullptr, "GetPossibleClockRates"},
         FunctionInfo{11, nullptr, "GetDvfsTable"}
-    );
+    });
     DeviceCode device_code;
     u32 clock_rate{};
 };
@@ -144,23 +144,23 @@ private:
         rb.PushIpcInterface<IClkrstSession>(ctx, system, device_code);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, &CLKRST::OpenSession, "OpenSession"},
         FunctionInfo{1, nullptr, "GetTemperatureThresholds"},
         FunctionInfo{2, nullptr, "SetTemperature"},
         FunctionInfo{3, nullptr, "GetModuleStateTable"},
         FunctionInfo{4, nullptr, "GetModuleStateTableEvent"},
         FunctionInfo{5, nullptr, "GetModuleStateTableMaxCount"}
-    );
+    });
 };
 
 class CLKRST_A final : public ServiceFramework<CLKRST_A> {
 public:
     explicit CLKRST_A(Core::System& system_) : ServiceFramework{system_, "clkrst:a"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "ReleaseControl"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

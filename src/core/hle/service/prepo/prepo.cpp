@@ -180,7 +180,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{10100, &PlayReport::SaveReport<Core::Reporter::PlayReportType::Old>, "SaveReportOld"},
         FunctionInfo{10101, &PlayReport::SaveReportWithUser<Core::Reporter::PlayReportType::Old>, "SaveReportWithUserOld"},
         FunctionInfo{10102, &PlayReport::SaveReport<Core::Reporter::PlayReportType::Old2>, "SaveReportOld2"},
@@ -213,7 +213,7 @@ private:
         FunctionInfo{90200, nullptr, "GetStatistics"},
         FunctionInfo{90201, nullptr, "GetThroughputHistory"},
         FunctionInfo{90300, nullptr, "GetLastUploadError"}
-    );
+    });
 };
 
 void LoopProcess(Core::System& system) {

@@ -13,14 +13,14 @@ namespace Service::Audio {
 using namespace AudioCore::AudioIn;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioInManager::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioInManager::ListAudioIns>, "ListAudioIns"},
         FunctionInfo{1, D<&IAudioInManager::OpenAudioIn>, "OpenAudioIn"},
         FunctionInfo{2, D<&IAudioInManager::ListAudioIns>, "ListAudioInsAuto"},
         FunctionInfo{3, D<&IAudioInManager::OpenAudioIn>, "OpenAudioInAuto"},
         FunctionInfo{4, D<&IAudioInManager::ListAudioInsAutoFiltered>, "ListAudioInsAutoFiltered"},
         FunctionInfo{5, D<&IAudioInManager::OpenAudioInProtocolSpecified>, "OpenAudioInProtocolSpecified"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

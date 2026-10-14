@@ -24,9 +24,9 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{100, nullptr, "OpenBgAgentController" }
-    );
+    });
 };
 
 class IDaemonController;
@@ -114,7 +114,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, D<&IOlscServiceForSystemService::GetTransferTaskListController>, "GetTransferTaskListController"},
             FunctionInfo{1, D<&IOlscServiceForSystemService::GetRemoteStorageController>, "GetRemoteStorageController"},
             FunctionInfo{2, D<&IOlscServiceForSystemService::GetDaemonController>, "GetDaemonController"},
@@ -176,7 +176,7 @@ public:
             FunctionInfo{1123, nullptr, "RepairDownloadOriginalSaveDataAsync"},
             FunctionInfo{1124, nullptr, "RepairGetOperationProgressInfo"},
             FunctionInfo{10000, D<&IOlscServiceForSystemService::GetOlscServiceForSystemService>, "GetOlscServiceForSystemService"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 };

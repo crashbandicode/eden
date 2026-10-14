@@ -22,7 +22,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{2, nullptr, "SetSettingsItemValue"},
         FunctionInfo{3, nullptr, "ResetSettingsItemValue"},
         FunctionInfo{4, nullptr, "CreateSettingsItemKeyIterator"},
@@ -34,7 +34,7 @@ public:
         FunctionInfo{23, nullptr, "SetMemoryUsageRateFlag"},
         FunctionInfo{24, nullptr, "CommitSettings", MakeVersionGate({20,0,0})},
         FunctionInfo{27, nullptr, "SetHttpAuthConfigs", MakeVersionGate({21,0,0})}
-    );
+    });
 };
 
 } // namespace Service::Set

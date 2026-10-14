@@ -22,7 +22,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetBluetoothBdAddress"},
         FunctionInfo{1, nullptr, "GetConfigurationId1"},
         FunctionInfo{2, nullptr, "GetAccelerometerOffset"},
@@ -66,7 +66,7 @@ public:
         FunctionInfo{41, nullptr, "GetBatteryVersion"},
         FunctionInfo{42, nullptr, "GetDeviceId"},
         FunctionInfo{43, nullptr, "GetConsoleSixAxisSensorMountType"}
-    );
+    });
 };
 
 } // namespace Service::Set

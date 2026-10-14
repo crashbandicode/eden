@@ -11,7 +11,7 @@ namespace Service::Audio {
 using namespace AudioCore::Renderer;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioRenderer::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IAudioRenderer::GetSampleRate>, "GetSampleRate"},
         FunctionInfo{1, D<&IAudioRenderer::GetSampleCount>, "GetSampleCount"},
         FunctionInfo{2, D<&IAudioRenderer::GetMixBufferCount>, "GetMixBufferCount"},
@@ -26,7 +26,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioRenderer::FindReques
         FunctionInfo{11, nullptr, "ExecuteAudioRendererRendering", MakeVersionGate({3,0,0})},
         FunctionInfo{12, D<&IAudioRenderer::SetVoiceDropParameter>, "SetVoiceDropParameter", MakeVersionGate({15,0,0})},
         FunctionInfo{13, D<&IAudioRenderer::GetVoiceDropParameter>, "GetVoiceDropParameter", MakeVersionGate({15,0,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

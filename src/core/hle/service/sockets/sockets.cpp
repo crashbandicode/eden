@@ -17,7 +17,7 @@ public:
     explicit ETHC_C(Core::System& system_)
         : ServiceFramework{system_, "ethc:c"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "Initialize"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "GetResult"},
@@ -25,7 +25,7 @@ public:
             FunctionInfo{4, nullptr, "SetMediaType"},
             FunctionInfo{5, nullptr, "GetMediaType"},
             FunctionInfo{6, nullptr, "GetMacAddress"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -36,13 +36,13 @@ public:
     explicit ETHC_I(Core::System& system_)
         : ServiceFramework{system_, "ethc:i"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "GetReadableHandle"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "GetResult"},
             FunctionInfo{3, nullptr, "GetInterfaceList"},
             FunctionInfo{4, nullptr, "GetInterfaceCount"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
@@ -53,9 +53,9 @@ public:
     explicit ISfDriverServiceCreator(Core::System& system_)
         : ServiceFramework{system_, "eth:nd"} {}
 
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{0, nullptr, "CreateDriverService"}
-        );
+        });
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }

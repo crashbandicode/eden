@@ -18,7 +18,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, nullptr, "GetLaunchRequiredVersion"},
         FunctionInfo{1, nullptr, "UpgradeLaunchRequiredVersion"},
         FunctionInfo{35, nullptr, "UpdateVersionList"},
@@ -32,7 +32,7 @@ public:
         FunctionInfo{902, nullptr, "ListAutoUpdatePolicyForSpecificApplication"},
         FunctionInfo{1000, nullptr, "PerformAutoUpdate"},
         FunctionInfo{1001, nullptr, "ListAutoUpdateSchedule"}
-    );
+    });
 };
 
 } // namespace Service::NS

@@ -15,7 +15,7 @@
 namespace Service::Capture {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAlbumControlService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{1, nullptr, "CaptureRawImage"},
         FunctionInfo{2, nullptr, "CaptureRawImageWithTimeout"},
         FunctionInfo{33, C<&IAlbumControlService::SetShimLibraryVersion>, "SetShimLibraryVersion"},
@@ -35,7 +35,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IAlbumControlService::Find
         FunctionInfo{2301, nullptr, "SetOverlayScreenShotThumbnailData"},
         FunctionInfo{2302, nullptr, "SetOverlayMovieThumbnailData"},
         FunctionInfo{60001, nullptr, "OpenControlSession"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

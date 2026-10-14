@@ -22,7 +22,7 @@ public:
           get_receive_event{service_context}, get_request_change_state_cancel_event{service_context} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "ListenAll"},
             FunctionInfo{2, C<&INpnsSystem::ListenTo>, "ListenTo"},
             FunctionInfo{3, nullptr, "Receive"},
@@ -89,7 +89,7 @@ public:
             FunctionInfo{304, nullptr, "GetPersistentConnectionSummary", MakeVersionGate({18,0,0})},
             FunctionInfo{305, nullptr, "GetDigitalTwinSummary", MakeVersionGate({18,0,0})},
             FunctionInfo{306, nullptr, "GetDigitalTwinValue", MakeVersionGate({18,0,0})}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -151,7 +151,7 @@ public:
         : ServiceFramework{system_, "npns:u"}, service_context{system, "npns:u"}, get_receive_event{service_context} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
             FunctionInfo{1, nullptr, "ListenAll"},
             FunctionInfo{2, nullptr, "ListenTo"},
             FunctionInfo{3, nullptr, "Receive"},
@@ -173,7 +173,7 @@ public:
             FunctionInfo{152, nullptr, "GetStateChangeEventWithHandover"},
             FunctionInfo{153, nullptr, "GetDropEventWithHandover"},
             FunctionInfo{154, nullptr, "CreateTokenAsync"}
-        );
+        });
         return HandlerTableGenerateWithFind(key, functions);
     }
 

@@ -178,17 +178,9 @@ protected:
         u32 version_gating;
     };
 
-    template<typename ...Ts>
-        //requires (std::same_as<Ts, FunctionInfo> && ...)
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, sizeof...(Ts)> CreateStaticMap(Ts... args) {
-        return frozen::map<u32, FunctionValueInfo<Self>, sizeof...(args)>{
-            {args.expected_header, FunctionValueInfo<Self>{args.handler_callback, args.name, args.version_gating}}...
-        };
-    }
-
-    // Large runtime tables must not pass hundreds of records as separate arguments:
-    // MSVC 19.44 takes many minutes and several GiB compiling that call. Keep one
-    // array argument while producing the same immutable Frozen map.
+    // Pass one array instead of a separate argument per record. MSVC 19.44 uses
+    // excessive compile resources and stack space for large variadic tables
+    // (the 240-entry HID initializer required 1.86 MB before main).
     template <std::size_t N, std::size_t... I>
     [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, N>
     CreateStaticMapFromArrayImpl(const FunctionInfo (&args)[N], std::index_sequence<I...>) {
@@ -205,12 +197,19 @@ protected:
     }
 
     // Used exclusively by NFC
-    template<typename T, typename ...Ts>
-        //requires (std::same_as<Ts, FunctionInfoTyped<T>> && ...)
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, sizeof...(Ts)> CreateStaticMapWithClass(Ts... args) {
-        return frozen::map<u32, FunctionValueInfo<T>, sizeof...(args)>{
-            {args.expected_header, FunctionValueInfo<T>{args.handler_callback, args.name, args.version_gating}}...
-        };
+    template <typename T, std::size_t N, std::size_t... I>
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, N>
+    CreateStaticMapWithClassImpl(const FunctionInfoTyped<T> (&args)[N], std::index_sequence<I...>) {
+        return frozen::map<u32, FunctionValueInfo<T>, N>{
+            {args[I].expected_header,
+             FunctionValueInfo<T>{args[I].handler_callback, args[I].name,
+                                  args[I].version_gating}}...};
+    }
+
+    template <typename T, std::size_t N>
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, N>
+    CreateStaticMapWithClass(const FunctionInfoTyped<T> (&args)[N]) {
+        return CreateStaticMapWithClassImpl(args, std::make_index_sequence<N>{});
     }
 
     template<typename T>

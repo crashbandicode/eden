@@ -12,13 +12,13 @@ namespace Service::AOC {
 constexpr Result ResultNoPurchasedProductInfoAvailable{ErrorModule::NIMShop, 400};
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IPurchaseEventManager::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IPurchaseEventManager::SetDefaultDeliveryTarget>, "SetDefaultDeliveryTarget"},
         FunctionInfo{1, D<&IPurchaseEventManager::SetDeliveryTarget>, "SetDeliveryTarget"},
         FunctionInfo{2, D<&IPurchaseEventManager::GetPurchasedEvent>, "GetPurchasedEvent"},
         FunctionInfo{3, D<&IPurchaseEventManager::PopPurchasedProductInfo>, "PopPurchasedProductInfo"},
         FunctionInfo{4, D<&IPurchaseEventManager::PopPurchasedProductInfoWithUid>, "PopPurchasedProductInfoWithUid"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

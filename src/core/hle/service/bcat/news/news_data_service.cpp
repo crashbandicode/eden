@@ -25,13 +25,13 @@ std::string_view ToStringView(std::span<const char> buf) {
 } // namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsDataService::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&INewsDataService::Open>, "Open"},
         FunctionInfo{1, D<&INewsDataService::OpenWithNewsRecordV1>, "OpenWithNewsRecordV1"},
         FunctionInfo{2, D<&INewsDataService::Read>, "Read"},
         FunctionInfo{3, D<&INewsDataService::GetSize>, "GetSize"},
         FunctionInfo{1001, D<&INewsDataService::OpenWithNewsRecord>, "OpenWithNewsRecord"}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

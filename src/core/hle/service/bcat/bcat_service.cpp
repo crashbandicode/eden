@@ -25,7 +25,7 @@ static u64 GetCurrentBuildID(const Core::System::CurrentBuildProcessID& id) {
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IBcatService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{10100, D<&IBcatService::RequestSyncDeliveryCache>, "RequestSyncDeliveryCache"},
         FunctionInfo{10101, D<&IBcatService::RequestSyncDeliveryCacheWithDirectoryName>, "RequestSyncDeliveryCacheWithDirectoryName"},
         FunctionInfo{10200, nullptr, "CancelSyncDeliveryCacheRequest"},

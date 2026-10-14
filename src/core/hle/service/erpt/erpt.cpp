@@ -20,7 +20,7 @@ public:
     explicit ErrorReportContext(Core::System& system_) : ServiceFramework{system_, "erpt:c"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, C<&ErrorReportContext::SubmitContext>, "SubmitContext"},
             FunctionInfo{1, C<&ErrorReportContext::CreateReportV0>, "CreateReportV0"},
             FunctionInfo{2, nullptr, "SetInitialLaunchSettingsCompletionTime"},
@@ -96,7 +96,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "OpenReport"},
         FunctionInfo{1, nullptr, "OpenManager"},
         FunctionInfo{2, nullptr, "OpenAttachment"}

@@ -193,7 +193,7 @@ protected:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &BSD_USA::RegisterClient, "RegisterClient"},
         FunctionInfo{1, &BSD_USA::StartMonitoring, "StartMonitoring"},
         FunctionInfo{2, &BSD_USA::Socket, "Socket"},
@@ -252,7 +252,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "SetIfUp"},
         FunctionInfo{1, nullptr, "SetIfUpWithEvent"},
         FunctionInfo{2, nullptr, "CancelIf"},
@@ -280,7 +280,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "CreateUserService"}
     );
 };

@@ -13,7 +13,7 @@
 namespace Service::BCAT {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDeliveryCacheFileService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IDeliveryCacheFileService::Open>, "Open"},
         FunctionInfo{1, D<&IDeliveryCacheFileService::Read>, "Read"},
         FunctionInfo{2, D<&IDeliveryCacheFileService::GetSize>, "GetSize"},

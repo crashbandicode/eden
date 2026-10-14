@@ -12,7 +12,7 @@
 namespace Service::PSC::Time {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> SteadyClock::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&SteadyClock::GetCurrentTimePoint>, "GetCurrentTimePoint"},
         FunctionInfo{2, D<&SteadyClock::GetTestOffset>, "GetTestOffset"},
         FunctionInfo{3, D<&SteadyClock::SetTestOffset>, "SetTestOffset"},

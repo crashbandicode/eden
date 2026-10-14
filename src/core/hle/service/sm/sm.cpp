@@ -136,7 +136,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &Controller::ConvertCurrentObjectToDomain, "ConvertCurrentObjectToDomain"},
         FunctionInfo{1, nullptr, "CopyFromCurrentDomain"},
         FunctionInfo{2, &Controller::CloneCurrentObject, "CloneCurrentObject"},
@@ -249,29 +249,44 @@ private:
     Result GetServiceImpl(Kernel::KClientSession** out_client_session, HLERequestContext& ctx);
     void RegisterServiceImpl(HLERequestContext& ctx, std::string name, u32 max_session_count, bool is_light);
 
-    // TODO: We reuse function list for both TIPC and non-TIPC
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+            FunctionInfo{0, &SM::Initialize, "Initialize"},
+            FunctionInfo{1, &SM::GetServiceCmif, "GetService"},
+            FunctionInfo{2, &SM::RegisterServiceCmif, "RegisterService"},
+            FunctionInfo{3, &SM::UnregisterService, "UnregisterService"},
+            FunctionInfo{4, nullptr, "DetachClient"},
+            FunctionInfo{65000, nullptr, "AtmosphereInstallMitm"},
+            FunctionInfo{65001, nullptr, "AtmosphereUninstallMitm"},
+            FunctionInfo{65002, nullptr, "Deprecated_AtmosphereAssociatePidTidForMitm"},
+            FunctionInfo{65003, nullptr, "AtmosphereAcknowledgeMitmSession"},
+            FunctionInfo{65004, nullptr, "AtmosphereHasMitm"},
+            FunctionInfo{65005, nullptr, "AtmosphereWaitMitm"},
+            FunctionInfo{65006, nullptr, "AtmosphereDeclareFutureMitm"},
+            FunctionInfo{65100, &SM::AtmosphereHasService, "AtmosphereHasService"},
+            FunctionInfo{65101, nullptr, "AtmosphereWaitService"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
     std::optional<FunctionInfoBase> FindRequestTipc(u32 key) override {
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+            FunctionInfo{0, &SM::Initialize, "Initialize"},
+            FunctionInfo{1, &SM::GetServiceTipc, "GetService"},
+            FunctionInfo{2, &SM::RegisterServiceTipc, "RegisterService"},
+            FunctionInfo{3, &SM::UnregisterService, "UnregisterService"},
+            FunctionInfo{4, nullptr, "DetachClient"},
+            FunctionInfo{65000, nullptr, "AtmosphereInstallMitm"},
+            FunctionInfo{65001, nullptr, "AtmosphereUninstallMitm"},
+            FunctionInfo{65002, nullptr, "Deprecated_AtmosphereAssociatePidTidForMitm"},
+            FunctionInfo{65003, nullptr, "AtmosphereAcknowledgeMitmSession"},
+            FunctionInfo{65004, nullptr, "AtmosphereHasMitm"},
+            FunctionInfo{65005, nullptr, "AtmosphereWaitMitm"},
+            FunctionInfo{65006, nullptr, "AtmosphereDeclareFutureMitm"},
+            FunctionInfo{65100, &SM::AtmosphereHasService, "AtmosphereHasService"},
+            FunctionInfo{65101, nullptr, "AtmosphereWaitService"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, &SM::Initialize, "Initialize"},
-        FunctionInfo{1, &SM::GetServiceTipc, "GetService"},
-        FunctionInfo{2, &SM::RegisterServiceTipc, "RegisterService"},
-        FunctionInfo{3, &SM::UnregisterService, "UnregisterService"},
-        FunctionInfo{4, nullptr, "DetachClient"},
-        FunctionInfo{65000, nullptr, "AtmosphereInstallMitm"},
-        FunctionInfo{65001, nullptr, "AtmosphereUninstallMitm"},
-        FunctionInfo{65002, nullptr, "Deprecated_AtmosphereAssociatePidTidForMitm"},
-        FunctionInfo{65003, nullptr, "AtmosphereAcknowledgeMitmSession"},
-        FunctionInfo{65004, nullptr, "AtmosphereHasMitm"},
-        FunctionInfo{65005, nullptr, "AtmosphereWaitMitm"},
-        FunctionInfo{65006, nullptr, "AtmosphereDeclareFutureMitm"},
-        FunctionInfo{65100, &SM::AtmosphereHasService, "AtmosphereHasService"},
-        FunctionInfo{65101, nullptr, "AtmosphereWaitService"}
-    );
 
     ServiceManager& service_manager;
 };

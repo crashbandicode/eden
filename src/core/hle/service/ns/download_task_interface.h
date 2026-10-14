@@ -20,7 +20,7 @@ private:
     Result DisableAutoCommit();
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{701, nullptr, "ClearTaskStatusList"},
             FunctionInfo{702, nullptr, "RequestDownloadTaskList"},
             FunctionInfo{703, nullptr, "RequestEnsureDownloadTask"},

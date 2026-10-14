@@ -24,7 +24,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{100, nullptr, "OpenBgAgentController" }
     );
 };
@@ -114,7 +114,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IOlscServiceForSystemService::GetTransferTaskListController>, "GetTransferTaskListController"},
             FunctionInfo{1, D<&IOlscServiceForSystemService::GetRemoteStorageController>, "GetRemoteStorageController"},
             FunctionInfo{2, D<&IOlscServiceForSystemService::GetDaemonController>, "GetDaemonController"},

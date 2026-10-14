@@ -89,7 +89,7 @@ void ServiceFrameworkBase::InvokeRequest(HLERequestContext& ctx) {
     const bool is_cmd_read = ctx.GetCommand() == 0;
     auto const info = FindRequest(ctx.GetCommand());
     if (!info.has_value() || info->handler_callback == nullptr)
-        return ReportUnimplementedFunction(ctx, &*info, false);
+        return ReportUnimplementedFunction(ctx, info ? &*info : nullptr, false);
 
     if (!VersionGateCheck(system, info->version_gating))
     {
@@ -109,7 +109,7 @@ void ServiceFrameworkBase::InvokeRequest(HLERequestContext& ctx) {
 void ServiceFrameworkBase::InvokeRequestTipc(HLERequestContext& ctx) {
     auto const info = FindRequestTipc(ctx.GetCommand());
     if (!info.has_value() || info->handler_callback == nullptr)
-        return ReportUnimplementedFunction(ctx, &*info, false);
+        return ReportUnimplementedFunction(ctx, info ? &*info : nullptr, false);
 
     LOG_ERROR(Service, "check for {} version_gating: {}", info->name, info->version_gating);
     if (!VersionGateCheck(system, info->version_gating))

@@ -27,7 +27,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ARP_R::GetApplicationLaunchProperty, "GetApplicationLaunchProperty"},
         FunctionInfo{1, &ARP_R::GetApplicationLaunchPropertyWithApplicationId, "GetApplicationLaunchPropertyWithApplicationId"},
         FunctionInfo{2, &ARP_R::GetApplicationControlProperty, "GetApplicationControlProperty"},
@@ -54,7 +54,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ARP_W::AcquireRegistrar, "AcquireRegistrar"},
         FunctionInfo{1, &ARP_W::UnregisterApplicationInstance , "UnregisterApplicationInstance "},
         FunctionInfo{2, nullptr, "AcquireUpdater"}

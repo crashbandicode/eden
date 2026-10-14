@@ -17,7 +17,7 @@ public:
     explicit IUser(Core::System& system_) : Interface(system_, "NFP:IUser") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMapWithClass<IUser>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IUser>(
             FunctionInfoTyped<IUser>{0, &IUser::Initialize, "Initialize"},
             FunctionInfoTyped<IUser>{1, &IUser::Finalize, "Finalize"},
             FunctionInfoTyped<IUser>{2, &IUser::ListDevices, "ListDevices"},
@@ -54,7 +54,7 @@ public:
     explicit ISystem(Core::System& system_) : Interface(system_, "NFP:ISystem") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMapWithClass<ISystem>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<ISystem>(
             FunctionInfoTyped<ISystem>{0, &ISystem::InitializeSystem, "InitializeSystem"},
             FunctionInfoTyped<ISystem>{1, &ISystem::FinalizeSystem, "FinalizeSystem"},
             FunctionInfoTyped<ISystem>{2, &ISystem::ListDevices, "ListDevices"},
@@ -93,7 +93,7 @@ public:
     explicit IDebug(Core::System& system_) : Interface(system_, "NFP:IDebug") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMapWithClass<IDebug>(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapWithClass<IDebug>(
             FunctionInfoTyped<IDebug>{0, &IDebug::InitializeDebug, "InitializeDebug"},
             FunctionInfoTyped<IDebug>{1, &IDebug::FinalizeDebug, "FinalizeDebug"},
             FunctionInfoTyped<IDebug>{2, &IDebug::ListDevices, "ListDevices"},
@@ -155,7 +155,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IUserManager::CreateUserInterface, "CreateUserInterface"}
     );
 };
@@ -177,7 +177,7 @@ private:
         rb.PushIpcInterface<ISystem>(ctx, system);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ISystemManager::CreateSystemInterface, "CreateSystemInterface"}
     );
 };
@@ -199,7 +199,7 @@ private:
         rb.PushIpcInterface<IDebug>(ctx, system);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IDebugManager::CreateDebugInterface, "CreateDebugInterface"}
     );
 };

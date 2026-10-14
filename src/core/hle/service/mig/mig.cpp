@@ -20,7 +20,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "Unknown0", MakeVersionGate({19,0,0})},
         FunctionInfo{1, nullptr, "Unknown1", MakeVersionGate({20,0,0})},
         FunctionInfo{2, nullptr, "Unknown2", MakeVersionGate({20,0,0})},

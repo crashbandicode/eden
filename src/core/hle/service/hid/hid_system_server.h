@@ -87,7 +87,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{31, nullptr, "SendKeyboardLockKeyEvent"},
         FunctionInfo{101, nullptr, "AcquireHomeButtonEventHandle"},
         FunctionInfo{111, nullptr, "ActivateHomeButton"},

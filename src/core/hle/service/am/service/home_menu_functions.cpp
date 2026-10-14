@@ -15,7 +15,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHomeMenuFunctions::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{10, D<&IHomeMenuFunctions::RequestToGetForeground>, "RequestToGetForeground"},
         FunctionInfo{11, D<&IHomeMenuFunctions::LockForeground>, "LockForeground"},
         FunctionInfo{12, D<&IHomeMenuFunctions::UnlockForeground>, "UnlockForeground"},

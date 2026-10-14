@@ -12,7 +12,7 @@
 namespace Service::Nvnflinger {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHOSBinderDriver::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, C<&IHOSBinderDriver::TransactParcel>, "TransactParcel"},
         FunctionInfo{1, C<&IHOSBinderDriver::AdjustRefcount>, "AdjustRefcount"},
         FunctionInfo{2, C<&IHOSBinderDriver::GetNativeHandle>, "GetNativeHandle"},

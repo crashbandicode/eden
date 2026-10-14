@@ -13,7 +13,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemDisplayService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{1200, nullptr, "GetZOrderCountMin"},
         FunctionInfo{1202, nullptr, "GetZOrderCountMax"},
         FunctionInfo{1203, nullptr, "GetDisplayLogicalResolution"},

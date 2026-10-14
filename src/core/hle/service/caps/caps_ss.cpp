@@ -13,7 +13,7 @@
 namespace Service::Capture {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IScreenShotService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{201, nullptr, "SaveScreenShot"},
         FunctionInfo{202, nullptr, "SaveEditedScreenShot"},
         FunctionInfo{203, C<&IScreenShotService::SaveScreenShotEx0>, "SaveScreenShotEx0"},

@@ -69,7 +69,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "NotifyMessageToHomeMenuForDebug"},
         FunctionInfo{1, nullptr, "OpenMainApplication"},
         FunctionInfo{10, nullptr, "PerformSystemButtonPressing"},
@@ -172,7 +172,7 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IApplicationProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&IApplicationProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&IApplicationProxy::GetWindowController>, "GetWindowController"},
@@ -219,7 +219,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy"}
         );
         return HandlerTableGenerateWithFind(key, functions);
@@ -277,7 +277,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "SetTerminateResult"},
             FunctionInfo{10, nullptr, "ReadThemeStorage"},
             FunctionInfo{11, nullptr, "WriteThemeStorage"},
@@ -404,7 +404,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ISystemAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&ISystemAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&ISystemAppletProxy::GetWindowController>, "GetWindowController"},
@@ -689,7 +689,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ILibraryAppletSelfAccessor::PopInData>, "PopInData"},
             FunctionInfo{1, D<&ILibraryAppletSelfAccessor::PushOutData>, "PushOutData"},
             FunctionInfo{2, D<&ILibraryAppletSelfAccessor::PopInteractiveInData>, "PopInteractiveInData"},
@@ -830,7 +830,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ILibraryAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&ILibraryAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&ILibraryAppletProxy::GetWindowController>, "GetWindowController"},
@@ -940,7 +940,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IOverlayAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
             FunctionInfo{1, D<&IOverlayAppletProxy::GetSelfController>, "GetSelfController"},
             FunctionInfo{2, D<&IOverlayAppletProxy::GetWindowController>, "GetWindowController"},
@@ -1209,7 +1209,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ILibraryAppletCreator::CreateLibraryApplet>, "CreateLibraryApplet"},
             FunctionInfo{1, nullptr, "TerminateAllLibraryApplets"},
             FunctionInfo{2, nullptr, "AreAnyLibraryAppletsLeft"},
@@ -1320,7 +1320,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{100, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxy"},
             FunctionInfo{110, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxyEx"},
             FunctionInfo{200, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxyOld>, "OpenLibraryAppletProxyOld"},

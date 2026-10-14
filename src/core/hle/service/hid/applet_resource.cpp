@@ -13,7 +13,7 @@
 namespace Service::HID {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAppletResource::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, C<&IAppletResource::GetSharedMemoryHandle>, "GetSharedMemoryHandle"}
     );
     return HandlerTableGenerateWithFind(key, functions);

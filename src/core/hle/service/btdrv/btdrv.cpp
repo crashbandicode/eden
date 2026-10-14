@@ -26,7 +26,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "LeClientReadCharacteristic"},
             FunctionInfo{1, nullptr, "LeClientReadDescriptor"},
             FunctionInfo{2, nullptr, "LeClientWriteCharacteristic"},
@@ -63,7 +63,7 @@ public:
     explicit IBluetoothDriver(Core::System& system_) : ServiceFramework{system_, "btdrv"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "InitializeBluetoothDriver"},
             FunctionInfo{1, nullptr, "InitializeBluetooth"},
             FunctionInfo{2, nullptr, "EnableBluetooth"},

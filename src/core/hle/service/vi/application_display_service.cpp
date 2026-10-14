@@ -18,7 +18,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationDisplayService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{100, C<&IApplicationDisplayService::GetRelayService>, "GetRelayService"},
         FunctionInfo{101, C<&IApplicationDisplayService::GetSystemDisplayService>, "GetSystemDisplayService"},
         FunctionInfo{102, C<&IApplicationDisplayService::GetManagerDisplayService>, "GetManagerDisplayService"},

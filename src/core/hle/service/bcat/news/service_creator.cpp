@@ -15,7 +15,7 @@
 namespace Service::News {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IServiceCreator::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IServiceCreator::CreateNewsService>, "CreateNewsService"},
         FunctionInfo{1, D<&IServiceCreator::CreateNewlyArrivedEventHolder>, "CreateNewlyArrivedEventHolder"},
         FunctionInfo{2, D<&IServiceCreator::CreateNewsDataService>, "CreateNewsDataService"},

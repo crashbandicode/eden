@@ -12,6 +12,7 @@
 #include <tuple>
 #include <type_traits>
 #include "frozen/map.h"
+#include "core/hle/service/dispatch_table.h"
 #include "common/container/unordered_map.h"
 #include "common/common_types.h"
 #include "core/hle/service/hle_ipc.h"
@@ -143,7 +144,7 @@ class ServiceFramework : public ServiceFrameworkBase {
 protected:
     /// Contains information about a request type which is handled by the service.
     template <typename T>
-    struct FunctionInfoTyped : FunctionInfoBase {
+    struct FunctionInfoTyped {
         // TODO(yuriks): This function could be constexpr, but clang is the only compiler that
         // doesn't emit an ICE or a wrong diagnostic because of the static_cast.
 
@@ -179,7 +180,7 @@ protected:
 
     template<typename ...Ts>
         //requires (std::same_as<Ts, FunctionInfo> && ...)
-    [[nodiscard]] static consteval frozen::map<u32, FunctionValueInfo<Self>, sizeof...(Ts)> CreateStaticMap(Ts... args) {
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, sizeof...(Ts)> CreateStaticMap(Ts... args) {
         return frozen::map<u32, FunctionValueInfo<Self>, sizeof...(args)>{
             {args.expected_header, FunctionValueInfo<Self>{args.handler_callback, args.name, args.version_gating}}...
         };
@@ -188,7 +189,7 @@ protected:
     // Used exclusively by NFC
     template<typename T, typename ...Ts>
         //requires (std::same_as<Ts, FunctionInfoTyped<T>> && ...)
-    [[nodiscard]] static consteval frozen::map<u32, FunctionValueInfo<T>, sizeof...(Ts)> CreateStaticMapWithClass(Ts... args) {
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, sizeof...(Ts)> CreateStaticMapWithClass(Ts... args) {
         return frozen::map<u32, FunctionValueInfo<T>, sizeof...(args)>{
             {args.expected_header, FunctionValueInfo<T>{args.handler_callback, args.name, args.version_gating}}...
         };

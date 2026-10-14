@@ -23,7 +23,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{100, &BGTC_T::OpenTaskService, "OpenTaskService"}
     );
 };
@@ -36,7 +36,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{1, nullptr, "NotifyTaskStarting"},
         FunctionInfo{2, nullptr, "NotifyTaskFinished"},
         FunctionInfo{3, nullptr, "GetTriggerEvent"},
@@ -64,7 +64,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{1, nullptr, "GetState"},
         FunctionInfo{2, nullptr, "GetStateChangedEvent"},
         FunctionInfo{3, nullptr, "NotifyEnteringHalfAwake"},

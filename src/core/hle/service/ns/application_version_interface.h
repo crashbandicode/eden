@@ -18,7 +18,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetLaunchRequiredVersion"},
         FunctionInfo{1, nullptr, "UpgradeLaunchRequiredVersion"},
         FunctionInfo{35, nullptr, "UpdateVersionList"},

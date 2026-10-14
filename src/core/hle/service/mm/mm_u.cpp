@@ -201,7 +201,7 @@ private:
         rb.Push<u32>(0);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &MM_U::InitializeOld, "InitializeOld"},
         FunctionInfo{1, &MM_U::FinalizeOld, "FinalizeOld"},
         FunctionInfo{2, &MM_U::SetAndWaitOld, "SetAndWaitOld"},

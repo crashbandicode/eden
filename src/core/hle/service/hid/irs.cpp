@@ -30,7 +30,7 @@
 namespace Service::IRS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IRS::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{302, C<&IRS::ActivateIrsensor>, "ActivateIrsensor"},
         FunctionInfo{303, C<&IRS::DeactivateIrsensor>, "DeactivateIrsensor"},
         FunctionInfo{304, C<&IRS::GetIrsensorSharedMemoryHandle>, "GetIrsensorSharedMemoryHandle"},

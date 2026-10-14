@@ -16,7 +16,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IManagerRootService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{2, C<&IManagerRootService::GetDisplayService>, "GetDisplayService"},
         FunctionInfo{3, nullptr, "GetDisplayServiceWithProxyNameExchange"},
         FunctionInfo{100, nullptr, "PrepareFatal"},

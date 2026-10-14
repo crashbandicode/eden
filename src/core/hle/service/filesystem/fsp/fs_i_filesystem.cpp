@@ -14,7 +14,7 @@
 namespace Service::FileSystem {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IFileSystem::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IFileSystem::CreateFile>, "CreateFile"},
         FunctionInfo{1, D<&IFileSystem::DeleteFile>, "DeleteFile"},
         FunctionInfo{2, D<&IFileSystem::CreateDirectory>, "CreateDirectory"},

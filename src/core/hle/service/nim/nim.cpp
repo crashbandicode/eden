@@ -30,7 +30,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IShopServiceAsync::Cancel>, "Cancel"},
             FunctionInfo{1, D<&IShopServiceAsync::GetSize>, "GetSize"},
             FunctionInfo{2, D<&IShopServiceAsync::Read>, "Read"},
@@ -155,7 +155,7 @@ private:
         rb.PushIpcInterface<IShopServiceAsync>(ctx, std::move(async_interface));
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IShopServiceAccessor::CreateAsyncInterface, "CreateAsyncInterface"}
     );
 };
@@ -177,7 +177,7 @@ private:
         rb.PushIpcInterface<IShopServiceAccessor>(ctx, system);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IShopServiceAccessServer::CreateAccessorInterface, "CreateAccessorInterface"}
     );
 };
@@ -186,7 +186,7 @@ class NIM final : public ServiceFramework<NIM> {
 public:
     explicit NIM(Core::System& system_) : ServiceFramework{system_, "nim"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "CreateSystemUpdateTask"},
         FunctionInfo{1, nullptr, "DestroySystemUpdateTask"},
         FunctionInfo{2, nullptr, "ListSystemUpdateTask"},
@@ -452,7 +452,7 @@ private:
         rb.PushIpcInterface<IShopServiceAccessServer>(ctx, system);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &NIM_ECA::CreateServerInterface, "CreateServerInterface"},
         FunctionInfo{1, nullptr, "RefreshDebugAvailability"},
         FunctionInfo{2, nullptr, "ClearDebugResponse"},
@@ -466,7 +466,7 @@ class NIM_SHP final : public ServiceFramework<NIM_SHP> {
 public:
     explicit NIM_SHP(Core::System& system_) : ServiceFramework{system_, "nim:shp"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "RequestDeviceAuthenticationToken"},
             FunctionInfo{1, nullptr, "RequestCachedDeviceAuthenticationToken"},
             FunctionInfo{2, nullptr, "RequestEdgeToken"},
@@ -567,7 +567,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IEnsureNetworkClockAvailabilityService::StartTask, "StartTask"},
         FunctionInfo{1, &IEnsureNetworkClockAvailabilityService::GetFinishNotificationEvent, "GetFinishNotificationEvent"},
         FunctionInfo{2, &IEnsureNetworkClockAvailabilityService::GetResult, "GetResult"},
@@ -611,7 +611,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &NTC::OpenEnsureNetworkClockAvailabilityService, "OpenEnsureNetworkClockAvailabilityService"},
         FunctionInfo{100, &NTC::SuspendAutonomicTimeCorrection, "SuspendAutonomicTimeCorrection"},
         FunctionInfo{101, &NTC::ResumeAutonomicTimeCorrection, "ResumeAutonomicTimeCorrection"}
@@ -622,7 +622,7 @@ class NIM_ECAS final : public ServiceFramework<NIM_ECAS> {
 public:
     explicit NIM_ECAS(Core::System& system_) : ServiceFramework{system_, "nim:ecas"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "RegisterSpecialClient"},
             FunctionInfo{1, nullptr, "UnregisterSpecialClient"}
         );

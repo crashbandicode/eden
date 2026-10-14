@@ -10,7 +10,7 @@
 namespace Service::News {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INewlyArrivedEventHolder::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&INewlyArrivedEventHolder::Get>, "Get"}
     );
     return HandlerTableGenerateWithFind(key, functions);

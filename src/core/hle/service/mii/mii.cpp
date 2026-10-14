@@ -23,7 +23,7 @@
 namespace Service::Mii {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IStaticService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IStaticService::GetDatabaseService>, "GetDatabaseService"}
     );
     return HandlerTableGenerateWithFind(key, functions);
@@ -40,7 +40,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IDatabaseService::IsUpdated>, "IsUpdated"},
             FunctionInfo{1, D<&IDatabaseService::IsFullDatabase>, "IsFullDatabase"},
             FunctionInfo{2, D<&IDatabaseService::GetCount>, "GetCount"},
@@ -326,7 +326,7 @@ public:
     explicit IImageDatabaseService(Core::System& system_) : ServiceFramework{system_, "miiimg"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IImageDatabaseService::Initialize>, "Initialize"},
             FunctionInfo{10, nullptr, "Reload"},
             FunctionInfo{11, D<&IImageDatabaseService::GetCount>, "GetCount"},

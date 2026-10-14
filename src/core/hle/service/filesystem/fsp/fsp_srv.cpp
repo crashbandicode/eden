@@ -48,7 +48,7 @@
 namespace Service::FileSystem {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> FSP_SRV::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "OpenFileSystem"},
         FunctionInfo{1, D<&FSP_SRV::SetCurrentProcess>, "SetCurrentProcess"},
         FunctionInfo{2, D<&FSP_SRV::OpenDataFileSystemByCurrentProcess>, "OpenDataFileSystemByCurrentProcess"},

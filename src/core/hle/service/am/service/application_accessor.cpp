@@ -19,7 +19,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationAccessor::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IApplicationAccessor::GetAppletStateChangedEvent>, "GetAppletStateChangedEvent"},
         FunctionInfo{1, nullptr, "IsCompleted"},
         FunctionInfo{10, D<&IApplicationAccessor::Start>, "Start"},

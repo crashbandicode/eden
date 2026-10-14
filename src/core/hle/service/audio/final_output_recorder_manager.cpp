@@ -13,7 +13,7 @@ public:
     explicit IFinalOutputRecorder(Core::System& system_)
         : ServiceFramework{system_, "IFinalOutputRecorder"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetFinalOutputRecorderState"},
             FunctionInfo{1, nullptr, "Start"},
             FunctionInfo{2, nullptr, "Stop"},

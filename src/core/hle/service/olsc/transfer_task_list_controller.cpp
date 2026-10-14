@@ -12,7 +12,7 @@
 namespace Service::OLSC {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ITransferTaskListController::FindRequest(u32 key) {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetTransferTaskCountForOcean"},
             FunctionInfo{1, nullptr, "GetTransferTaskInfoForOcean"},
             FunctionInfo{2, nullptr, "ListTransferTaskInfoForOcean"},

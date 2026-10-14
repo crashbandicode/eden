@@ -19,7 +19,7 @@ namespace Service::Audio {
 using namespace AudioCore::Renderer;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioRendererManager::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IAudioRendererManager::OpenAudioRenderer>, "OpenAudioRenderer"},
         FunctionInfo{1, D<&IAudioRendererManager::GetWorkBufferSize>, "GetWorkBufferSize"},
         FunctionInfo{2, D<&IAudioRendererManager::GetAudioDeviceService>, "GetAudioDeviceService"},

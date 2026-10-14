@@ -21,7 +21,7 @@ constexpr inline std::size_t MaxAlarms = 8;
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServicesForApplication::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{500, D<&INotificationServicesForApplication::RegisterAlarmSetting>, "RegisterAlarmSetting"},
         FunctionInfo{510, D<&INotificationServicesForApplication::UpdateAlarmSetting>, "UpdateAlarmSetting"},
         FunctionInfo{520, D<&INotificationServicesForApplication::ListAlarmSettings>, "ListAlarmSettings"},
@@ -33,7 +33,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServicesForAp
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INotificationServices::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{500, D<&INotificationServices::RegisterAlarmSetting>, "RegisterAlarmSetting"},
         FunctionInfo{510, D<&INotificationServices::UpdateAlarmSetting>, "UpdateAlarmSetting"},
         FunctionInfo{520, D<&INotificationServices::ListAlarmSettings>, "ListAlarmSettings"},
@@ -208,7 +208,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&INotificationSystemEventAccessor::GetSystemEvent>, "GetSystemEvent"}
         );
         return HandlerTableGenerateWithFind(key, functions);

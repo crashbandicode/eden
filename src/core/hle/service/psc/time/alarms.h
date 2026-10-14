@@ -117,7 +117,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IAlarmService::CreateWakeupAlarm, "CreateWakeupAlarm"},
         FunctionInfo{1, &IAlarmService::CreateBackgroundTaskAlarm, "CreateBackgroundTaskAlarm"}
     );
@@ -138,7 +138,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0,  &ISteadyClockAlarm::GetAlarmEvent, "GetAlarmEvent"},
         FunctionInfo{1,  &ISteadyClockAlarm::Enable, "Enable"},
         FunctionInfo{2,  &ISteadyClockAlarm::Disable, "Disable"},

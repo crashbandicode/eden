@@ -25,7 +25,7 @@ std::string_view ToStringView(std::span<const char> buf) {
 } // namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INewsDataService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&INewsDataService::Open>, "Open"},
         FunctionInfo{1, D<&INewsDataService::OpenWithNewsRecordV1>, "OpenWithNewsRecordV1"},
         FunctionInfo{2, D<&INewsDataService::Read>, "Read"},

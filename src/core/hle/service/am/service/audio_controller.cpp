@@ -10,7 +10,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioController::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IAudioController::SetExpectedMasterVolume>, "SetExpectedMasterVolume"},
         FunctionInfo{1, D<&IAudioController::GetMainAppletExpectedMasterVolume>, "GetMainAppletExpectedMasterVolume"},
         FunctionInfo{2, D<&IAudioController::GetLibraryAppletExpectedMasterVolume>, "GetLibraryAppletExpectedMasterVolume"},

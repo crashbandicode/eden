@@ -10,7 +10,7 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemLocalCommunicationService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetState"},
         FunctionInfo{1, nullptr, "GetNetworkInfo"},
         FunctionInfo{2, nullptr, "GetIpv4Address"},

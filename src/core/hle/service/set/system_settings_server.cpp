@@ -115,7 +115,7 @@ Result GetFirmwareVersionImpl(FirmwareVersionFormat& out_firmware, Core::System&
 }
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ISystemSettingsServer::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, C<&ISystemSettingsServer::SetLanguageCode>, "SetLanguageCode"},
         FunctionInfo{1, nullptr, "SetNetworkSettings"},
         FunctionInfo{2, nullptr, "GetNetworkSettings"},

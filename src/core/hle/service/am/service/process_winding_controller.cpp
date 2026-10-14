@@ -14,7 +14,7 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> IProcessWindingController::FindRequest(u32 key) {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IProcessWindingController::GetLaunchReason>, "GetLaunchReason"},
             FunctionInfo{11, D<&IProcessWindingController::OpenCallingLibraryApplet>, "OpenCallingLibraryApplet"},
             FunctionInfo{21, D<&IProcessWindingController::PushContext>, "PushContext"},

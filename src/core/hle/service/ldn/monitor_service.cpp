@@ -11,7 +11,7 @@
 namespace Service::LDN {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IMonitorService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, C<&IMonitorService::GetStateForMonitor>, "GetStateForMonitor"},
         FunctionInfo{1, nullptr, "GetNetworkInfoForMonitor"},
         FunctionInfo{2, nullptr, "GetIpv4AddressForMonitor"},

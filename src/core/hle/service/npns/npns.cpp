@@ -22,7 +22,7 @@ public:
           get_receive_event{service_context}, get_request_change_state_cancel_event{service_context} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1, nullptr, "ListenAll"},
             FunctionInfo{2, C<&INpnsSystem::ListenTo>, "ListenTo"},
             FunctionInfo{3, nullptr, "Receive"},
@@ -151,7 +151,7 @@ public:
         : ServiceFramework{system_, "npns:u"}, service_context{system, "npns:u"}, get_receive_event{service_context} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1, nullptr, "ListenAll"},
             FunctionInfo{2, nullptr, "ListenTo"},
             FunctionInfo{3, nullptr, "Receive"},

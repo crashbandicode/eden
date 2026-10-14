@@ -13,7 +13,7 @@ namespace Service::Audio {
 using namespace AudioCore::Renderer;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioDevice::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IAudioDevice::ListAudioDeviceName>, "ListAudioDeviceName"},
         FunctionInfo{1, D<&IAudioDevice::SetAudioDeviceOutputVolume>, "SetAudioDeviceOutputVolume"},
         FunctionInfo{2, D<&IAudioDevice::GetAudioDeviceOutputVolume>, "GetAudioDeviceOutputVolume"},

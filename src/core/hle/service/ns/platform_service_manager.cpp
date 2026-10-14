@@ -28,7 +28,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IPlatformServiceManager::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IPlatformServiceManager::RequestLoad>, "RequestLoad"},
         FunctionInfo{1, D<&IPlatformServiceManager::GetLoadState>, "GetLoadState"},
         FunctionInfo{2, D<&IPlatformServiceManager::GetSize>, "GetSize"},

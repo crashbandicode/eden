@@ -10,7 +10,7 @@
 namespace Service::OLSC {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IOlscServiceForApplication::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IOlscServiceForApplication::Initialize>, "Initialize"},
         FunctionInfo{10, nullptr, "VerifySaveDataBackupLicenseAsync"},
         FunctionInfo{13, D<&IOlscServiceForApplication::GetSaveDataBackupSetting>, "GetSaveDataBackupSetting"},

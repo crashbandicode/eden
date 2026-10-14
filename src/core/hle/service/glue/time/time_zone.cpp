@@ -20,7 +20,7 @@
 namespace Service::Glue::Time {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> TimeZoneService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0,   D<&TimeZoneService::GetDeviceLocationName>, "GetDeviceLocationName"},
         FunctionInfo{1,   D<&TimeZoneService::SetDeviceLocationName>, "SetDeviceLocationName"},
         FunctionInfo{2,   D<&TimeZoneService::GetTotalLocationNameCount>, "GetTotalLocationNameCount"},

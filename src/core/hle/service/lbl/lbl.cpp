@@ -302,7 +302,7 @@ private:
         rb.Push<u8>(auto_brightness_supported);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &LBL::SaveCurrentSetting, "SaveCurrentSetting"},
         FunctionInfo{1, &LBL::LoadCurrentSetting, "LoadCurrentSetting"},
         FunctionInfo{2, &LBL::SetCurrentBrightnessSetting, "SetCurrentBrightnessSetting"},

@@ -41,7 +41,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &NVDRV::Open, "Open"},
         FunctionInfo{1, &NVDRV::Ioctl1, "Ioctl"},
         FunctionInfo{2, &NVDRV::Close, "Close"},

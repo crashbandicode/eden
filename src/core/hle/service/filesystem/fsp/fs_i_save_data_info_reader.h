@@ -46,7 +46,7 @@ private:
     void FindTemporaryStorageSaves(FileSys::SaveDataSpaceId space, const FileSys::VirtualDir& type);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ISaveDataInfoReader::ReadSaveDataInfo>, "ReadSaveDataInfo"}
         );
         return HandlerTableGenerateWithFind(key, functions);

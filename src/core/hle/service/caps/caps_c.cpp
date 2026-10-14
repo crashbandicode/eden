@@ -15,7 +15,7 @@
 namespace Service::Capture {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAlbumControlService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{1, nullptr, "CaptureRawImage"},
         FunctionInfo{2, nullptr, "CaptureRawImageWithTimeout"},
         FunctionInfo{33, C<&IAlbumControlService::SetShimLibraryVersion>, "SetShimLibraryVersion"},

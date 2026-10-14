@@ -18,7 +18,7 @@
 namespace Service::AM {
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ISelfController::FindRequest(u32 key) {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ISelfController::Exit>, "Exit"},
             FunctionInfo{1, D<&ISelfController::LockExit>, "LockExit"},
             FunctionInfo{2, D<&ISelfController::UnlockExit>, "UnlockExit"},

@@ -25,7 +25,7 @@ class IDecoderControlService final : public ServiceFramework<IDecoderControlServ
 public:
     explicit IDecoderControlService(Core::System& system_) : ServiceFramework{system_, "grc:d"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{3001, nullptr, "DecodeJpeg"},
             FunctionInfo{4001, nullptr, "ShrinkJpeg"},
             FunctionInfo{4002, nullptr, "ShrinkJpegEx"}
@@ -182,7 +182,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetAlbumFileCount"},
             FunctionInfo{1, C<&IAlbumAccessorService::GetAlbumFileList>, "GetAlbumFileList"},
             FunctionInfo{2, nullptr, "LoadAlbumFile"},

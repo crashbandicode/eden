@@ -18,7 +18,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> ICommonStateGetter::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&ICommonStateGetter::GetEventHandle>, "GetEventHandle"},
         FunctionInfo{1, D<&ICommonStateGetter::ReceiveMessage>, "ReceiveMessage"},
         FunctionInfo{2, nullptr, "GetThisAppletKind"},
@@ -142,7 +142,7 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1, D<&ILockAccessor::TryLock>, "TryLock"},
             FunctionInfo{2, D<&ILockAccessor::Unlock>, "Unlock"},
             FunctionInfo{3, D<&ILockAccessor::GetEvent>, "GetEvent"},

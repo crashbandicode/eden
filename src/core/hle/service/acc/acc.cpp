@@ -109,7 +109,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, D<&IManagerForSystemService::CheckAvailability>, "CheckAvailability"},
                 FunctionInfo{1, D<&IManagerForSystemService::GetAccountId>, "GetAccountId"},
                 FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
@@ -153,7 +153,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetSessionId"},
             FunctionInfo{12, nullptr, "GetAccountId"},
             FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
@@ -186,7 +186,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "CheckAvailability"},
                 FunctionInfo{1, nullptr, "GetAccountId"},
                 FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
@@ -249,7 +249,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "GetSessionId"},
                 FunctionInfo{10, nullptr, "InvokeWithoutInteractionAsync"},
                 FunctionInfo{19, nullptr, "IsAuthorized"},
@@ -267,7 +267,7 @@ public:
         : ServiceFramework{system_, "IOAuthProcedure"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -286,7 +286,7 @@ public:
     {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -309,7 +309,7 @@ public:
     {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "PrepareAsync"},
                 FunctionInfo{1, nullptr, "GetRequest"},
                 FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -334,7 +334,7 @@ public:
         : ServiceFramework{system_, "INotifier"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "GetSystemEvent"}
         );
         return HandlerTableGenerateWithFind(key, functions);
@@ -574,7 +574,7 @@ protected:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IProfileCommon::Get, "Get"},
         FunctionInfo{1, &IProfileCommon::GetBase, "GetBase"},
         FunctionInfo{10, &IProfileCommon::GetImageSize, "GetImageSize"},
@@ -611,7 +611,7 @@ public:
         : ServiceFramework{system_, "ISessionObject"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{999, nullptr, "Dummy"}
             );
         return HandlerTableGenerateWithFind(key, functions);
@@ -624,7 +624,7 @@ public:
         : ServiceFramework{system_, "IGuestLoginRequest"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
                 FunctionInfo{0, nullptr, "GetSessionId"},
                 FunctionInfo{11, nullptr, "Unknown", MakeVersionGate({1,0,0}, {2,3,0})}, // the name is blank on Switchbrew
                 FunctionInfo{12, nullptr, "GetAccountId"},
@@ -744,7 +744,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IManagerForApplication::CheckAvailability, "CheckAvailability"},
         FunctionInfo{1, &IManagerForApplication::GetAccountId, "GetAccountId"},
         FunctionInfo{2, &IManagerForApplication::EnsureIdTokenCacheAsync, "EnsureIdTokenCacheAsync"},
@@ -768,7 +768,7 @@ public:
         : ServiceFramework{system_, "IAsyncNetworkServiceLicenseKindContext"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetSystemEvent"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "HasDone"},
@@ -787,7 +787,7 @@ public:
         : ServiceFramework{system_, "IOAuthProcedureForUserRegistration"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "PrepareAsync"},
             FunctionInfo{1, nullptr, "GetRequest"},
             FunctionInfo{2, nullptr, "ApplyResponse"},
@@ -816,7 +816,7 @@ public:
     explicit DAUTH_O(Core::System& system_, Common::UUID) : ServiceFramework{system_, "dauth:o"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
             FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
             FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
@@ -842,7 +842,7 @@ public:
         : ServiceFramework{system_, "IAsyncResult"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetResult"},
             FunctionInfo{1, nullptr, "Cancel"},
             FunctionInfo{2, nullptr, "IsAvailable"},
@@ -1256,7 +1256,7 @@ public:
     }
     ~ACC_AA() override = default;
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "EnsureCacheAsync"},
         FunctionInfo{1, nullptr, "LoadCache"},
         FunctionInfo{2, nullptr, "GetDeviceAccountId"},
@@ -1276,7 +1276,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ACC_SU::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_SU::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_SU::ListAllUsers, "ListAllUsers"},
@@ -1352,7 +1352,7 @@ public:
     }
     ~ACC_U0() override = default;
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ACC_U0::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_U0::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_U0::ListAllUsers, "ListAllUsers"},
@@ -1391,7 +1391,7 @@ public:
     }
     ~ACC_U1() override = default;
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &ACC_U1::GetUserCount, "GetUserCount"},
         FunctionInfo{1, &ACC_U1::GetUserExistence, "GetUserExistence"},
         FunctionInfo{2, &ACC_U1::ListAllUsers, "ListAllUsers"},
@@ -1439,7 +1439,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
         FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
         FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
@@ -1469,7 +1469,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},
@@ -1558,7 +1558,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u1") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},
@@ -1601,7 +1601,7 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u2") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetUserCount"},
             FunctionInfo{1, nullptr, "GetUserExistence"},
             FunctionInfo{2, nullptr, "ListAllUsers"},

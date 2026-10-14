@@ -34,7 +34,7 @@ private:
         rb.Push(temperature);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetTemperatureRange"},
         FunctionInfo{2, nullptr, "SetMeasurementMode"},
         FunctionInfo{4, &ISession::GetTemperature, "GetTemperature"}

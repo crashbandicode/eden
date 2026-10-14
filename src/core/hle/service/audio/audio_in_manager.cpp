@@ -13,7 +13,7 @@ namespace Service::Audio {
 using namespace AudioCore::AudioIn;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioInManager::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IAudioInManager::ListAudioIns>, "ListAudioIns"},
         FunctionInfo{1, D<&IAudioInManager::OpenAudioIn>, "OpenAudioIn"},
         FunctionInfo{2, D<&IAudioInManager::ListAudioIns>, "ListAudioInsAuto"},

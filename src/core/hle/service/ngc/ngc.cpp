@@ -57,7 +57,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IService::Match, "Match"},
         FunctionInfo{1, &IService::Filter, "Filter"}
     );
@@ -142,7 +142,7 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &NgcServiceImpl::GetContentVersion, "GetContentVersion"},
         FunctionInfo{1, &NgcServiceImpl::Check, "Check"},
         FunctionInfo{2, &NgcServiceImpl::Mask, "Mask"},
@@ -156,7 +156,7 @@ class IServiceWithManagementApi final : public ServiceFramework<IServiceWithMana
 public:
     explicit IServiceWithManagementApi(Core::System& system_) : ServiceFramework(system_, "ngct:s") {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "Match"},
             FunctionInfo{1, nullptr, "Filter"},
             FunctionInfo{100, nullptr, "ConfigureAutoUpdateSetting"},
@@ -182,7 +182,7 @@ public:
     explicit IUserShimScopedObject(Core::System& system_) : ServiceFramework(system_, "IUserShimScopedObject") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{450, nullptr, "InitializeForSaveData"},
             FunctionInfo{451, nullptr, "FinalizeForSaveData"},
             FunctionInfo{452, D<&IUserShimScopedObject::OpenSaveData>, "OpenSaveData"},
@@ -219,7 +219,7 @@ public:
     explicit IUserService(Core::System& system_) : ServiceFramework(system_, "stpl:u") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IUserService::Cmd0>, "Cmd0"}
         );
         return HandlerTableGenerateWithFind(key, functions);
@@ -238,7 +238,7 @@ public:
     explicit ISystemShimScopedObject(Core::System& system_) : ServiceFramework(system_, "ISystemShimScopedObject") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{106, nullptr, "Cmd106"},
             FunctionInfo{107, nullptr, "Cmd107"},
             FunctionInfo{108, D<&ISystemShimScopedObject::Cmd108>, "Cmd108"},
@@ -270,7 +270,7 @@ public:
     explicit ISystemService(Core::System& system_) : ServiceFramework(system_, "stpl:sys") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ISystemService::Cmd0>, "Cmd0"}
         );
         return HandlerTableGenerateWithFind(key, functions);

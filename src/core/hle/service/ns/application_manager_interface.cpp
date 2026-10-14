@@ -26,7 +26,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationManagerInterface::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IApplicationManagerInterface::ListApplicationRecord>, "ListApplicationRecord"},
         FunctionInfo{1, nullptr, "GenerateApplicationRecordCount"},
         FunctionInfo{2, D<&IApplicationManagerInterface::GetApplicationRecordUpdateSystemEvent>, "GetApplicationRecordUpdateSystemEvent"},

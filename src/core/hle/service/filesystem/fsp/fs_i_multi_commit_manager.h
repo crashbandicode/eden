@@ -21,7 +21,7 @@ private:
     Result Commit();
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1, D<&IMultiCommitManager::Add>, "Add"},
             FunctionInfo{2, D<&IMultiCommitManager::Commit>, "Commit"}
         );

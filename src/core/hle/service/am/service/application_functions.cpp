@@ -52,7 +52,7 @@ FileSys::PatchManager::Metadata GetApplicationMetadata(Core::System& system, u64
 } // Anonymous namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationFunctions::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{1, D<&IApplicationFunctions::PopLaunchParameter>, "PopLaunchParameter"},
         FunctionInfo{10, nullptr, "CreateApplicationAndPushAndRequestToStart"},
         FunctionInfo{11, nullptr, "CreateApplicationAndPushAndRequestToStartForQuest"},

@@ -450,7 +450,7 @@ public:
     };
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1, D<&IParentalControlService::Initialize>, "Initialize"},
             FunctionInfo{1001, D<&IParentalControlService::CheckFreeCommunicationPermission>, "CheckFreeCommunicationPermission"},
             FunctionInfo{1002, D<&IParentalControlService::ConfirmLaunchApplicationPermission>, "ConfirmLaunchApplicationPermission"},
@@ -617,7 +617,7 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IParentalControlServiceFactory::CreateService>, "CreateService"},
             FunctionInfo{1, D<&IParentalControlServiceFactory::CreateServiceWithoutInitialize>, "CreateServiceWithoutInitialize"}
         );

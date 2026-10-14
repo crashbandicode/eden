@@ -26,7 +26,7 @@ public:
     Result GetUnknown71(Out<u64> out_value_a, Out<u64> out_value_b, u8 flag);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{11, D<&IContentManagementInterface::CalculateApplicationOccupiedSize>, "CalculateApplicationOccupiedSize"},
             FunctionInfo{43, D<&IContentManagementInterface::CheckSdCardMountStatus>, "CheckSdCardMountStatus"},
             FunctionInfo{47, D<&IContentManagementInterface::GetTotalSpaceSize>, "GetTotalSpaceSize"},

@@ -13,7 +13,7 @@
 namespace Service::OLSC {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> INativeHandleHolder::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&INativeHandleHolder::GetNativeHandle>, "GetNativeHandle"}
     );
     return HandlerTableGenerateWithFind(key, functions);

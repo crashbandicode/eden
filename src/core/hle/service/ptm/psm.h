@@ -32,7 +32,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &PSM::GetBatteryChargePercentage, "GetBatteryChargePercentage"},
         FunctionInfo{1, &PSM::GetChargerType, "GetChargerType"},
         FunctionInfo{2, nullptr, "EnableBatteryCharging"},

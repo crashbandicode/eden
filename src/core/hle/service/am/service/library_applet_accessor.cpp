@@ -46,7 +46,7 @@ static void ReplaceEmptyUuidWithCurrentUser(const std::shared_ptr<LibraryAppletS
 }
 
     std::optional<ServiceFrameworkBase::FunctionInfoBase> ILibraryAppletAccessor::FindRequest(u32 key) {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&ILibraryAppletAccessor::GetAppletStateChangedEvent>, "GetAppletStateChangedEvent"},
             FunctionInfo{1, D<&ILibraryAppletAccessor::IsCompleted>, "IsCompleted"},
             FunctionInfo{10, D<&ILibraryAppletAccessor::Start>, "Start"},

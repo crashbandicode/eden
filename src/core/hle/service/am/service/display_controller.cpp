@@ -13,7 +13,7 @@
 namespace Service::AM {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IDisplayController::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetLastForegroundCaptureImage"},
         FunctionInfo{1, nullptr, "UpdateLastForegroundCaptureImage"},
         FunctionInfo{2, nullptr, "GetLastApplicationCaptureImage"},

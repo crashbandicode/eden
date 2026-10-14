@@ -33,3 +33,11 @@ are not part of the release archive.
 The standalone GIF encoder test project is `tools/tests/gif_writer`. Configure
 it with `CMAKE_PREFIX_PATH` pointing to the same Qt distribution, build it, then
 run CTest. Its independent decoding checks use Python and Pillow.
+
+The service-dispatch regression test is `tools/tests/service_dispatch`; configure
+it with `FROZEN_INCLUDE_DIR` pointing to the fetched Frozen `include` directory.
+MSVC 19.44 miscompiles constant-evaluated tables containing null member-function
+pointers. This fork initializes immutable dispatch tables at runtime on MSVC,
+while GCC/Clang retain constant evaluation. Defining `EDEN_REPRO_BROKEN` in this
+standalone test restores the defective path as a negative control (expected to
+fail on MSVC 19.44). Both the normal MSVC and GCC test paths must pass.

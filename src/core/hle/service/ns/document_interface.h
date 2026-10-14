@@ -22,7 +22,7 @@ private:
     Result GetRunningApplicationProgramId(Out<u64> out_program_id, u64 caller_program_id);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{21, nullptr, "GetApplicationContentPath"},
             FunctionInfo{23, D<&IDocumentInterface::ResolveApplicationContentPath>, "ResolveApplicationContentPath"},
             FunctionInfo{92, D<&IDocumentInterface::GetRunningApplicationProgramId>, "GetRunningApplicationProgramId"}

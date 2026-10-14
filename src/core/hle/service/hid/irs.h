@@ -172,7 +172,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{500, nullptr, "SetAppletResourceUserId"},
         FunctionInfo{501, nullptr, "RegisterAppletResourceUserId"},
         FunctionInfo{502, nullptr, "UnregisterAppletResourceUserId"},

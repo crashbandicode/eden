@@ -11,7 +11,7 @@
 namespace Service::VI {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IManagerDisplayService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{200, nullptr, "AllocateProcessHeapBlock"},
         FunctionInfo{201, nullptr, "FreeProcessHeapBlock"},
         FunctionInfo{1102, nullptr, "GetDisplayResolution"},

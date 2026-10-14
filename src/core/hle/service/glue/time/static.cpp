@@ -25,7 +25,7 @@
 namespace Service::Glue::Time {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> StaticService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0,   D<&StaticService::GetStandardUserSystemClock>, "GetStandardUserSystemClock"},
         FunctionInfo{1,   D<&StaticService::GetStandardNetworkSystemClock>, "GetStandardNetworkSystemClock"},
         FunctionInfo{2,   D<&StaticService::GetStandardSteadyClock>, "GetStandardSteadyClock"},

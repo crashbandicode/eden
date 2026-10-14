@@ -27,7 +27,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &APM::OpenSession, "OpenSession"},
         FunctionInfo{1, &APM::GetPerformanceMode, "GetPerformanceMode"},
         FunctionInfo{6, &APM::IsCpuOverclockEnabled, "IsCpuOverclockEnabled"}
@@ -50,7 +50,7 @@ private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "RequestPerformanceMode"},
         FunctionInfo{1, &APM_Sys::GetPerformanceEvent, "GetPerformanceEvent"},
         FunctionInfo{2, nullptr, "GetThrottlingState"},

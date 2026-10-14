@@ -21,7 +21,7 @@ class INotifyService final : public ServiceFramework<INotifyService> {
 public:
     explicit INotifyService(Core::System& system_) : ServiceFramework{system_, "pdm:ntfy"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "NotifyAppletEvent" },
         FunctionInfo{2, nullptr, "NotifyOperationModeChangeEvent" },
         FunctionInfo{3, nullptr, "NotifyPowerStateChangeEvent" },
@@ -48,7 +48,7 @@ public:
         : ServiceFramework{system_, "ns:vm"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{1200, D<&IVulnerabilityManagerInterface::NeedsUpdateVulnerability>, "NeedsUpdateVulnerability"},
             FunctionInfo{1201, nullptr, "UpdateSafeSystemVersionForDebug"},
             FunctionInfo{1202, nullptr, "GetSafeSystemVersion"},

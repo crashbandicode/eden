@@ -29,7 +29,7 @@
 namespace Service::AOC {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAddOnContentManager::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "CountAddOnContentByApplicationId"},
         FunctionInfo{1, nullptr, "ListAddOnContentByApplicationId"},
         FunctionInfo{2, D<&IAddOnContentManager::CountAddOnContent>, "CountAddOnContent"},

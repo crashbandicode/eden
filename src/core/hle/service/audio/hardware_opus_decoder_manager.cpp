@@ -13,7 +13,7 @@ namespace Service::Audio {
 using namespace AudioCore::OpusDecoder;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHardwareOpusDecoderManager::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IHardwareOpusDecoderManager::OpenHardwareOpusDecoder>, "OpenHardwareOpusDecoder"},
         FunctionInfo{1, D<&IHardwareOpusDecoderManager::GetWorkBufferSize>, "GetWorkBufferSize"},
         FunctionInfo{2, D<&IHardwareOpusDecoderManager::OpenHardwareOpusDecoderForMultiStream>, "OpenOpusDecoderForMultiStream"},

@@ -32,7 +32,7 @@ private:
     Result GetSize(Out<s64> out_size);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IFile::Read>, "Read"},
             FunctionInfo{1, D<&IFile::Write>, "Write"},
             FunctionInfo{2, D<&IFile::Flush>, "Flush"},

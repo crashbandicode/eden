@@ -15,7 +15,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IQueryService::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "QueryAppletEvent"},
         FunctionInfo{1, nullptr, "QueryPlayStatistics"},
         FunctionInfo{2, nullptr, "QueryPlayStatisticsByUserAccountId"},

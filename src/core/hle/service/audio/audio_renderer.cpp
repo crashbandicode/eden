@@ -11,7 +11,7 @@ namespace Service::Audio {
 using namespace AudioCore::Renderer;
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioRenderer::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IAudioRenderer::GetSampleRate>, "GetSampleRate"},
         FunctionInfo{1, D<&IAudioRenderer::GetSampleCount>, "GetSampleCount"},
         FunctionInfo{2, D<&IAudioRenderer::GetMixBufferCount>, "GetMixBufferCount"},

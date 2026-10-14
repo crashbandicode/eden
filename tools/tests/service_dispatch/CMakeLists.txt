@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+# SPDX-License-Identifier: GPL-3.0-or-later
+cmake_minimum_required(VERSION 3.20)
+project(service_dispatch_test LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_path(FROZEN_INCLUDE_DIR frozen/map.h REQUIRED)
+add_executable(service_dispatch_test service_dispatch_test.cpp)
+target_include_directories(service_dispatch_test PRIVATE "../../../src" "${FROZEN_INCLUDE_DIR}")
+if(MSVC)
+    target_compile_options(service_dispatch_test PRIVATE /W4 /WX /permissive-)
+else()
+    target_compile_options(service_dispatch_test PRIVATE -Wall -Wextra -Werror)
+endif()
+enable_testing()
+add_test(NAME service_dispatch COMMAND service_dispatch_test)

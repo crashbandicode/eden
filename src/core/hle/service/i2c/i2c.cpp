@@ -26,7 +26,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "SendOld"},
             FunctionInfo{1, nullptr, "ReceiveOld"},
             FunctionInfo{2, nullptr, "ExecuteCommandListOld"},
@@ -76,7 +76,7 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, C<&I2C::OpenSessionForDev>, "OpenSessionForDev"},
             FunctionInfo{1, C<&I2C::OpenSession>, "OpenSession"},
             FunctionInfo{2, C<&I2C::HasDevice>, "HasDevice"},

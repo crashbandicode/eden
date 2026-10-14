@@ -43,7 +43,7 @@
 namespace Service::HID {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IHidServer::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, C<&IHidServer::CreateAppletResource>, "CreateAppletResource"},
         FunctionInfo{1, C<&IHidServer::ActivateDebugPad>, "ActivateDebugPad"},
         FunctionInfo{11, C<&IHidServer::ActivateTouchScreen>, "ActivateTouchScreen"},

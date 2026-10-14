@@ -74,7 +74,7 @@ void SanitizeJPEGImageSize(std::vector<u8>& image) {
 } // namespace
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IReadOnlyApplicationControlDataInterface::FindRequest(u32 key) {
-    static constexpr auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, D<&IReadOnlyApplicationControlDataInterface::GetApplicationControlData>, "GetApplicationControlData"},
         FunctionInfo{1, D<&IReadOnlyApplicationControlDataInterface::GetApplicationDesiredLanguage>, "GetApplicationDesiredLanguage"},
         FunctionInfo{2, D<&IReadOnlyApplicationControlDataInterface::ConvertApplicationLanguageToLanguageCode>, "ConvertApplicationLanguageToLanguageCode"},
@@ -132,7 +132,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IAsyncValue::GetSize>, "GetSize"},
             FunctionInfo{1, D<&IAsyncValue::Get>, "Get"},
             FunctionInfo{2, D<&IAsyncValue::Cancel>, "Cancel"},

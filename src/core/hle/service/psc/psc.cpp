@@ -20,7 +20,7 @@ class PSC_L final : public ServiceFramework<PSC_L> {
 public:
     explicit PSC_L(Core::System& system_) : ServiceFramework{system_, "psc:l"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "Initialize_3"},
         FunctionInfo{1, nullptr, "Lock"},
         FunctionInfo{2, nullptr, "Unlock"},
@@ -36,7 +36,7 @@ class INS_R final : public ServiceFramework<INS_R> {
 public:
     explicit INS_R(Core::System& system_) : ServiceFramework{system_, "ins:r"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetInputSourceState"},
             FunctionInfo{1, nullptr, "GetTriggerTargetEvent"}
         );
@@ -49,7 +49,7 @@ class INS_S final : public ServiceFramework<INS_S> {
 public:
     explicit INS_S(Core::System& system_) : ServiceFramework{system_, "ins:s"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetNotifyEvent"}
         );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
@@ -61,7 +61,7 @@ class HSHL_SYS final : public ServiceFramework<HSHL_SYS> {
 public:
     explicit HSHL_SYS(Core::System& system_) : ServiceFramework{system_, "hshl:sys"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, nullptr, "GetBatteryPercentage"},
             FunctionInfo{1, nullptr, "GetChargerType"},
             FunctionInfo{2, nullptr, "OpenChargeSession"},
@@ -88,7 +88,7 @@ class HSHL_SET final : public ServiceFramework<HSHL_SET> {
 public:
     explicit HSHL_SET(Core::System& system_) : ServiceFramework{system_, "hshl:set"} {}
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "OpenChargeSession_2"},
         FunctionInfo{1, nullptr, "OpenThermalSession_2"},
         FunctionInfo{2, nullptr, "SetClockRate"},
@@ -109,7 +109,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "GetRequest"},
         FunctionInfo{2, nullptr, "Acknowledge"},
@@ -131,7 +131,7 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static constexpr auto functions = CreateStaticMap(
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
             FunctionInfo{0, D<&IPmService::GetPmModule>, "GetPmModule"}
         );
         return HandlerTableGenerateWithFind(key, functions);
@@ -146,7 +146,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "Initialize"},
         FunctionInfo{1, nullptr, "DispatchRequest"},
         FunctionInfo{2, nullptr, "GetResult"},

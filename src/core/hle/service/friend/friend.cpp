@@ -25,7 +25,7 @@ public:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &Friend::CreateFriendService, "CreateFriendService"},
         FunctionInfo{1, &Friend::CreateNotificationService, "CreateNotificationService"},
         FunctionInfo{2, nullptr, "CreateDaemonSuspendSessionService"}
@@ -266,7 +266,7 @@ private:
         rb.Push(0);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &IFriendService::GetCompletionEvent, "GetCompletionEvent"},
         FunctionInfo{1, &IFriendService::Cancel, "Cancel"},
         FunctionInfo{10100, nullptr, "GetFriendListIds"},
@@ -471,7 +471,7 @@ private:
         bool has_received_friend_request;
     };
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, &INotificationService::GetEvent, "GetEvent"},
         FunctionInfo{1, &INotificationService::Clear, "Clear"},
         FunctionInfo{2, &INotificationService::Pop, "Pop"}
@@ -517,7 +517,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetReceivableNeighborInfoCountMax"},
         FunctionInfo{10, nullptr, "IsNeighborDetectionEnabled"}
     );
@@ -533,7 +533,7 @@ public:
         return HandlerTableGenerateWithFind(key, functions);
     }
 
-    static constexpr auto functions = CreateStaticMap(
+    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
         FunctionInfo{0, nullptr, "GetReceivableNeighborInfoCountMax"},
         FunctionInfo{10, nullptr, "IsNeighborDetectionEnabled"},
         FunctionInfo{200, nullptr, "SetSystemData"},

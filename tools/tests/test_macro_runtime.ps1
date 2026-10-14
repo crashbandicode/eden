@@ -125,6 +125,19 @@ try {
     $null = Call 'macro.shortcuts' @{marker_keyboard='Ctrl+Shift+M'; marker_gamepad='l+r+minus'}
     $markerSettings = Call 'macro.shortcuts'
     Check ($markerSettings.marker_gamepad -eq 'l+r+minus') 'Both marker shortcut types are configurable'
+    $null = Call 'macro.record' @{name="$prefix-shortcuts"; player=$Player; countdown_ms=0}
+    $null = WaitState 'recording'
+    Start-Sleep -Milliseconds 200
+    $null = Call 'ui.key' @{target='MainWindow'; key='Ctrl+Shift+M'}
+    Start-Sleep -Milliseconds 200
+    foreach ($button in @('l','r','minus')) {
+        $null = Call 'input.button' @{player=$Player; button=$button; state='press'; lease_ms=1000}
+    }
+    Start-Sleep -Milliseconds 250
+    $null = Call 'input.reset'
+    $null = Call 'macro.stop'
+    $marked = Call 'macro.inspect' @{name="$prefix-shortcuts"}
+    Check (@($marked.markers).Count -eq 2) 'Keyboard and mapped gamepad marker shortcuts each insert a marker'
     # Clear temporary playback bindings after activation checks.
     $null = Call 'macro.bind' @{name=$prefix; keyboard=''; gamepad=''}
     @{ok=$true; checks=$script:checks; original=$originalPath; branch=$branch.path; commit=$game.commit; physical_controller_tested=$false} |

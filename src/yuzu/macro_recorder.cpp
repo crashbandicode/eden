@@ -42,7 +42,7 @@ constexpr int kTickMs = 16;
 constexpr int kCountdownMaxMs = 120000;
 // Bound capture and JSON-save memory even when noisy motion changes every frame.
 constexpr std::size_t kRecordingEventLimit = 60000;
-const QString kStopKeyboard = QStringLiteral("Ctrl+Shift+Esc");
+const QString kStopKeyboard = QStringLiteral("Ctrl+Shift+F12");
 
 static_assert(EdenMacro::ButtonCount == static_cast<int>(Settings::NativeButton::NumButtons));
 static_assert(static_cast<int>(Settings::NativeAnalog::NumAnalogs) == 2);

@@ -9,7 +9,7 @@ Open **Tools → Input Macros…** to record and replay a named controller seque
 3. Insert markers at useful branch points using the configured keyboard shortcut
    or gamepad combination. Both kinds of shortcut are supported. The default
    keyboard marker shortcut is **Ctrl+Shift+M**.
-4. Stop to save the named file. **Ctrl+Shift+Esc** stops the current operation.
+4. Stop to save the named file. **Ctrl+Shift+F12** stops the current operation.
 5. Select the saved macro and assign its playback keyboard shortcut, gamepad
    combination, or both. Playback starts immediately when invoked.
 

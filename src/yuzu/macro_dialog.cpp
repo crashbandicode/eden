@@ -24,6 +24,7 @@
 #include <QSizePolicy>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTabWidget>
 #include <QUrl>
 #include <QVariant>
 #include <QVBoxLayout>
@@ -163,18 +164,24 @@ void MacroDialog::showEvent(QShowEvent* event) {
 }
 
 void MacroDialog::BuildUi() {
-    auto* layout = new QVBoxLayout(this);
+    auto* outer = new QVBoxLayout(this);
+    auto* tabs = new QTabWidget(this);
+    tabs->setObjectName(QStringLiteral("macroTabs"));
+    auto* recording_page = new QWidget(tabs);
+    auto* shortcut_page = new QWidget(tabs);
+    auto* layout = new QVBoxLayout(recording_page);
+    auto* shortcut_layout = new QVBoxLayout(shortcut_page);
+    tabs->addTab(recording_page, tr("Record and play"));
+    tabs->addTab(shortcut_page, tr("Shortcuts"));
+    outer->addWidget(tabs);
 
     help_label = new QLabel(this);
     help_label->setObjectName(QStringLiteral("macroHelpLabel"));
     help_label->setWordWrap(true);
     help_label->setText(tr(
-        "Play a macro from the same place in the game where it was recorded. "
-        "Record from marker plays up to that marker, then records what you do next into a new file. "
-        "The original macro is kept. This does not use save states, so get the game to that same "
-        "starting point before you play or record.\n\n"
-        "Recording and playing close this window so you can switch to the game. "
-        "A new recording waits three seconds first."));
+        "Start from the same game or menu state as the original recording. "
+        "Record from marker replays the prefix, then records a new branch without changing the original. "
+        "Recording starts after a three-second countdown."));
 
     status_label = new QLabel(tr("Ready."), this);
     status_label->setObjectName(QStringLiteral("macroStatusLabel"));
@@ -316,7 +323,7 @@ void MacroDialog::BuildUi() {
         "sl_left, sr_left, home, capture, sl_right, sr_right."));
     save_marker_shortcuts_button = new QPushButton(tr("Save marker shortcuts"), this);
     save_marker_shortcuts_button->setObjectName(QStringLiteral("macroSaveMarkerShortcutsButton"));
-    stop_hint = new QLabel(tr("Stop from the keyboard with Ctrl+Shift+Esc."), this);
+    stop_hint = new QLabel(tr("Stop from the keyboard with Ctrl+Shift+F12."), this);
     stop_hint->setObjectName(QStringLiteral("macroStopHintLabel"));
     stop_hint->setWordWrap(true);
     auto* marker_box = new QGroupBox(tr("Marker shortcut"), this);
@@ -335,8 +342,9 @@ void MacroDialog::BuildUi() {
     layout->addWidget(library, 1);
     layout->addLayout(form);
     layout->addLayout(actions);
-    layout->addWidget(playback);
-    layout->addWidget(marker_box);
+    shortcut_layout->addWidget(playback);
+    shortcut_layout->addWidget(marker_box);
+    shortcut_layout->addStretch(1);
 
     connect(refresh_button, &QPushButton::clicked, this, &MacroDialog::Refresh);
     connect(open_file_button, &QPushButton::clicked, this, &MacroDialog::OpenFile);

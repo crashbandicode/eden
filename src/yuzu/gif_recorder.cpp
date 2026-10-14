@@ -43,6 +43,9 @@ GifRecorder::GifRecorder(GRenderWindow& window_, QObject* parent)
     worker_thread.start();
     timer.setTimerType(Qt::PreciseTimer);
     connect(&timer, &QTimer::timeout, this, &GifRecorder::Capture);
+    duration_timer.setSingleShot(true);
+    duration_timer.setTimerType(Qt::PreciseTimer);
+    connect(&duration_timer, &QTimer::timeout, this, &GifRecorder::Stop);
 }
 
 GifRecorder::~GifRecorder() {
@@ -97,6 +100,7 @@ bool GifRecorder::Start(const QString& output, int rate, int requested_width, in
     state = QStringLiteral("recording");
     clock.start();
     timer.start(std::max(1, 1000 / fps));
+    duration_timer.start(duration_ms);
     emit Changed();
     Capture();
     return true;
@@ -161,6 +165,7 @@ void GifRecorder::Capture() {
 void GifRecorder::Stop() {
     if (!IsRecording()) return;
     timer.stop();
+    duration_timer.stop();
     elapsed_ms = clock.elapsed();
     state = QStringLiteral("finished");
     ++generation;

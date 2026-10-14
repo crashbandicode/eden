@@ -33,6 +33,7 @@ private:
     QThread worker_thread;
     QObject* worker{};
     QTimer timer;
+    QTimer duration_timer;
     QElapsedTimer clock;
     QString state{QStringLiteral("idle")};
     QString path;

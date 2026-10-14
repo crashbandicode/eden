@@ -61,7 +61,8 @@ bool GifRecorder::Start(const QString& output, int rate, int requested_width, in
         error = tr("A GIF recording is already active.");
         return false;
     }
-    if (!QtCommon::system->IsPoweredOn() || !QtCommon::emu_thread ||
+    if (!QtCommon::system->IsPoweredOn() || QtCommon::system->IsShuttingDown() ||
+        !QtCommon::emu_thread ||
         !QtCommon::emu_thread->IsRunning() || !window.IsLoadingComplete()) {
         error = tr("Start a game and wait for it to finish loading before recording.");
         return false;

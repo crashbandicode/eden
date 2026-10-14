@@ -131,11 +131,11 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IPmService::GetPmModule>, "GetPmModule"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IPmService::GetPmModule>, "GetPmModule"}
-    );
 };
 
 class IPmControl final : public ServiceFramework<IPmControl> {

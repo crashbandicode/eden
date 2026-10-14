@@ -22,13 +22,13 @@ private:
     Result GetRunningApplicationProgramId(Out<u64> out_program_id, u64 caller_program_id);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{21, nullptr, "GetApplicationContentPath"},
+            FunctionInfo{23, D<&IDocumentInterface::ResolveApplicationContentPath>, "ResolveApplicationContentPath"},
+            FunctionInfo{92, D<&IDocumentInterface::GetRunningApplicationProgramId>, "GetRunningApplicationProgramId"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{21, nullptr, "GetApplicationContentPath"},
-        FunctionInfo{23, D<&IDocumentInterface::ResolveApplicationContentPath>, "ResolveApplicationContentPath"},
-        FunctionInfo{92, D<&IDocumentInterface::GetRunningApplicationProgramId>, "GetRunningApplicationProgramId"}
-    );
 };
 
 } // namespace Service::NS

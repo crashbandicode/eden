@@ -30,6 +30,14 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IShopServiceAsync::Cancel>, "Cancel"},
+            FunctionInfo{1, D<&IShopServiceAsync::GetSize>, "GetSize"},
+            FunctionInfo{2, D<&IShopServiceAsync::Read>, "Read"},
+            FunctionInfo{3, D<&IShopServiceAsync::GetErrorCode>, "GetErrorCode"},
+            FunctionInfo{4, D<&IShopServiceAsync::Request>, "Request"},
+            FunctionInfo{5, D<&IShopServiceAsync::Prepare>, "Prepare"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -119,14 +127,7 @@ private:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IShopServiceAsync::Cancel>, "Cancel"},
-        FunctionInfo{1, D<&IShopServiceAsync::GetSize>, "GetSize"},
-        FunctionInfo{2, D<&IShopServiceAsync::Read>, "Read"},
-        FunctionInfo{3, D<&IShopServiceAsync::GetErrorCode>, "GetErrorCode"},
-        FunctionInfo{4, D<&IShopServiceAsync::Request>, "Request"},
-        FunctionInfo{5, D<&IShopServiceAsync::Prepare>, "Prepare"}
-    );
+
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* completion_event;
     std::jthread worker;

@@ -101,15 +101,15 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IReceiver::AddSource>, "AddSource"},
+            FunctionInfo{1, D<&IReceiver::RemoveSource>, "RemoveSource"},
+            FunctionInfo{2, D<&IReceiver::GetReceiveEventHandle>, "GetReceiveEventHandle"},
+            FunctionInfo{3, D<&IReceiver::Receive>, "Receive"},
+            FunctionInfo{4, D<&IReceiver::ReceiveWithTick>, "ReceiveWithTick"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IReceiver::AddSource>, "AddSource"},
-        FunctionInfo{1, D<&IReceiver::RemoveSource>, "RemoveSource"},
-        FunctionInfo{2, D<&IReceiver::GetReceiveEventHandle>, "GetReceiveEventHandle"},
-        FunctionInfo{3, D<&IReceiver::Receive>, "Receive"},
-        FunctionInfo{4, D<&IReceiver::ReceiveWithTick>, "ReceiveWithTick"}
-    );
 
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* receive_event;

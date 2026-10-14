@@ -132,14 +132,14 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IAsyncValue::GetSize>, "GetSize"},
+            FunctionInfo{1, D<&IAsyncValue::Get>, "Get"},
+            FunctionInfo{2, D<&IAsyncValue::Cancel>, "Cancel"},
+            FunctionInfo{3, D<&IAsyncValue::GetErrorContext>, "GetErrorContext"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IAsyncValue::GetSize>, "GetSize"},
-        FunctionInfo{1, D<&IAsyncValue::Get>, "Get"},
-        FunctionInfo{2, D<&IAsyncValue::Cancel>, "Cancel"},
-        FunctionInfo{3, D<&IAsyncValue::GetErrorContext>, "GetErrorContext"}
-    );
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* completion_event{};
     s32 data_offset;

@@ -108,38 +108,38 @@ private:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, D<&IManagerForSystemService::CheckAvailability>, "CheckAvailability"},
-            FunctionInfo{1, D<&IManagerForSystemService::GetAccountId>, "GetAccountId"},
-            FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
-            FunctionInfo{3, D<&IManagerForSystemService::LoadIdTokenCacheDeprecated>, "LoadIdTokenCacheDeprecated", MakeVersionGate({19,0,0})},
-            FunctionInfo{4, D<&IManagerForSystemService::LoadIdTokenCache>, "LoadIdTokenCache", MakeVersionGate({19,0,0})},
-            FunctionInfo{100, nullptr, "SetSystemProgramIdentification"},
-            FunctionInfo{101, nullptr, "RefreshNotificationTokenAsync", MakeVersionGate({7,0,0})},
-            FunctionInfo{110, nullptr, "GetServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
-            FunctionInfo{111, nullptr, "InvalidateServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
-            FunctionInfo{112, nullptr, "InvalidateTokenCache", MakeVersionGate({4,0,0}, {6,2,0})},
-            FunctionInfo{113, nullptr, "GetServiceEntryRequirementCacheForOnlinePlay", MakeVersionGate({6,1,0})},
-            FunctionInfo{120, nullptr, "GetNintendoAccountId"},
-            FunctionInfo{121, nullptr, "CalculateNintendoAccountAuthenticationFingerprint", MakeVersionGate({9,0,0})},
-            FunctionInfo{130, nullptr, "GetNintendoAccountUserResourceCache"},
-            FunctionInfo{131, nullptr, "RefreshNintendoAccountUserResourceCacheAsync"},
-            FunctionInfo{132, nullptr, "RefreshNintendoAccountUserResourceCacheAsyncIfSecondsElapsed"},
-            FunctionInfo{133, nullptr, "GetNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
-            FunctionInfo{134, nullptr, "RefreshNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
-            FunctionInfo{135, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsyncIfSecondsElapsed", MakeVersionGate({9,0,0})},
-            FunctionInfo{136, nullptr, "GetNintendoAccountUserResourceCache", MakeVersionGate({19,0,0})},
-            FunctionInfo{140, nullptr, "GetNetworkServiceLicenseCache", MakeVersionGate({5,0,0})},
-            FunctionInfo{141, nullptr, "RefreshNetworkServiceLicenseCacheAsync", MakeVersionGate({5,0,0})},
-            FunctionInfo{142, nullptr, "RefreshNetworkServiceLicenseCacheAsyncIfSecondsElapsed", MakeVersionGate({5,0,0})},
-            FunctionInfo{143, D<&IManagerForSystemService::GetNetworkServiceLicenseCacheEx>, "GetNetworkServiceLicenseCacheEx", MakeVersionGate({15,0,0})},
-            FunctionInfo{150, nullptr, "CreateAuthorizationRequest"},
-            FunctionInfo{160, nullptr, "RequiresUpdateNetworkServiceAccountIdTokenCache"},
-            FunctionInfo{161, nullptr, "RequireReauthenticationOfNetworkServiceAccount"},
-            FunctionInfo{170, nullptr, "CreateDeviceHistoryRequest", MakeVersionGate({17,0,0})},
-            FunctionInfo{180, nullptr, "GetRequestForNintendoAccountReauthentication", MakeVersionGate({18,0,0})}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, D<&IManagerForSystemService::CheckAvailability>, "CheckAvailability"},
+                FunctionInfo{1, D<&IManagerForSystemService::GetAccountId>, "GetAccountId"},
+                FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
+                FunctionInfo{3, D<&IManagerForSystemService::LoadIdTokenCacheDeprecated>, "LoadIdTokenCacheDeprecated", MakeVersionGate({19,0,0})},
+                FunctionInfo{4, D<&IManagerForSystemService::LoadIdTokenCache>, "LoadIdTokenCache", MakeVersionGate({19,0,0})},
+                FunctionInfo{100, nullptr, "SetSystemProgramIdentification"},
+                FunctionInfo{101, nullptr, "RefreshNotificationTokenAsync", MakeVersionGate({7,0,0})},
+                FunctionInfo{110, nullptr, "GetServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
+                FunctionInfo{111, nullptr, "InvalidateServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
+                FunctionInfo{112, nullptr, "InvalidateTokenCache", MakeVersionGate({4,0,0}, {6,2,0})},
+                FunctionInfo{113, nullptr, "GetServiceEntryRequirementCacheForOnlinePlay", MakeVersionGate({6,1,0})},
+                FunctionInfo{120, nullptr, "GetNintendoAccountId"},
+                FunctionInfo{121, nullptr, "CalculateNintendoAccountAuthenticationFingerprint", MakeVersionGate({9,0,0})},
+                FunctionInfo{130, nullptr, "GetNintendoAccountUserResourceCache"},
+                FunctionInfo{131, nullptr, "RefreshNintendoAccountUserResourceCacheAsync"},
+                FunctionInfo{132, nullptr, "RefreshNintendoAccountUserResourceCacheAsyncIfSecondsElapsed"},
+                FunctionInfo{133, nullptr, "GetNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
+                FunctionInfo{134, nullptr, "RefreshNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
+                FunctionInfo{135, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsyncIfSecondsElapsed", MakeVersionGate({9,0,0})},
+                FunctionInfo{136, nullptr, "GetNintendoAccountUserResourceCache", MakeVersionGate({19,0,0})},
+                FunctionInfo{140, nullptr, "GetNetworkServiceLicenseCache", MakeVersionGate({5,0,0})},
+                FunctionInfo{141, nullptr, "RefreshNetworkServiceLicenseCacheAsync", MakeVersionGate({5,0,0})},
+                FunctionInfo{142, nullptr, "RefreshNetworkServiceLicenseCacheAsyncIfSecondsElapsed", MakeVersionGate({5,0,0})},
+                FunctionInfo{143, D<&IManagerForSystemService::GetNetworkServiceLicenseCacheEx>, "GetNetworkServiceLicenseCacheEx", MakeVersionGate({15,0,0})},
+                FunctionInfo{150, nullptr, "CreateAuthorizationRequest"},
+                FunctionInfo{160, nullptr, "RequiresUpdateNetworkServiceAccountIdTokenCache"},
+                FunctionInfo{161, nullptr, "RequireReauthenticationOfNetworkServiceAccount"},
+                FunctionInfo{170, nullptr, "CreateDeviceHistoryRequest", MakeVersionGate({17,0,0})},
+                FunctionInfo{180, nullptr, "GetRequestForNintendoAccountReauthentication", MakeVersionGate({18,0,0})}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
     Common::UUID account_id;
@@ -152,22 +152,22 @@ public:
         : ServiceFramework{system_, "IFloatingRegistrationRequest"} {
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetSessionId"},
-        FunctionInfo{12, nullptr, "GetAccountId"},
-        FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
-        FunctionInfo{14, nullptr, "GetNickname"},
-        FunctionInfo{15, nullptr, "GetProfileImage"},
-        FunctionInfo{16, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
-        FunctionInfo{21, nullptr, "LoadIdTokenCache"},
-        FunctionInfo{100, nullptr, "RegisterUser"}, // [1.0.0-3.0.2] RegisterAsync
-        FunctionInfo{101, nullptr, "RegisterUserWithUid"}, // [1.0.0-3.0.2] RegisterWithUidAsync
-        FunctionInfo{102, nullptr, "RegisterNetworkServiceAccountAsync", MakeVersionGate({4,0,0})},
-        FunctionInfo{103, nullptr, "RegisterNetworkServiceAccountWithUidAsync", MakeVersionGate({4,0,0})},
-        FunctionInfo{110, nullptr, "SetSystemProgramIdentification"},
-        FunctionInfo{111, nullptr, "EnsureIdTokenCacheAsync"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetSessionId"},
+            FunctionInfo{12, nullptr, "GetAccountId"},
+            FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
+            FunctionInfo{14, nullptr, "GetNickname"},
+            FunctionInfo{15, nullptr, "GetProfileImage"},
+            FunctionInfo{16, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
+            FunctionInfo{21, nullptr, "LoadIdTokenCache"},
+            FunctionInfo{100, nullptr, "RegisterUser"}, // [1.0.0-3.0.2] RegisterAsync
+            FunctionInfo{101, nullptr, "RegisterUserWithUid"}, // [1.0.0-3.0.2] RegisterWithUidAsync
+            FunctionInfo{102, nullptr, "RegisterNetworkServiceAccountAsync", MakeVersionGate({4,0,0})},
+            FunctionInfo{103, nullptr, "RegisterNetworkServiceAccountWithUidAsync", MakeVersionGate({4,0,0})},
+            FunctionInfo{110, nullptr, "SetSystemProgramIdentification"},
+            FunctionInfo{111, nullptr, "EnsureIdTokenCacheAsync"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -185,59 +185,59 @@ private:
         rb.Push(false);
     }
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "CheckAvailability"},
-            FunctionInfo{1, nullptr, "GetAccountId"},
-            FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
-            FunctionInfo{3, nullptr, "LoadIdTokenCache"},
-            FunctionInfo{100, nullptr, "SetSystemProgramIdentification"},
-            FunctionInfo{101, nullptr, "RefreshNotificationTokenAsync", MakeVersionGate({7,0,0})},
-            FunctionInfo{110, nullptr, "GetServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
-            FunctionInfo{111, nullptr, "InvalidateServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
-            FunctionInfo{112, nullptr, "InvalidateTokenCache", MakeVersionGate({4,0,0}, {6,2,0})},
-            FunctionInfo{113, nullptr, "GetServiceEntryRequirementCacheForOnlinePlay", MakeVersionGate({6,1,0})},
-            FunctionInfo{120, nullptr, "GetNintendoAccountId"},
-            FunctionInfo{121, nullptr, "CalculateNintendoAccountAuthenticationFingerprint", MakeVersionGate({9,0,0})},
-            FunctionInfo{130, nullptr, "GetNintendoAccountUserResourceCache"},
-            FunctionInfo{131, nullptr, "RefreshNintendoAccountUserResourceCacheAsync"},
-            FunctionInfo{132, nullptr, "RefreshNintendoAccountUserResourceCacheAsyncIfSecondsElapsed"},
-            FunctionInfo{133, nullptr, "GetNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
-            FunctionInfo{134, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsync", MakeVersionGate({9,0,0})},
-            FunctionInfo{135, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsyncIfSecondsElapsed", MakeVersionGate({9,0,0})},
-            FunctionInfo{140, nullptr, "GetNetworkServiceLicenseCache", MakeVersionGate({5,0,0})},
-            FunctionInfo{141, nullptr, "RefreshNetworkServiceLicenseCacheAsync", MakeVersionGate({5,0,0})},
-            FunctionInfo{142, nullptr, "RefreshNetworkServiceLicenseCacheAsyncIfSecondsElapsed", MakeVersionGate({5,0,0})},
-            FunctionInfo{143, nullptr, "GetNetworkServiceLicenseCacheEx"},
-            FunctionInfo{150, nullptr, "CreateAuthorizationRequest"},
-            FunctionInfo{160, nullptr, "RequiresUpdateNetworkServiceAccountIdTokenCache"},
-            FunctionInfo{161, nullptr, "RequireReauthenticationOfNetworkServiceAccount"},
-            FunctionInfo{170, nullptr, "CreateDeviceHistoryRequest", MakeVersionGate({17,0,0})},
-            FunctionInfo{180, nullptr, "GetRequestForNintendoAccountReauthentication", MakeVersionGate({18,0,0})},
-            FunctionInfo{200, nullptr, "IsRegistered"},
-            FunctionInfo{201, nullptr, "RegisterAsync"},
-            FunctionInfo{202, nullptr, "UnregisterAsync"},
-            FunctionInfo{203, nullptr, "DeleteRegistrationInfoLocally"},
-            FunctionInfo{220, nullptr, "SynchronizeProfileAsync"},
-            FunctionInfo{221, nullptr, "UploadProfileAsync"},
-            FunctionInfo{222, nullptr, "SynchronizaProfileAsyncIfSecondsElapsed"},
-            FunctionInfo{250, &IAdministrator::IsLinkedWithNintendoAccount, "IsLinkedWithNintendoAccount"},
-            FunctionInfo{251, nullptr, "CreateProcedureToLinkWithNintendoAccount"},
-            FunctionInfo{252, nullptr, "ResumeProcedureToLinkWithNintendoAccount"},
-            FunctionInfo{255, nullptr, "CreateProcedureToUpdateLinkageStateOfNintendoAccount"},
-            FunctionInfo{256, nullptr, "ResumeProcedureToUpdateLinkageStateOfNintendoAccount"},
-            FunctionInfo{260, nullptr, "CreateProcedureToLinkNnidWithNintendoAccount", MakeVersionGate({3,0,0})},
-            FunctionInfo{261, nullptr, "ResumeProcedureToLinkNnidWithNintendoAccount", MakeVersionGate({3,0,0})},
-            FunctionInfo{280, nullptr, "ProxyProcedureToAcquireApplicationAuthorizationForNintendoAccount"},
-            FunctionInfo{290, nullptr, "GetRequestForNintendoAccountUserResourceView", MakeVersionGate({8,0,0})},
-            FunctionInfo{300, nullptr, "TryRecoverNintendoAccountUserStateAsync", MakeVersionGate({6,0,0})},
-            FunctionInfo{400, nullptr, "IsServiceEntryRequirementCacheRefreshRequiredForOnlinePlay", MakeVersionGate({6,1,0})},
-            FunctionInfo{401, nullptr, "RefreshServiceEntryRequirementCacheForOnlinePlayAsync", MakeVersionGate({6,1,0})},
-            FunctionInfo{900, nullptr, "GetAuthenticationInfoForWin", MakeVersionGate({9,0,0})},
-            FunctionInfo{901, nullptr, "ImportAsyncForWin", MakeVersionGate({9,0,0})},
-            FunctionInfo{997, nullptr, "DebugUnlinkNintendoAccountAsync"},
-            FunctionInfo{998, nullptr, "DebugSetAvailabilityErrorDetail"}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "CheckAvailability"},
+                FunctionInfo{1, nullptr, "GetAccountId"},
+                FunctionInfo{2, nullptr, "EnsureIdTokenCacheAsync"},
+                FunctionInfo{3, nullptr, "LoadIdTokenCache"},
+                FunctionInfo{100, nullptr, "SetSystemProgramIdentification"},
+                FunctionInfo{101, nullptr, "RefreshNotificationTokenAsync", MakeVersionGate({7,0,0})},
+                FunctionInfo{110, nullptr, "GetServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
+                FunctionInfo{111, nullptr, "InvalidateServiceEntryRequirementCache", MakeVersionGate({4,0,0})},
+                FunctionInfo{112, nullptr, "InvalidateTokenCache", MakeVersionGate({4,0,0}, {6,2,0})},
+                FunctionInfo{113, nullptr, "GetServiceEntryRequirementCacheForOnlinePlay", MakeVersionGate({6,1,0})},
+                FunctionInfo{120, nullptr, "GetNintendoAccountId"},
+                FunctionInfo{121, nullptr, "CalculateNintendoAccountAuthenticationFingerprint", MakeVersionGate({9,0,0})},
+                FunctionInfo{130, nullptr, "GetNintendoAccountUserResourceCache"},
+                FunctionInfo{131, nullptr, "RefreshNintendoAccountUserResourceCacheAsync"},
+                FunctionInfo{132, nullptr, "RefreshNintendoAccountUserResourceCacheAsyncIfSecondsElapsed"},
+                FunctionInfo{133, nullptr, "GetNintendoAccountVerificationUrlCache", MakeVersionGate({9,0,0})},
+                FunctionInfo{134, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsync", MakeVersionGate({9,0,0})},
+                FunctionInfo{135, nullptr, "RefreshNintendoAccountVerificationUrlCacheAsyncIfSecondsElapsed", MakeVersionGate({9,0,0})},
+                FunctionInfo{140, nullptr, "GetNetworkServiceLicenseCache", MakeVersionGate({5,0,0})},
+                FunctionInfo{141, nullptr, "RefreshNetworkServiceLicenseCacheAsync", MakeVersionGate({5,0,0})},
+                FunctionInfo{142, nullptr, "RefreshNetworkServiceLicenseCacheAsyncIfSecondsElapsed", MakeVersionGate({5,0,0})},
+                FunctionInfo{143, nullptr, "GetNetworkServiceLicenseCacheEx"},
+                FunctionInfo{150, nullptr, "CreateAuthorizationRequest"},
+                FunctionInfo{160, nullptr, "RequiresUpdateNetworkServiceAccountIdTokenCache"},
+                FunctionInfo{161, nullptr, "RequireReauthenticationOfNetworkServiceAccount"},
+                FunctionInfo{170, nullptr, "CreateDeviceHistoryRequest", MakeVersionGate({17,0,0})},
+                FunctionInfo{180, nullptr, "GetRequestForNintendoAccountReauthentication", MakeVersionGate({18,0,0})},
+                FunctionInfo{200, nullptr, "IsRegistered"},
+                FunctionInfo{201, nullptr, "RegisterAsync"},
+                FunctionInfo{202, nullptr, "UnregisterAsync"},
+                FunctionInfo{203, nullptr, "DeleteRegistrationInfoLocally"},
+                FunctionInfo{220, nullptr, "SynchronizeProfileAsync"},
+                FunctionInfo{221, nullptr, "UploadProfileAsync"},
+                FunctionInfo{222, nullptr, "SynchronizaProfileAsyncIfSecondsElapsed"},
+                FunctionInfo{250, &IAdministrator::IsLinkedWithNintendoAccount, "IsLinkedWithNintendoAccount"},
+                FunctionInfo{251, nullptr, "CreateProcedureToLinkWithNintendoAccount"},
+                FunctionInfo{252, nullptr, "ResumeProcedureToLinkWithNintendoAccount"},
+                FunctionInfo{255, nullptr, "CreateProcedureToUpdateLinkageStateOfNintendoAccount"},
+                FunctionInfo{256, nullptr, "ResumeProcedureToUpdateLinkageStateOfNintendoAccount"},
+                FunctionInfo{260, nullptr, "CreateProcedureToLinkNnidWithNintendoAccount", MakeVersionGate({3,0,0})},
+                FunctionInfo{261, nullptr, "ResumeProcedureToLinkNnidWithNintendoAccount", MakeVersionGate({3,0,0})},
+                FunctionInfo{280, nullptr, "ProxyProcedureToAcquireApplicationAuthorizationForNintendoAccount"},
+                FunctionInfo{290, nullptr, "GetRequestForNintendoAccountUserResourceView", MakeVersionGate({8,0,0})},
+                FunctionInfo{300, nullptr, "TryRecoverNintendoAccountUserStateAsync", MakeVersionGate({6,0,0})},
+                FunctionInfo{400, nullptr, "IsServiceEntryRequirementCacheRefreshRequiredForOnlinePlay", MakeVersionGate({6,1,0})},
+                FunctionInfo{401, nullptr, "RefreshServiceEntryRequirementCacheForOnlinePlayAsync", MakeVersionGate({6,1,0})},
+                FunctionInfo{900, nullptr, "GetAuthenticationInfoForWin", MakeVersionGate({9,0,0})},
+                FunctionInfo{901, nullptr, "ImportAsyncForWin", MakeVersionGate({9,0,0})},
+                FunctionInfo{997, nullptr, "DebugUnlinkNintendoAccountAsync"},
+                FunctionInfo{998, nullptr, "DebugSetAvailabilityErrorDetail"}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -248,15 +248,15 @@ public:
         : ServiceFramework{system_, "IAuthorizationRequest"} {
     }
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "GetSessionId"},
-            FunctionInfo{10, nullptr, "InvokeWithoutInteractionAsync"},
-            FunctionInfo{19, nullptr, "IsAuthorized"},
-            FunctionInfo{20, nullptr, "GetAuthorizationCode"},
-            FunctionInfo{21, nullptr, "GetIdToken"},
-            FunctionInfo{22, nullptr, "GetState"}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "GetSessionId"},
+                FunctionInfo{10, nullptr, "InvokeWithoutInteractionAsync"},
+                FunctionInfo{19, nullptr, "IsAuthorized"},
+                FunctionInfo{20, nullptr, "GetAuthorizationCode"},
+                FunctionInfo{21, nullptr, "GetIdToken"},
+                FunctionInfo{22, nullptr, "GetState"}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -266,14 +266,14 @@ public:
     explicit IOAuthProcedure(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "IOAuthProcedure"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "PrepareAsync"},
-            FunctionInfo{1, nullptr, "GetRequest"},
-            FunctionInfo{2, nullptr, "ApplyResponse"},
-            FunctionInfo{3, nullptr, "ApplyResponseAsync"},
-            FunctionInfo{10, nullptr, "Suspend"}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "PrepareAsync"},
+                FunctionInfo{1, nullptr, "GetRequest"},
+                FunctionInfo{2, nullptr, "ApplyResponse"},
+                FunctionInfo{3, nullptr, "ApplyResponseAsync"},
+                FunctionInfo{10, nullptr, "Suspend"}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -285,19 +285,19 @@ public:
         : ServiceFramework{system_, "IOAuthProcedureForExternalNsa"}
     {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "PrepareAsync"},
-            FunctionInfo{1, nullptr, "GetRequest"},
-            FunctionInfo{2, nullptr, "ApplyResponse"},
-            FunctionInfo{3, nullptr, "ApplyResponseAsync"},
-            FunctionInfo{10, nullptr, "Suspend"},
-            FunctionInfo{100, nullptr, "GetAccountId"},
-            FunctionInfo{101, nullptr, "GetLinkedNintendoAccountId"},
-            FunctionInfo{102, nullptr, "GetNickname"},
-            FunctionInfo{103, nullptr, "GetProfileImage"},
-            FunctionInfo{104, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "PrepareAsync"},
+                FunctionInfo{1, nullptr, "GetRequest"},
+                FunctionInfo{2, nullptr, "ApplyResponse"},
+                FunctionInfo{3, nullptr, "ApplyResponseAsync"},
+                FunctionInfo{10, nullptr, "Suspend"},
+                FunctionInfo{100, nullptr, "GetAccountId"},
+                FunctionInfo{101, nullptr, "GetLinkedNintendoAccountId"},
+                FunctionInfo{102, nullptr, "GetNickname"},
+                FunctionInfo{103, nullptr, "GetProfileImage"},
+                FunctionInfo{104, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -308,22 +308,22 @@ public:
         : ServiceFramework{system_, "IOAuthProcedureForNintendoAccountLinkage"}
     {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "PrepareAsync"},
-            FunctionInfo{1, nullptr, "GetRequest"},
-            FunctionInfo{2, nullptr, "ApplyResponse"},
-            FunctionInfo{3, nullptr, "ApplyResponseAsync"},
-            FunctionInfo{10, nullptr, "Suspend"},
-            FunctionInfo{100, nullptr, "GetRequestWithTheme"},
-            FunctionInfo{101, nullptr, "IsNetworkServiceAccountReplaced"},
-            FunctionInfo{199, nullptr, "GetUrlForIntroductionOfExtraMembership", MakeVersionGate({2,0,0}, {5,1,0})},
-            FunctionInfo{200, nullptr, "ApplyAsyncWithAuthorizedToken"},
-            FunctionInfo{210, nullptr, "IsProfileAvailable", MakeVersionGate({17,0,0})},
-            FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
-            FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
-            FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "PrepareAsync"},
+                FunctionInfo{1, nullptr, "GetRequest"},
+                FunctionInfo{2, nullptr, "ApplyResponse"},
+                FunctionInfo{3, nullptr, "ApplyResponseAsync"},
+                FunctionInfo{10, nullptr, "Suspend"},
+                FunctionInfo{100, nullptr, "GetRequestWithTheme"},
+                FunctionInfo{101, nullptr, "IsNetworkServiceAccountReplaced"},
+                FunctionInfo{199, nullptr, "GetUrlForIntroductionOfExtraMembership", MakeVersionGate({2,0,0}, {5,1,0})},
+                FunctionInfo{200, nullptr, "ApplyAsyncWithAuthorizedToken"},
+                FunctionInfo{210, nullptr, "IsProfileAvailable", MakeVersionGate({17,0,0})},
+                FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
+                FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
+                FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -333,10 +333,10 @@ public:
     explicit INotifier(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "INotifier"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "GetSystemEvent"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "GetSystemEvent"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -610,10 +610,10 @@ public:
     explicit ISessionObject(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "ISessionObject"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{999, nullptr, "Dummy"}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{999, nullptr, "Dummy"}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -623,17 +623,17 @@ public:
     explicit IGuestLoginRequest(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "IGuestLoginRequest"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-            FunctionInfo{0, nullptr, "GetSessionId"},
-            FunctionInfo{11, nullptr, "Unknown", MakeVersionGate({1,0,0}, {2,3,0})}, // the name is blank on Switchbrew
-            FunctionInfo{12, nullptr, "GetAccountId"},
-            FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
-            FunctionInfo{14, nullptr, "GetNickname"},
-            FunctionInfo{15, nullptr, "GetProfileImage"},
-            FunctionInfo{16, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
-            FunctionInfo{21, nullptr, "LoadIdTokenCache", MakeVersionGate({3,0,0})}
-        );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+                FunctionInfo{0, nullptr, "GetSessionId"},
+                FunctionInfo{11, nullptr, "Unknown", MakeVersionGate({1,0,0}, {2,3,0})}, // the name is blank on Switchbrew
+                FunctionInfo{12, nullptr, "GetAccountId"},
+                FunctionInfo{13, nullptr, "GetLinkedNintendoAccountId"},
+                FunctionInfo{14, nullptr, "GetNickname"},
+                FunctionInfo{15, nullptr, "GetProfileImage"},
+                FunctionInfo{16, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
+                FunctionInfo{21, nullptr, "LoadIdTokenCache", MakeVersionGate({3,0,0})}
+            );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -767,14 +767,14 @@ public:
     explicit IAsyncNetworkServiceLicenseKindContext(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "IAsyncNetworkServiceLicenseKindContext"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetSystemEvent"},
-        FunctionInfo{1, nullptr, "Cancel"},
-        FunctionInfo{2, nullptr, "HasDone"},
-        FunctionInfo{3, nullptr, "GetResult"},
-        FunctionInfo{4, nullptr, "GetNetworkServiceLicenseKind"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetSystemEvent"},
+            FunctionInfo{1, nullptr, "Cancel"},
+            FunctionInfo{2, nullptr, "HasDone"},
+            FunctionInfo{3, nullptr, "GetResult"},
+            FunctionInfo{4, nullptr, "GetNetworkServiceLicenseKind"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -786,27 +786,27 @@ public:
     explicit IOAuthProcedureForUserRegistration(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "IOAuthProcedureForUserRegistration"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "PrepareAsync"},
-        FunctionInfo{1, nullptr, "GetRequest"},
-        FunctionInfo{2, nullptr, "ApplyResponse"},
-        FunctionInfo{3, nullptr, "ApplyResponseAsync"},
-        FunctionInfo{10, nullptr, "Suspend"},
-        FunctionInfo{100, nullptr, "GetAccountId"},
-        FunctionInfo{101, nullptr, "GetLinkedNintendoAccountId"},
-        FunctionInfo{102, nullptr, "GetNickname"},
-        FunctionInfo{103, nullptr, "GetProfileImage"},
-        FunctionInfo{104, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
-        FunctionInfo{110, nullptr, "RegisterUserAsync"},
-        FunctionInfo{111, nullptr, "GetUid"},
-        FunctionInfo{200, nullptr, "ApplyResponseForUserCreationAsync", MakeVersionGate({17,0,0})},
-        FunctionInfo{205, nullptr, "SuspendAfterApplyResponse", MakeVersionGate({17,0,0})},
-        FunctionInfo{210, nullptr, "IsProfileAvailable", MakeVersionGate({17,0,0})},
-        FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
-        FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
-        FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "PrepareAsync"},
+            FunctionInfo{1, nullptr, "GetRequest"},
+            FunctionInfo{2, nullptr, "ApplyResponse"},
+            FunctionInfo{3, nullptr, "ApplyResponseAsync"},
+            FunctionInfo{10, nullptr, "Suspend"},
+            FunctionInfo{100, nullptr, "GetAccountId"},
+            FunctionInfo{101, nullptr, "GetLinkedNintendoAccountId"},
+            FunctionInfo{102, nullptr, "GetNickname"},
+            FunctionInfo{103, nullptr, "GetProfileImage"},
+            FunctionInfo{104, nullptr, "GetProfileLargeImage", MakeVersionGate({18,0,0})},
+            FunctionInfo{110, nullptr, "RegisterUserAsync"},
+            FunctionInfo{111, nullptr, "GetUid"},
+            FunctionInfo{200, nullptr, "ApplyResponseForUserCreationAsync", MakeVersionGate({17,0,0})},
+            FunctionInfo{205, nullptr, "SuspendAfterApplyResponse", MakeVersionGate({17,0,0})},
+            FunctionInfo{210, nullptr, "IsProfileAvailable", MakeVersionGate({17,0,0})},
+            FunctionInfo{220, nullptr, "RegisterUserAsyncWithoutProfile", MakeVersionGate({17,0,0})},
+            FunctionInfo{221, nullptr, "RegisterUserWithProfileAsync", MakeVersionGate({17,0,0})},
+            FunctionInfo{230, nullptr, "RegisterUserWithLargeImageProfileAsync", MakeVersionGate({18,0,0})}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -815,22 +815,22 @@ class DAUTH_O final : public ServiceFramework<DAUTH_O> {
 public:
     explicit DAUTH_O(Core::System& system_, Common::UUID) : ServiceFramework{system_, "dauth:o"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
-        FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
-        FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
-        FunctionInfo{3, nullptr, "IsDeviceAuthenticationTokenCacheAvailable"},
-        FunctionInfo{10, nullptr, "EnsureEdgeTokenCacheAsync"},
-        FunctionInfo{11, nullptr, "LoadEdgeTokenCache"},
-        FunctionInfo{12, nullptr, "InvalidateEdgeTokenCache"},
-        FunctionInfo{13, nullptr, "IsEdgeTokenCacheAvailable"},
-        FunctionInfo{20, nullptr, "EnsureApplicationAuthenticationCacheAsync"},
-        FunctionInfo{21, nullptr, "LoadApplicationAuthenticationTokenCache"},
-        FunctionInfo{22, nullptr, "LoadApplicationNetworkServiceClientConfigCache"},
-        FunctionInfo{23, nullptr, "IsApplicationAuthenticationCacheAvailable"},
-        FunctionInfo{24, nullptr, "InvalidateApplicationAuthenticationCache"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "EnsureAuthenticationTokenCacheAsync"},
+            FunctionInfo{1, nullptr, "LoadAuthenticationTokenCache"},
+            FunctionInfo{2, nullptr, "InvalidateAuthenticationTokenCache"},
+            FunctionInfo{3, nullptr, "IsDeviceAuthenticationTokenCacheAvailable"},
+            FunctionInfo{10, nullptr, "EnsureEdgeTokenCacheAsync"},
+            FunctionInfo{11, nullptr, "LoadEdgeTokenCache"},
+            FunctionInfo{12, nullptr, "InvalidateEdgeTokenCache"},
+            FunctionInfo{13, nullptr, "IsEdgeTokenCacheAvailable"},
+            FunctionInfo{20, nullptr, "EnsureApplicationAuthenticationCacheAsync"},
+            FunctionInfo{21, nullptr, "LoadApplicationAuthenticationTokenCache"},
+            FunctionInfo{22, nullptr, "LoadApplicationNetworkServiceClientConfigCache"},
+            FunctionInfo{23, nullptr, "IsApplicationAuthenticationCacheAvailable"},
+            FunctionInfo{24, nullptr, "InvalidateApplicationAuthenticationCache"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -841,13 +841,13 @@ public:
     explicit IAsyncResult(Core::System& system_, Common::UUID)
         : ServiceFramework{system_, "IAsyncResult"} {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetResult"},
-        FunctionInfo{1, nullptr, "Cancel"},
-        FunctionInfo{2, nullptr, "IsAvailable"},
-        FunctionInfo{3, nullptr, "GetSystemEvent"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetResult"},
+            FunctionInfo{1, nullptr, "Cancel"},
+            FunctionInfo{2, nullptr, "IsAvailable"},
+            FunctionInfo{3, nullptr, "GetSystemEvent"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1468,86 +1468,86 @@ public:
     explicit ACC_E(std::shared_ptr<Module> module_, std::shared_ptr<ProfileManager> profile_manager_, Core::System& system_)
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e") {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetUserCount"},
-        FunctionInfo{1, nullptr, "GetUserExistence"},
-        FunctionInfo{2, nullptr, "ListAllUsers"},
-        FunctionInfo{3, nullptr, "ListOpenUsers"},
-        FunctionInfo{4, nullptr, "GetLastOpenedUser"},
-        FunctionInfo{5, nullptr, "GetProfile"},
-        FunctionInfo{6, nullptr, "GetProfileDigest"},
-        FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
-        FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
-        FunctionInfo{52, nullptr, "TrySelectUserWithoutInteraction"},
-        FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
-        FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
-        FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
-        FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
-        FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
-        FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
-        FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
-        FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
-        FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
-        FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
-        FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
-        FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
-        FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
-        FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
-        FunctionInfo{140, nullptr, "ListQualifiedUsers"},
-        FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
-        FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
-        FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
-        FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
-        FunctionInfo{200, nullptr, "BeginUserRegistration"},
-        FunctionInfo{201, nullptr, "CompleteUserRegistration"},
-        FunctionInfo{202, nullptr, "CancelUserRegistration"},
-        FunctionInfo{203, nullptr, "DeleteUser"},
-        FunctionInfo{204, nullptr, "SetUserPosition"},
-        FunctionInfo{205, nullptr, "GetProfileEditor"},
-        FunctionInfo{206, nullptr, "CompleteUserRegistrationForcibly"},
-        FunctionInfo{210, nullptr, "CreateFloatingRegistrationRequest"},
-        FunctionInfo{211, nullptr, "CreateProcedureToRegisterUserWithNintendoAccount"},
-        FunctionInfo{212, nullptr, "ResumeProcedureToRegisterUserWithNintendoAccount"},
-        FunctionInfo{213, nullptr, "CreateProcedureToCreateUserWithNintendoAccount"},
-        FunctionInfo{214, nullptr, "ResumeProcedureToCreateUserWithNintendoAccount"},
-        FunctionInfo{215, nullptr, "ResumeProcedureToCreateUserWithNintendoAccountAfterApplyResponse"},
-        FunctionInfo{230, nullptr, "AuthenticateServiceAsync"},
-        FunctionInfo{250, nullptr, "GetBaasAccountAdministrator"},
-        FunctionInfo{251, nullptr, "SynchronizeNetworkServiceAccountsSnapshotAsync"},
-        FunctionInfo{290, nullptr, "ProxyProcedureForGuestLoginWithNintendoAccount"},
-        FunctionInfo{291, nullptr, "ProxyProcedureForFloatingRegistrationWithNintendoAccount"},
-        FunctionInfo{292, nullptr, "ProxyProcedureForDeviceMigrationAuthenticatingOperatingUser"},
-        FunctionInfo{293, nullptr, "ProxyProcedureForDeviceMigrationDownload"},
-        FunctionInfo{299, nullptr, "SuspendBackgroundDaemon"},
-        FunctionInfo{350, nullptr, "CreateDeviceMigrationUserExportRequest"},
-        FunctionInfo{351, nullptr, "UploadNasCredential"},
-        FunctionInfo{352, nullptr, "CreateDeviceMigrationUserImportRequest"},
-        FunctionInfo{353, nullptr, "DeleteUserMigrationSaveData"},
-        FunctionInfo{400, nullptr, "SetPinCode"},
-        FunctionInfo{401, nullptr, "GetPinCodeLength"},
-        FunctionInfo{402, nullptr, "GetPinCode"},
-        FunctionInfo{403, nullptr, "GetPinCodeParity"},
-        FunctionInfo{404, nullptr, "VerifyPinCode"},
-        FunctionInfo{405, nullptr, "IsPinCodeVerificationForbidden"},
-        FunctionInfo{410, nullptr, "GetPinCodeErrorCount"},
-        FunctionInfo{411, nullptr, "ResetPinCodeErrorCount"},
-        FunctionInfo{412, nullptr, "IncrementPinCodeErrorCount"},
-        FunctionInfo{413, nullptr, "SetPinCodeErrorCount"},
-        FunctionInfo{420, nullptr, "SetStartPenaltyTime"},
-        FunctionInfo{421, nullptr, "GetStartPenaltyTime"},
-        FunctionInfo{900, nullptr, "SetUserUnqualifiedForDebug"},
-        FunctionInfo{901, nullptr, "UnsetUserUnqualifiedForDebug"},
-        FunctionInfo{902, nullptr, "ListUsersUnqualifiedForDebug"},
-        FunctionInfo{910, nullptr, "RefreshFirmwareSettingsForDebug"},
-        FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
-        FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
-        FunctionInfo{999, nullptr, "DebugSetUserStateOpen"},
-        FunctionInfo{1000, nullptr, "CreateIAccountEntityServiceForApplication"},
-        FunctionInfo{1100, nullptr, "CreateIUserStateManager"},
-        FunctionInfo{10050, nullptr, "IsUserRegistrationRequestPermittedForAccountPolicy"},
-        FunctionInfo{10105, nullptr, "CheckNetworkServiceAvailabilityAsyncForAccountPolicy"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetUserCount"},
+            FunctionInfo{1, nullptr, "GetUserExistence"},
+            FunctionInfo{2, nullptr, "ListAllUsers"},
+            FunctionInfo{3, nullptr, "ListOpenUsers"},
+            FunctionInfo{4, nullptr, "GetLastOpenedUser"},
+            FunctionInfo{5, nullptr, "GetProfile"},
+            FunctionInfo{6, nullptr, "GetProfileDigest"},
+            FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
+            FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
+            FunctionInfo{52, nullptr, "TrySelectUserWithoutInteraction"},
+            FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
+            FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
+            FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
+            FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
+            FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
+            FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
+            FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
+            FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
+            FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
+            FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
+            FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
+            FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
+            FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
+            FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
+            FunctionInfo{140, nullptr, "ListQualifiedUsers"},
+            FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
+            FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
+            FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
+            FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
+            FunctionInfo{200, nullptr, "BeginUserRegistration"},
+            FunctionInfo{201, nullptr, "CompleteUserRegistration"},
+            FunctionInfo{202, nullptr, "CancelUserRegistration"},
+            FunctionInfo{203, nullptr, "DeleteUser"},
+            FunctionInfo{204, nullptr, "SetUserPosition"},
+            FunctionInfo{205, nullptr, "GetProfileEditor"},
+            FunctionInfo{206, nullptr, "CompleteUserRegistrationForcibly"},
+            FunctionInfo{210, nullptr, "CreateFloatingRegistrationRequest"},
+            FunctionInfo{211, nullptr, "CreateProcedureToRegisterUserWithNintendoAccount"},
+            FunctionInfo{212, nullptr, "ResumeProcedureToRegisterUserWithNintendoAccount"},
+            FunctionInfo{213, nullptr, "CreateProcedureToCreateUserWithNintendoAccount"},
+            FunctionInfo{214, nullptr, "ResumeProcedureToCreateUserWithNintendoAccount"},
+            FunctionInfo{215, nullptr, "ResumeProcedureToCreateUserWithNintendoAccountAfterApplyResponse"},
+            FunctionInfo{230, nullptr, "AuthenticateServiceAsync"},
+            FunctionInfo{250, nullptr, "GetBaasAccountAdministrator"},
+            FunctionInfo{251, nullptr, "SynchronizeNetworkServiceAccountsSnapshotAsync"},
+            FunctionInfo{290, nullptr, "ProxyProcedureForGuestLoginWithNintendoAccount"},
+            FunctionInfo{291, nullptr, "ProxyProcedureForFloatingRegistrationWithNintendoAccount"},
+            FunctionInfo{292, nullptr, "ProxyProcedureForDeviceMigrationAuthenticatingOperatingUser"},
+            FunctionInfo{293, nullptr, "ProxyProcedureForDeviceMigrationDownload"},
+            FunctionInfo{299, nullptr, "SuspendBackgroundDaemon"},
+            FunctionInfo{350, nullptr, "CreateDeviceMigrationUserExportRequest"},
+            FunctionInfo{351, nullptr, "UploadNasCredential"},
+            FunctionInfo{352, nullptr, "CreateDeviceMigrationUserImportRequest"},
+            FunctionInfo{353, nullptr, "DeleteUserMigrationSaveData"},
+            FunctionInfo{400, nullptr, "SetPinCode"},
+            FunctionInfo{401, nullptr, "GetPinCodeLength"},
+            FunctionInfo{402, nullptr, "GetPinCode"},
+            FunctionInfo{403, nullptr, "GetPinCodeParity"},
+            FunctionInfo{404, nullptr, "VerifyPinCode"},
+            FunctionInfo{405, nullptr, "IsPinCodeVerificationForbidden"},
+            FunctionInfo{410, nullptr, "GetPinCodeErrorCount"},
+            FunctionInfo{411, nullptr, "ResetPinCodeErrorCount"},
+            FunctionInfo{412, nullptr, "IncrementPinCodeErrorCount"},
+            FunctionInfo{413, nullptr, "SetPinCodeErrorCount"},
+            FunctionInfo{420, nullptr, "SetStartPenaltyTime"},
+            FunctionInfo{421, nullptr, "GetStartPenaltyTime"},
+            FunctionInfo{900, nullptr, "SetUserUnqualifiedForDebug"},
+            FunctionInfo{901, nullptr, "UnsetUserUnqualifiedForDebug"},
+            FunctionInfo{902, nullptr, "ListUsersUnqualifiedForDebug"},
+            FunctionInfo{910, nullptr, "RefreshFirmwareSettingsForDebug"},
+            FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
+            FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
+            FunctionInfo{999, nullptr, "DebugSetUserStateOpen"},
+            FunctionInfo{1000, nullptr, "CreateIAccountEntityServiceForApplication"},
+            FunctionInfo{1100, nullptr, "CreateIUserStateManager"},
+            FunctionInfo{10050, nullptr, "IsUserRegistrationRequestPermittedForAccountPolicy"},
+            FunctionInfo{10105, nullptr, "CheckNetworkServiceAvailabilityAsyncForAccountPolicy"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1557,40 +1557,40 @@ public:
     explicit ACC_E_U1(std::shared_ptr<Module> module_, std::shared_ptr<ProfileManager> profile_manager_, Core::System& system_)
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u1") {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetUserCount"},
-        FunctionInfo{1, nullptr, "GetUserExistence"},
-        FunctionInfo{2, nullptr, "ListAllUsers"},
-        FunctionInfo{3, nullptr, "ListOpenUsers"},
-        FunctionInfo{4, nullptr, "GetLastOpenedUser"},
-        FunctionInfo{5, nullptr, "GetProfile"},
-        FunctionInfo{6, nullptr, "GetProfileDigest"},
-        FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
-        FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
-        FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
-        FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
-        FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
-        FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
-        FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
-        FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
-        FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
-        FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
-        FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
-        FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
-        FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
-        FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
-        FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
-        FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
-        FunctionInfo{140, nullptr, "ListQualifiedUsers"},
-        FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
-        FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
-        FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
-        FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
-        FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
-        FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
-        FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetUserCount"},
+            FunctionInfo{1, nullptr, "GetUserExistence"},
+            FunctionInfo{2, nullptr, "ListAllUsers"},
+            FunctionInfo{3, nullptr, "ListOpenUsers"},
+            FunctionInfo{4, nullptr, "GetLastOpenedUser"},
+            FunctionInfo{5, nullptr, "GetProfile"},
+            FunctionInfo{6, nullptr, "GetProfileDigest"},
+            FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
+            FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
+            FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
+            FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
+            FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
+            FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
+            FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
+            FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
+            FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
+            FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
+            FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
+            FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
+            FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
+            FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
+            FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
+            FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
+            FunctionInfo{140, nullptr, "ListQualifiedUsers"},
+            FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
+            FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
+            FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
+            FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
+            FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
+            FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
+            FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };
@@ -1600,47 +1600,47 @@ public:
     explicit ACC_E_U2(std::shared_ptr<Module> module_, std::shared_ptr<ProfileManager> profile_manager_, Core::System& system_)
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:e:u2") {}
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "GetUserCount"},
-        FunctionInfo{1, nullptr, "GetUserExistence"},
-        FunctionInfo{2, nullptr, "ListAllUsers"},
-        FunctionInfo{3, nullptr, "ListOpenUsers"},
-        FunctionInfo{4, nullptr, "GetLastOpenedUser"},
-        FunctionInfo{5, nullptr, "GetProfile"},
-        FunctionInfo{6, nullptr, "GetProfileDigest"},
-        FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
-        FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
-        FunctionInfo{52, nullptr, "TrySelectUserWithoutInteraction"},
-        FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
-        FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
-        FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
-        FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
-        FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
-        FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
-        FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
-        FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
-        FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
-        FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
-        FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
-        FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
-        FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
-        FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
-        FunctionInfo{140, nullptr, "ListQualifiedUsers"},
-        FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
-        FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
-        FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
-        FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
-        FunctionInfo{205, nullptr, "GetProfileEditor"},
-        FunctionInfo{401, nullptr, "GetPinCodeLength"},
-        FunctionInfo{402, nullptr, "GetPinCode"},
-        FunctionInfo{403, nullptr, "GetPinCodeParity"},
-        FunctionInfo{404, nullptr, "VerifyPinCode"},
-        FunctionInfo{405, nullptr, "IsPinCodeVerificationForbidden"},
-        FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
-        FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
-        FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
-    );
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "GetUserCount"},
+            FunctionInfo{1, nullptr, "GetUserExistence"},
+            FunctionInfo{2, nullptr, "ListAllUsers"},
+            FunctionInfo{3, nullptr, "ListOpenUsers"},
+            FunctionInfo{4, nullptr, "GetLastOpenedUser"},
+            FunctionInfo{5, nullptr, "GetProfile"},
+            FunctionInfo{6, nullptr, "GetProfileDigest"},
+            FunctionInfo{50, nullptr, "IsUserRegistrationRequestPermitted"},
+            FunctionInfo{51, nullptr, "TrySelectUserWithoutInteractionDeprecated"},
+            FunctionInfo{52, nullptr, "TrySelectUserWithoutInteraction"},
+            FunctionInfo{99, nullptr, "DebugActivateOpenContextRetention"},
+            FunctionInfo{100, nullptr, "GetUserRegistrationNotifier"},
+            FunctionInfo{101, nullptr, "GetUserStateChangeNotifier"},
+            FunctionInfo{102, nullptr, "GetBaasAccountManagerForSystemService"},
+            FunctionInfo{103, nullptr, "GetBaasUserAvailabilityChangeNotifier"},
+            FunctionInfo{104, nullptr, "GetProfileUpdateNotifier"},
+            FunctionInfo{105, nullptr, "CheckNetworkServiceAvailabilityAsync"},
+            FunctionInfo{106, nullptr, "GetProfileSyncNotifier"},
+            FunctionInfo{110, nullptr, "StoreSaveDataThumbnail"},
+            FunctionInfo{111, nullptr, "ClearSaveDataThumbnail"},
+            FunctionInfo{112, nullptr, "LoadSaveDataThumbnail"},
+            FunctionInfo{113, nullptr, "GetSaveDataThumbnailExistence"},
+            FunctionInfo{120, nullptr, "ListOpenUsersInApplication"},
+            FunctionInfo{130, nullptr, "ActivateOpenContextRetention"},
+            FunctionInfo{140, nullptr, "ListQualifiedUsers"},
+            FunctionInfo{151, nullptr, "EnsureSignedDeviceIdentifierCacheForNintendoAccountAsync"},
+            FunctionInfo{152, nullptr, "LoadSignedDeviceIdentifierCacheForNintendoAccount"},
+            FunctionInfo{170, nullptr, "GetNasOp2MembershipStateChangeNotifier"},
+            FunctionInfo{191, nullptr, "UpdateNotificationReceiverInfo"},
+            FunctionInfo{205, nullptr, "GetProfileEditor"},
+            FunctionInfo{401, nullptr, "GetPinCodeLength"},
+            FunctionInfo{402, nullptr, "GetPinCode"},
+            FunctionInfo{403, nullptr, "GetPinCodeParity"},
+            FunctionInfo{404, nullptr, "VerifyPinCode"},
+            FunctionInfo{405, nullptr, "IsPinCodeVerificationForbidden"},
+            FunctionInfo{997, nullptr, "DebugInvalidateTokenCacheForUser"},
+            FunctionInfo{998, nullptr, "DebugSetUserStateClose"},
+            FunctionInfo{999, nullptr, "DebugSetUserStateOpen"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 };

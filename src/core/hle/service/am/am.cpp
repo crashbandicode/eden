@@ -172,19 +172,19 @@ public:
 
 private:
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IApplicationProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
+            FunctionInfo{1, D<&IApplicationProxy::GetSelfController>, "GetSelfController"},
+            FunctionInfo{2, D<&IApplicationProxy::GetWindowController>, "GetWindowController"},
+            FunctionInfo{3, D<&IApplicationProxy::GetAudioController>, "GetAudioController"},
+            FunctionInfo{4, D<&IApplicationProxy::GetDisplayController>, "GetDisplayController"},
+            FunctionInfo{10, D<&IApplicationProxy::GetProcessWindingController>, "GetProcessWindingController"},
+            FunctionInfo{11, D<&IApplicationProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
+            FunctionInfo{20, D<&IApplicationProxy::GetApplicationFunctions>, "GetApplicationFunctions"},
+            FunctionInfo{1000, D<&IApplicationProxy::GetDebugFunctions>, "GetDebugFunctions"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IApplicationProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
-        FunctionInfo{1, D<&IApplicationProxy::GetSelfController>, "GetSelfController"},
-        FunctionInfo{2, D<&IApplicationProxy::GetWindowController>, "GetWindowController"},
-        FunctionInfo{3, D<&IApplicationProxy::GetAudioController>, "GetAudioController"},
-        FunctionInfo{4, D<&IApplicationProxy::GetDisplayController>, "GetDisplayController"},
-        FunctionInfo{10, D<&IApplicationProxy::GetProcessWindingController>, "GetProcessWindingController"},
-        FunctionInfo{11, D<&IApplicationProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
-        FunctionInfo{20, D<&IApplicationProxy::GetApplicationFunctions>, "GetApplicationFunctions"},
-        FunctionInfo{1000, D<&IApplicationProxy::GetDebugFunctions>, "GetDebugFunctions"}
-    );
     WindowSystem& m_window_system;
     Kernel::KProcess* const m_process;
     const std::shared_ptr<Applet> m_applet;
@@ -219,11 +219,11 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy"}
-    );
     WindowSystem& m_window_system;
 };
 
@@ -277,34 +277,34 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "SetTerminateResult"},
+            FunctionInfo{10, nullptr, "ReadThemeStorage"},
+            FunctionInfo{11, nullptr, "WriteThemeStorage"},
+            FunctionInfo{20, nullptr, "PushToAppletBoundChannel"},
+            FunctionInfo{21, nullptr, "TryPopFromAppletBoundChannel"},
+            FunctionInfo{40, nullptr, "GetDisplayLogicalResolution"},
+            FunctionInfo{42, D<&IAppletCommonFunctions::SetDisplayMagnification>, "SetDisplayMagnification"},
+            FunctionInfo{50, D<&IAppletCommonFunctions::SetHomeButtonDoubleClickEnabled>, "SetHomeButtonDoubleClickEnabled"},
+            FunctionInfo{51, D<&IAppletCommonFunctions::GetHomeButtonDoubleClickEnabled>, "GetHomeButtonDoubleClickEnabled"},
+            FunctionInfo{52, nullptr, "IsHomeButtonShortPressedBlocked"},
+            FunctionInfo{60, nullptr, "IsVrModeCurtainRequired"},
+            FunctionInfo{61, nullptr, "IsSleepRequiredByHighTemperature"},
+            FunctionInfo{62, nullptr, "IsSleepRequiredByLowBattery"},
+            FunctionInfo{70, D<&IAppletCommonFunctions::SetCpuBoostRequestPriority>, "SetCpuBoostRequestPriority"},
+            FunctionInfo{80, nullptr, "SetHandlingCaptureButtonShortPressedMessageEnabledForApplet"},
+            FunctionInfo{81, nullptr, "SetHandlingCaptureButtonLongPressedMessageEnabledForApplet"},
+            FunctionInfo{90, nullptr, "OpenNamedChannelAsParent"},
+            FunctionInfo{91, nullptr, "OpenNamedChannelAsChild"},
+            FunctionInfo{100, nullptr, "SetApplicationCoreUsageMode"},
+            FunctionInfo{300, D<&IAppletCommonFunctions::GetCurrentApplicationId>, "GetCurrentApplicationId"},
+            FunctionInfo{310, nullptr, "IsSystemAppletHomeMenu", MakeVersionGate({19,0,0})},
+            FunctionInfo{320, D<&IAppletCommonFunctions::SetGpuTimeSliceBoost>, "SetGpuTimeSliceBoost", MakeVersionGate({19,0,0})},
+            FunctionInfo{321, nullptr, "SetGpuTimeSliceBoostDueToApplication", MakeVersionGate({19,0,0})},
+            FunctionInfo{350, D<&IAppletCommonFunctions::Unknown350>, "Unknown350", MakeVersionGate({20,0,0})}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "SetTerminateResult"},
-        FunctionInfo{10, nullptr, "ReadThemeStorage"},
-        FunctionInfo{11, nullptr, "WriteThemeStorage"},
-        FunctionInfo{20, nullptr, "PushToAppletBoundChannel"},
-        FunctionInfo{21, nullptr, "TryPopFromAppletBoundChannel"},
-        FunctionInfo{40, nullptr, "GetDisplayLogicalResolution"},
-        FunctionInfo{42, D<&IAppletCommonFunctions::SetDisplayMagnification>, "SetDisplayMagnification"},
-        FunctionInfo{50, D<&IAppletCommonFunctions::SetHomeButtonDoubleClickEnabled>, "SetHomeButtonDoubleClickEnabled"},
-        FunctionInfo{51, D<&IAppletCommonFunctions::GetHomeButtonDoubleClickEnabled>, "GetHomeButtonDoubleClickEnabled"},
-        FunctionInfo{52, nullptr, "IsHomeButtonShortPressedBlocked"},
-        FunctionInfo{60, nullptr, "IsVrModeCurtainRequired"},
-        FunctionInfo{61, nullptr, "IsSleepRequiredByHighTemperature"},
-        FunctionInfo{62, nullptr, "IsSleepRequiredByLowBattery"},
-        FunctionInfo{70, D<&IAppletCommonFunctions::SetCpuBoostRequestPriority>, "SetCpuBoostRequestPriority"},
-        FunctionInfo{80, nullptr, "SetHandlingCaptureButtonShortPressedMessageEnabledForApplet"},
-        FunctionInfo{81, nullptr, "SetHandlingCaptureButtonLongPressedMessageEnabledForApplet"},
-        FunctionInfo{90, nullptr, "OpenNamedChannelAsParent"},
-        FunctionInfo{91, nullptr, "OpenNamedChannelAsChild"},
-        FunctionInfo{100, nullptr, "SetApplicationCoreUsageMode"},
-        FunctionInfo{300, D<&IAppletCommonFunctions::GetCurrentApplicationId>, "GetCurrentApplicationId"},
-        FunctionInfo{310, nullptr, "IsSystemAppletHomeMenu", MakeVersionGate({19,0,0})},
-        FunctionInfo{320, D<&IAppletCommonFunctions::SetGpuTimeSliceBoost>, "SetGpuTimeSliceBoost", MakeVersionGate({19,0,0})},
-        FunctionInfo{321, nullptr, "SetGpuTimeSliceBoostDueToApplication", MakeVersionGate({19,0,0})},
-        FunctionInfo{350, D<&IAppletCommonFunctions::Unknown350>, "Unknown350", MakeVersionGate({20,0,0})}
-    );
     const std::shared_ptr<Applet> applet;
 };
 
@@ -404,22 +404,22 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ISystemAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
+            FunctionInfo{1, D<&ISystemAppletProxy::GetSelfController>, "GetSelfController"},
+            FunctionInfo{2, D<&ISystemAppletProxy::GetWindowController>, "GetWindowController"},
+            FunctionInfo{3, D<&ISystemAppletProxy::GetAudioController>, "GetAudioController"},
+            FunctionInfo{4, D<&ISystemAppletProxy::GetDisplayController>, "GetDisplayController"},
+            FunctionInfo{10, D<&ISystemAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
+            FunctionInfo{11, D<&ISystemAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
+            FunctionInfo{20, D<&ISystemAppletProxy::GetHomeMenuFunctions>, "GetHomeMenuFunctions"},
+            FunctionInfo{21, D<&ISystemAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
+            FunctionInfo{22, D<&ISystemAppletProxy::GetApplicationCreator>, "GetApplicationCreator"},
+            FunctionInfo{23, D<&ISystemAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
+            FunctionInfo{1000, D<&ISystemAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ISystemAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
-        FunctionInfo{1, D<&ISystemAppletProxy::GetSelfController>, "GetSelfController"},
-        FunctionInfo{2, D<&ISystemAppletProxy::GetWindowController>, "GetWindowController"},
-        FunctionInfo{3, D<&ISystemAppletProxy::GetAudioController>, "GetAudioController"},
-        FunctionInfo{4, D<&ISystemAppletProxy::GetDisplayController>, "GetDisplayController"},
-        FunctionInfo{10, D<&ISystemAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
-        FunctionInfo{11, D<&ISystemAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
-        FunctionInfo{20, D<&ISystemAppletProxy::GetHomeMenuFunctions>, "GetHomeMenuFunctions"},
-        FunctionInfo{21, D<&ISystemAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
-        FunctionInfo{22, D<&ISystemAppletProxy::GetApplicationCreator>, "GetApplicationCreator"},
-        FunctionInfo{23, D<&ISystemAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
-        FunctionInfo{1000, D<&ISystemAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-    );
     WindowSystem& m_window_system;
     Kernel::KProcess* const m_process;
     const std::shared_ptr<Applet> m_applet;
@@ -689,46 +689,46 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ILibraryAppletSelfAccessor::PopInData>, "PopInData"},
+            FunctionInfo{1, D<&ILibraryAppletSelfAccessor::PushOutData>, "PushOutData"},
+            FunctionInfo{2, D<&ILibraryAppletSelfAccessor::PopInteractiveInData>, "PopInteractiveInData"},
+            FunctionInfo{3, D<&ILibraryAppletSelfAccessor::PushInteractiveOutData>, "PushInteractiveOutData"},
+            FunctionInfo{5, D<&ILibraryAppletSelfAccessor::GetPopInDataEvent>, "GetPopInDataEvent"},
+            FunctionInfo{6, D<&ILibraryAppletSelfAccessor::GetPopInteractiveInDataEvent>, "GetPopInteractiveInDataEvent"},
+            FunctionInfo{10, D<&ILibraryAppletSelfAccessor::ExitProcessAndReturn>, "ExitProcessAndReturn"},
+            FunctionInfo{11, D<&ILibraryAppletSelfAccessor::GetLibraryAppletInfo>, "GetLibraryAppletInfo"},
+            FunctionInfo{12, D<&ILibraryAppletSelfAccessor::GetMainAppletIdentityInfo>, "GetMainAppletIdentityInfo"},
+            FunctionInfo{13, D<&ILibraryAppletSelfAccessor::CanUseApplicationCore>, "CanUseApplicationCore"},
+            FunctionInfo{14, D<&ILibraryAppletSelfAccessor::GetCallerAppletIdentityInfo>, "GetCallerAppletIdentityInfo"},
+            FunctionInfo{15, D<&ILibraryAppletSelfAccessor::GetMainAppletApplicationControlProperty>, "GetMainAppletApplicationControlProperty"},
+            FunctionInfo{16, D<&ILibraryAppletSelfAccessor::GetMainAppletStorageId>, "GetMainAppletStorageId"},
+            FunctionInfo{17, D<&ILibraryAppletSelfAccessor::GetCallerAppletIdentityInfoStack>, "GetCallerAppletIdentityInfoStack"},
+            FunctionInfo{18, nullptr, "GetNextReturnDestinationAppletIdentityInfo"},
+            FunctionInfo{19, D<&ILibraryAppletSelfAccessor::GetDesirableKeyboardLayout>, "GetDesirableKeyboardLayout"},
+            FunctionInfo{20, nullptr, "PopExtraStorage"},
+            FunctionInfo{25, nullptr, "GetPopExtraStorageEvent"},
+            FunctionInfo{30, D<&ILibraryAppletSelfAccessor::UnpopInData>, "UnpopInData"},
+            FunctionInfo{31, nullptr, "UnpopExtraStorage"},
+            FunctionInfo{40, nullptr, "GetIndirectLayerProducerHandle"},
+            FunctionInfo{50, D<&ILibraryAppletSelfAccessor::ReportVisibleError>, "ReportVisibleError"},
+            FunctionInfo{51, D<&ILibraryAppletSelfAccessor::ReportVisibleErrorWithErrorContext>, "ReportVisibleErrorWithErrorContext"},
+            FunctionInfo{60, D<&ILibraryAppletSelfAccessor::GetMainAppletApplicationDesiredLanguage>, "GetMainAppletApplicationDesiredLanguage"},
+            FunctionInfo{70, D<&ILibraryAppletSelfAccessor::GetCurrentApplicationId>, "GetCurrentApplicationId"},
+            FunctionInfo{80, nullptr, "RequestExitToSelf"},
+            FunctionInfo{90, nullptr, "CreateApplicationAndPushAndRequestToLaunch"},
+            FunctionInfo{100, nullptr, "CreateGameMovieTrimmer"},
+            FunctionInfo{101, nullptr, "ReserveResourceForMovieOperation"},
+            FunctionInfo{102, nullptr, "UnreserveResourceForMovieOperation"},
+            FunctionInfo{110, D<&ILibraryAppletSelfAccessor::GetMainAppletAvailableUsers>, "GetMainAppletAvailableUsers"},
+            FunctionInfo{120, nullptr, "GetLaunchStorageInfoForDebug"},
+            FunctionInfo{130, nullptr, "GetGpuErrorDetectedSystemEvent"},
+            FunctionInfo{140, nullptr, "SetApplicationMemoryReservation"},
+            FunctionInfo{150, D<&ILibraryAppletSelfAccessor::ShouldSetGpuTimeSliceManually>, "ShouldSetGpuTimeSliceManually"},
+            FunctionInfo{160, D<&ILibraryAppletSelfAccessor::GetLibraryAppletInfoEx>, "GetLibraryAppletInfoEx"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ILibraryAppletSelfAccessor::PopInData>, "PopInData"},
-        FunctionInfo{1, D<&ILibraryAppletSelfAccessor::PushOutData>, "PushOutData"},
-        FunctionInfo{2, D<&ILibraryAppletSelfAccessor::PopInteractiveInData>, "PopInteractiveInData"},
-        FunctionInfo{3, D<&ILibraryAppletSelfAccessor::PushInteractiveOutData>, "PushInteractiveOutData"},
-        FunctionInfo{5, D<&ILibraryAppletSelfAccessor::GetPopInDataEvent>, "GetPopInDataEvent"},
-        FunctionInfo{6, D<&ILibraryAppletSelfAccessor::GetPopInteractiveInDataEvent>, "GetPopInteractiveInDataEvent"},
-        FunctionInfo{10, D<&ILibraryAppletSelfAccessor::ExitProcessAndReturn>, "ExitProcessAndReturn"},
-        FunctionInfo{11, D<&ILibraryAppletSelfAccessor::GetLibraryAppletInfo>, "GetLibraryAppletInfo"},
-        FunctionInfo{12, D<&ILibraryAppletSelfAccessor::GetMainAppletIdentityInfo>, "GetMainAppletIdentityInfo"},
-        FunctionInfo{13, D<&ILibraryAppletSelfAccessor::CanUseApplicationCore>, "CanUseApplicationCore"},
-        FunctionInfo{14, D<&ILibraryAppletSelfAccessor::GetCallerAppletIdentityInfo>, "GetCallerAppletIdentityInfo"},
-        FunctionInfo{15, D<&ILibraryAppletSelfAccessor::GetMainAppletApplicationControlProperty>, "GetMainAppletApplicationControlProperty"},
-        FunctionInfo{16, D<&ILibraryAppletSelfAccessor::GetMainAppletStorageId>, "GetMainAppletStorageId"},
-        FunctionInfo{17, D<&ILibraryAppletSelfAccessor::GetCallerAppletIdentityInfoStack>, "GetCallerAppletIdentityInfoStack"},
-        FunctionInfo{18, nullptr, "GetNextReturnDestinationAppletIdentityInfo"},
-        FunctionInfo{19, D<&ILibraryAppletSelfAccessor::GetDesirableKeyboardLayout>, "GetDesirableKeyboardLayout"},
-        FunctionInfo{20, nullptr, "PopExtraStorage"},
-        FunctionInfo{25, nullptr, "GetPopExtraStorageEvent"},
-        FunctionInfo{30, D<&ILibraryAppletSelfAccessor::UnpopInData>, "UnpopInData"},
-        FunctionInfo{31, nullptr, "UnpopExtraStorage"},
-        FunctionInfo{40, nullptr, "GetIndirectLayerProducerHandle"},
-        FunctionInfo{50, D<&ILibraryAppletSelfAccessor::ReportVisibleError>, "ReportVisibleError"},
-        FunctionInfo{51, D<&ILibraryAppletSelfAccessor::ReportVisibleErrorWithErrorContext>, "ReportVisibleErrorWithErrorContext"},
-        FunctionInfo{60, D<&ILibraryAppletSelfAccessor::GetMainAppletApplicationDesiredLanguage>, "GetMainAppletApplicationDesiredLanguage"},
-        FunctionInfo{70, D<&ILibraryAppletSelfAccessor::GetCurrentApplicationId>, "GetCurrentApplicationId"},
-        FunctionInfo{80, nullptr, "RequestExitToSelf"},
-        FunctionInfo{90, nullptr, "CreateApplicationAndPushAndRequestToLaunch"},
-        FunctionInfo{100, nullptr, "CreateGameMovieTrimmer"},
-        FunctionInfo{101, nullptr, "ReserveResourceForMovieOperation"},
-        FunctionInfo{102, nullptr, "UnreserveResourceForMovieOperation"},
-        FunctionInfo{110, D<&ILibraryAppletSelfAccessor::GetMainAppletAvailableUsers>, "GetMainAppletAvailableUsers"},
-        FunctionInfo{120, nullptr, "GetLaunchStorageInfoForDebug"},
-        FunctionInfo{130, nullptr, "GetGpuErrorDetectedSystemEvent"},
-        FunctionInfo{140, nullptr, "SetApplicationMemoryReservation"},
-        FunctionInfo{150, D<&ILibraryAppletSelfAccessor::ShouldSetGpuTimeSliceManually>, "ShouldSetGpuTimeSliceManually"},
-        FunctionInfo{160, D<&ILibraryAppletSelfAccessor::GetLibraryAppletInfoEx>, "GetLibraryAppletInfoEx"}
-    );
     const std::shared_ptr<Applet> m_applet;
     const std::shared_ptr<AppletDataBroker> m_broker;
 };
@@ -830,22 +830,22 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ILibraryAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
+            FunctionInfo{1, D<&ILibraryAppletProxy::GetSelfController>, "GetSelfController"},
+            FunctionInfo{2, D<&ILibraryAppletProxy::GetWindowController>, "GetWindowController"},
+            FunctionInfo{3, D<&ILibraryAppletProxy::GetAudioController>, "GetAudioController"},
+            FunctionInfo{4, D<&ILibraryAppletProxy::GetDisplayController>, "GetDisplayController"},
+            FunctionInfo{10, D<&ILibraryAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
+            FunctionInfo{11, D<&ILibraryAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
+            FunctionInfo{20, D<&ILibraryAppletProxy::OpenLibraryAppletSelfAccessor>, "OpenLibraryAppletSelfAccessor"},
+            FunctionInfo{21, D<&ILibraryAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
+            FunctionInfo{22, D<&ILibraryAppletProxy::GetHomeMenuFunctions>, "GetHomeMenuFunctions"},
+            FunctionInfo{23, D<&ILibraryAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
+            FunctionInfo{1000, D<&ILibraryAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ILibraryAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
-        FunctionInfo{1, D<&ILibraryAppletProxy::GetSelfController>, "GetSelfController"},
-        FunctionInfo{2, D<&ILibraryAppletProxy::GetWindowController>, "GetWindowController"},
-        FunctionInfo{3, D<&ILibraryAppletProxy::GetAudioController>, "GetAudioController"},
-        FunctionInfo{4, D<&ILibraryAppletProxy::GetDisplayController>, "GetDisplayController"},
-        FunctionInfo{10, D<&ILibraryAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
-        FunctionInfo{11, D<&ILibraryAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
-        FunctionInfo{20, D<&ILibraryAppletProxy::OpenLibraryAppletSelfAccessor>, "OpenLibraryAppletSelfAccessor"},
-        FunctionInfo{21, D<&ILibraryAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
-        FunctionInfo{22, D<&ILibraryAppletProxy::GetHomeMenuFunctions>, "GetHomeMenuFunctions"},
-        FunctionInfo{23, D<&ILibraryAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
-        FunctionInfo{1000, D<&ILibraryAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-    );
     WindowSystem& m_window_system;
     Kernel::KProcess* const m_process;
     const std::shared_ptr<Applet> m_applet;
@@ -940,21 +940,21 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IOverlayAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
+            FunctionInfo{1, D<&IOverlayAppletProxy::GetSelfController>, "GetSelfController"},
+            FunctionInfo{2, D<&IOverlayAppletProxy::GetWindowController>, "GetWindowController"},
+            FunctionInfo{3, D<&IOverlayAppletProxy::GetAudioController>, "GetAudioController"},
+            FunctionInfo{4, D<&IOverlayAppletProxy::GetDisplayController>, "GetDisplayController"},
+            FunctionInfo{10, D<&IOverlayAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
+            FunctionInfo{11, D<&IOverlayAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
+            FunctionInfo{20, D<&IOverlayAppletProxy::GetOverlayFunctions>, "GetOverlayFunctions"},
+            FunctionInfo{21, D<&IOverlayAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
+            FunctionInfo{23, D<&IOverlayAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
+            FunctionInfo{1000, D<&IOverlayAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IOverlayAppletProxy::GetCommonStateGetter>, "GetCommonStateGetter"},
-        FunctionInfo{1, D<&IOverlayAppletProxy::GetSelfController>, "GetSelfController"},
-        FunctionInfo{2, D<&IOverlayAppletProxy::GetWindowController>, "GetWindowController"},
-        FunctionInfo{3, D<&IOverlayAppletProxy::GetAudioController>, "GetAudioController"},
-        FunctionInfo{4, D<&IOverlayAppletProxy::GetDisplayController>, "GetDisplayController"},
-        FunctionInfo{10, D<&IOverlayAppletProxy::GetProcessWindingController>, "GetProcessWindingController"},
-        FunctionInfo{11, D<&IOverlayAppletProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
-        FunctionInfo{20, D<&IOverlayAppletProxy::GetOverlayFunctions>, "GetOverlayFunctions"},
-        FunctionInfo{21, D<&IOverlayAppletProxy::GetAppletCommonFunctions>, "GetAppletCommonFunctions"},
-        FunctionInfo{23, D<&IOverlayAppletProxy::GetGlobalStateController>, "GetGlobalStateController"},
-        FunctionInfo{1000, D<&IOverlayAppletProxy::GetDebugFunctions>, "GetDebugFunctions"}
-    );
     WindowSystem& m_window_system;
     Kernel::KProcess* const m_process;
     const std::shared_ptr<Applet> m_applet;
@@ -1209,17 +1209,17 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ILibraryAppletCreator::CreateLibraryApplet>, "CreateLibraryApplet"},
+            FunctionInfo{1, nullptr, "TerminateAllLibraryApplets"},
+            FunctionInfo{2, nullptr, "AreAnyLibraryAppletsLeft"},
+            FunctionInfo{3, D<&ILibraryAppletCreator::CreateLibraryAppletEx>, "CreateLibraryAppletEx"},
+            FunctionInfo{10, D<&ILibraryAppletCreator::CreateStorage>, "CreateStorage"},
+            FunctionInfo{11, D<&ILibraryAppletCreator::CreateTransferMemoryStorage>, "CreateTransferMemoryStorage"},
+            FunctionInfo{12, D<&ILibraryAppletCreator::CreateHandleStorage>, "CreateHandleStorage"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ILibraryAppletCreator::CreateLibraryApplet>, "CreateLibraryApplet"},
-        FunctionInfo{1, nullptr, "TerminateAllLibraryApplets"},
-        FunctionInfo{2, nullptr, "AreAnyLibraryAppletsLeft"},
-        FunctionInfo{3, D<&ILibraryAppletCreator::CreateLibraryAppletEx>, "CreateLibraryAppletEx"},
-        FunctionInfo{10, D<&ILibraryAppletCreator::CreateStorage>, "CreateStorage"},
-        FunctionInfo{11, D<&ILibraryAppletCreator::CreateTransferMemoryStorage>, "CreateTransferMemoryStorage"},
-        FunctionInfo{12, D<&ILibraryAppletCreator::CreateHandleStorage>, "CreateHandleStorage"}
-    );
     WindowSystem& m_window_system;
     const std::shared_ptr<Applet> m_applet;
 };
@@ -1320,21 +1320,21 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{100, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxy"},
+            FunctionInfo{110, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxyEx"},
+            FunctionInfo{200, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxyOld>, "OpenLibraryAppletProxyOld"},
+            FunctionInfo{201, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxy>, "OpenLibraryAppletProxy"},
+            FunctionInfo{300, D<&IAllSystemAppletProxiesService::OpenOverlayAppletProxy>, "OpenOverlayAppletProxy"},
+            FunctionInfo{350, D<&IAllSystemAppletProxiesService::OpenSystemApplicationProxy>, "OpenSystemApplicationProxy"},
+            FunctionInfo{400, nullptr, "CreateSelfLibraryAppletCreatorForDevelop"},
+            FunctionInfo{410, nullptr, "GetSystemAppletControllerForDebug"},
+            FunctionInfo{450, D<&IAllSystemAppletProxiesService::GetSystemProcessCommonFunctions>, "GetSystemProcessCommonFunctions", MakeVersionGate({19,0,0})},
+            FunctionInfo{460, D<&IAllSystemAppletProxiesService::GetAppletAlternativeFunctions>, "GetAppletAlternativeFunctions", MakeVersionGate({20,0,0})},
+            FunctionInfo{1000, nullptr, "GetDebugFunctions"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{100, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxy"},
-        FunctionInfo{110, D<&IAllSystemAppletProxiesService::OpenSystemAppletProxy>, "OpenSystemAppletProxyEx"},
-        FunctionInfo{200, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxyOld>, "OpenLibraryAppletProxyOld"},
-        FunctionInfo{201, D<&IAllSystemAppletProxiesService::OpenLibraryAppletProxy>, "OpenLibraryAppletProxy"},
-        FunctionInfo{300, D<&IAllSystemAppletProxiesService::OpenOverlayAppletProxy>, "OpenOverlayAppletProxy"},
-        FunctionInfo{350, D<&IAllSystemAppletProxiesService::OpenSystemApplicationProxy>, "OpenSystemApplicationProxy"},
-        FunctionInfo{400, nullptr, "CreateSelfLibraryAppletCreatorForDevelop"},
-        FunctionInfo{410, nullptr, "GetSystemAppletControllerForDebug"},
-        FunctionInfo{450, D<&IAllSystemAppletProxiesService::GetSystemProcessCommonFunctions>, "GetSystemProcessCommonFunctions", MakeVersionGate({19,0,0})},
-        FunctionInfo{460, D<&IAllSystemAppletProxiesService::GetAppletAlternativeFunctions>, "GetAppletAlternativeFunctions", MakeVersionGate({20,0,0})},
-        FunctionInfo{1000, nullptr, "GetDebugFunctions"}
-    );
     WindowSystem& m_window_system;
 };
 

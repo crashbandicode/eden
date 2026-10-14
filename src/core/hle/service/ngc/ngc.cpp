@@ -182,6 +182,16 @@ public:
     explicit IUserShimScopedObject(Core::System& system_) : ServiceFramework(system_, "IUserShimScopedObject") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{450, nullptr, "InitializeForSaveData"},
+            FunctionInfo{451, nullptr, "FinalizeForSaveData"},
+            FunctionInfo{452, D<&IUserShimScopedObject::OpenSaveData>, "OpenSaveData"},
+            FunctionInfo{453, nullptr, "CloseSaveData"},
+            FunctionInfo{454, D<&IUserShimScopedObject::ReadSaveSlot>, "ReadSaveSlot"},
+            FunctionInfo{455, D<&IUserShimScopedObject::WriteSaveSlot>, "WriteSaveSlot"},
+            FunctionInfo{456, nullptr, "FlushSaveSlot"},
+            FunctionInfo{457, nullptr, "CommitSaveData"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -201,16 +211,7 @@ public:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{450, nullptr, "InitializeForSaveData"},
-        FunctionInfo{451, nullptr, "FinalizeForSaveData"},
-        FunctionInfo{452, D<&IUserShimScopedObject::OpenSaveData>, "OpenSaveData"},
-        FunctionInfo{453, nullptr, "CloseSaveData"},
-        FunctionInfo{454, D<&IUserShimScopedObject::ReadSaveSlot>, "ReadSaveSlot"},
-        FunctionInfo{455, D<&IUserShimScopedObject::WriteSaveSlot>, "WriteSaveSlot"},
-        FunctionInfo{456, nullptr, "FlushSaveSlot"},
-        FunctionInfo{457, nullptr, "CommitSaveData"}
-    );
+
 };
 
 class IUserService final : public ServiceFramework<IUserService> {
@@ -218,6 +219,9 @@ public:
     explicit IUserService(Core::System& system_) : ServiceFramework(system_, "stpl:u") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IUserService::Cmd0>, "Cmd0"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
     Result Cmd0(u32 unk0, OutInterface<IUserShimScopedObject> out_interface) {
@@ -226,9 +230,7 @@ public:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IUserService::Cmd0>, "Cmd0"}
-    );
+
 };
 
 class ISystemShimScopedObject final : public ServiceFramework<ISystemShimScopedObject> {
@@ -236,6 +238,17 @@ public:
     explicit ISystemShimScopedObject(Core::System& system_) : ServiceFramework(system_, "ISystemShimScopedObject") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{106, nullptr, "Cmd106"},
+            FunctionInfo{107, nullptr, "Cmd107"},
+            FunctionInfo{108, D<&ISystemShimScopedObject::Cmd108>, "Cmd108"},
+            FunctionInfo{207, nullptr, "Cmd207"},
+            FunctionInfo{208, D<&ISystemShimScopedObject::Cmd208>, "Cmd208"},
+            FunctionInfo{209, nullptr, "Cmd209"},
+            FunctionInfo{210, nullptr, "Cmd210"},
+            FunctionInfo{211, nullptr, "Cmd211"},
+            FunctionInfo{212, nullptr, "Cmd212"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -249,17 +262,7 @@ public:
         R_THROW(IPC::ResultNotSupported);
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{106, nullptr, "Cmd106"},
-        FunctionInfo{107, nullptr, "Cmd107"},
-        FunctionInfo{108, D<&ISystemShimScopedObject::Cmd108>, "Cmd108"},
-        FunctionInfo{207, nullptr, "Cmd207"},
-        FunctionInfo{208, D<&ISystemShimScopedObject::Cmd208>, "Cmd208"},
-        FunctionInfo{209, nullptr, "Cmd209"},
-        FunctionInfo{210, nullptr, "Cmd210"},
-        FunctionInfo{211, nullptr, "Cmd211"},
-        FunctionInfo{212, nullptr, "Cmd212"}
-    );
+
 };
 
 class ISystemService final : public ServiceFramework<ISystemService> {
@@ -267,6 +270,9 @@ public:
     explicit ISystemService(Core::System& system_) : ServiceFramework(system_, "stpl:sys") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ISystemService::Cmd0>, "Cmd0"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
     Result Cmd0(OutInterface<ISystemShimScopedObject> out_interface) {
@@ -275,9 +281,7 @@ public:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ISystemService::Cmd0>, "Cmd0"}
-    );
+
 };
 
 void LoopProcess(Core::System& system) {

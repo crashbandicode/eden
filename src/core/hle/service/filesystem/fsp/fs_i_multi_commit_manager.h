@@ -21,12 +21,12 @@ private:
     Result Commit();
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{1, D<&IMultiCommitManager::Add>, "Add"},
+            FunctionInfo{2, D<&IMultiCommitManager::Commit>, "Commit"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{1, D<&IMultiCommitManager::Add>, "Add"},
-        FunctionInfo{2, D<&IMultiCommitManager::Commit>, "Commit"}
-    );
     FileSys::VirtualFile backend;
 };
 

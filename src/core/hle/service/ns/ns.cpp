@@ -48,6 +48,14 @@ public:
         : ServiceFramework{system_, "ns:vm"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{1200, D<&IVulnerabilityManagerInterface::NeedsUpdateVulnerability>, "NeedsUpdateVulnerability"},
+            FunctionInfo{1201, nullptr, "UpdateSafeSystemVersionForDebug"},
+            FunctionInfo{1202, nullptr, "GetSafeSystemVersion"},
+            FunctionInfo{3100, D<&IVulnerabilityManagerInterface::GetSafeSystemVersionCheckInfo>, "GetSafeSystemVersionCheckInfo"},
+            FunctionInfo{3101, nullptr, "RequestUpdateSafeSystemVersionCheckInfo"},
+            FunctionInfo{3102, D<&IVulnerabilityManagerInterface::ResetSafeSystemVersionCheckInfo>, "ResetSafeSystemVersionCheckInfo"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
     ~IVulnerabilityManagerInterface() override = default;
@@ -69,14 +77,7 @@ public:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{1200, D<&IVulnerabilityManagerInterface::NeedsUpdateVulnerability>, "NeedsUpdateVulnerability"},
-        FunctionInfo{1201, nullptr, "UpdateSafeSystemVersionForDebug"},
-        FunctionInfo{1202, nullptr, "GetSafeSystemVersion"},
-        FunctionInfo{3100, D<&IVulnerabilityManagerInterface::GetSafeSystemVersionCheckInfo>, "GetSafeSystemVersionCheckInfo"},
-        FunctionInfo{3101, nullptr, "RequestUpdateSafeSystemVersionCheckInfo"},
-        FunctionInfo{3102, D<&IVulnerabilityManagerInterface::ResetSafeSystemVersionCheckInfo>, "ResetSafeSystemVersionCheckInfo"}
-    );
+
 };
 
 void LoopProcess(Core::System& system) {

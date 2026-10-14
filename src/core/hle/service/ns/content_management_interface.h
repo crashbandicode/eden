@@ -26,20 +26,20 @@ public:
     Result GetUnknown71(Out<u64> out_value_a, Out<u64> out_value_b, u8 flag);
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{11, D<&IContentManagementInterface::CalculateApplicationOccupiedSize>, "CalculateApplicationOccupiedSize"},
+            FunctionInfo{43, D<&IContentManagementInterface::CheckSdCardMountStatus>, "CheckSdCardMountStatus"},
+            FunctionInfo{47, D<&IContentManagementInterface::GetTotalSpaceSize>, "GetTotalSpaceSize"},
+            FunctionInfo{48, D<&IContentManagementInterface::GetFreeSpaceSize>, "GetFreeSpaceSize"},
+            FunctionInfo{71, D<&IContentManagementInterface::GetUnknown71>, "Unknown71"},
+            FunctionInfo{600, nullptr, "CountApplicationContentMeta"},
+            FunctionInfo{601, nullptr, "ListApplicationContentMetaStatus"},
+            FunctionInfo{605, nullptr, "ListApplicationContentMetaStatusWithRightsCheck"},
+            FunctionInfo{607, nullptr, "IsAnyApplicationRunning"},
+            FunctionInfo{608, nullptr, "Unknown608", MakeVersionGate({21,0,0})}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{11, D<&IContentManagementInterface::CalculateApplicationOccupiedSize>, "CalculateApplicationOccupiedSize"},
-        FunctionInfo{43, D<&IContentManagementInterface::CheckSdCardMountStatus>, "CheckSdCardMountStatus"},
-        FunctionInfo{47, D<&IContentManagementInterface::GetTotalSpaceSize>, "GetTotalSpaceSize"},
-        FunctionInfo{48, D<&IContentManagementInterface::GetFreeSpaceSize>, "GetFreeSpaceSize"},
-        FunctionInfo{71, D<&IContentManagementInterface::GetUnknown71>, "Unknown71"},
-        FunctionInfo{600, nullptr, "CountApplicationContentMeta"},
-        FunctionInfo{601, nullptr, "ListApplicationContentMetaStatus"},
-        FunctionInfo{605, nullptr, "ListApplicationContentMetaStatusWithRightsCheck"},
-        FunctionInfo{607, nullptr, "IsAnyApplicationRunning"},
-        FunctionInfo{608, nullptr, "Unknown608", MakeVersionGate({21,0,0})}
-    );
 };
 
 } // namespace Service::NS

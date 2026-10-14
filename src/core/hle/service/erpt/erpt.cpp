@@ -20,6 +20,25 @@ public:
     explicit ErrorReportContext(Core::System& system_) : ServiceFramework{system_, "erpt:c"} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, C<&ErrorReportContext::SubmitContext>, "SubmitContext"},
+            FunctionInfo{1, C<&ErrorReportContext::CreateReportV0>, "CreateReportV0"},
+            FunctionInfo{2, nullptr, "SetInitialLaunchSettingsCompletionTime"},
+            FunctionInfo{3, nullptr, "ClearInitialLaunchSettingsCompletionTime"},
+            FunctionInfo{4, nullptr, "UpdatePowerOnTime"},
+            FunctionInfo{5, D<&ErrorReportContext::UpdateAwakeTime>, "UpdateAwakeTime"},
+            FunctionInfo{6, nullptr, "SubmitMultipleCategoryContext"},
+            FunctionInfo{7, nullptr, "UpdateApplicationLaunchTime"},
+            FunctionInfo{8, nullptr, "ClearApplicationLaunchTime"},
+            FunctionInfo{9, nullptr, "SubmitAttachment"},
+            FunctionInfo{10, nullptr, "CreateReportWithAttachments"},
+            FunctionInfo{11, C<&ErrorReportContext::CreateReportV1>, "CreateReportV1"},
+            FunctionInfo{12, C<&ErrorReportContext::CreateReport>, "CreateReport"},
+            FunctionInfo{20, nullptr, "RegisterRunningApplet"},
+            FunctionInfo{21, nullptr, "UnregisterRunningApplet"},
+            FunctionInfo{22, nullptr, "UpdateAppletSuspendedDuration"},
+            FunctionInfo{30, nullptr, "InvalidateForcedShutdownDetection"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -66,25 +85,7 @@ private:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, C<&ErrorReportContext::SubmitContext>, "SubmitContext"},
-        FunctionInfo{1, C<&ErrorReportContext::CreateReportV0>, "CreateReportV0"},
-        FunctionInfo{2, nullptr, "SetInitialLaunchSettingsCompletionTime"},
-        FunctionInfo{3, nullptr, "ClearInitialLaunchSettingsCompletionTime"},
-        FunctionInfo{4, nullptr, "UpdatePowerOnTime"},
-        FunctionInfo{5, D<&ErrorReportContext::UpdateAwakeTime>, "UpdateAwakeTime"},
-        FunctionInfo{6, nullptr, "SubmitMultipleCategoryContext"},
-        FunctionInfo{7, nullptr, "UpdateApplicationLaunchTime"},
-        FunctionInfo{8, nullptr, "ClearApplicationLaunchTime"},
-        FunctionInfo{9, nullptr, "SubmitAttachment"},
-        FunctionInfo{10, nullptr, "CreateReportWithAttachments"},
-        FunctionInfo{11, C<&ErrorReportContext::CreateReportV1>, "CreateReportV1"},
-        FunctionInfo{12, C<&ErrorReportContext::CreateReport>, "CreateReport"},
-        FunctionInfo{20, nullptr, "RegisterRunningApplet"},
-        FunctionInfo{21, nullptr, "UnregisterRunningApplet"},
-        FunctionInfo{22, nullptr, "UpdateAppletSuspendedDuration"},
-        FunctionInfo{30, nullptr, "InvalidateForcedShutdownDetection"}
-    );
+
 };
 
 class ErrorReportSession final : public ServiceFramework<ErrorReportSession> {

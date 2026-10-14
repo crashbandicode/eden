@@ -84,6 +84,44 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ISslConnection::SetSocketDescriptor>, "SetSocketDescriptor"},
+            FunctionInfo{1, D<&ISslConnection::SetHostName>, "SetHostName"},
+            FunctionInfo{2, D<&ISslConnection::SetVerifyOption>, "SetVerifyOption"},
+            FunctionInfo{3, D<&ISslConnection::SetIoMode>, "SetIoMode"},
+            FunctionInfo{4, D<&ISslConnection::GetSocketDescriptor>, "GetSocketDescriptor"},
+            FunctionInfo{5, D<&ISslConnection::GetHostName>, "GetHostName"},
+            FunctionInfo{6, nullptr, "GetVerifyOption"},
+            FunctionInfo{7, D<&ISslConnection::GetIoMode>, "GetIoMode"},
+            FunctionInfo{8, D<&ISslConnection::DoHandshake>, "DoHandshake"},
+            FunctionInfo{9, &ISslConnection::DoHandshakeGetServerCert, "DoHandshakeGetServerCert"},
+            FunctionInfo{10, D<&ISslConnection::Read>, "Read"},
+            FunctionInfo{11, D<&ISslConnection::Write>, "Write"},
+            FunctionInfo{12, D<&ISslConnection::Pending>, "Pending"},
+            FunctionInfo{13, D<&ISslConnection::Peek>, "Peek"},
+            FunctionInfo{14, D<&ISslConnection::Poll>, "Poll"},
+            FunctionInfo{15, D<&ISslConnection::GetVerifyCertError>, "GetVerifyCertError"},
+            FunctionInfo{16, D<&ISslConnection::GetNeededServerCertBufferSize>, "GetNeededServerCertBufferSize"},
+            FunctionInfo{17, D<&ISslConnection::SetSessionCacheMode>, "SetSessionCacheMode"},
+            FunctionInfo{18, D<&ISslConnection::GetSessionCacheMode>, "GetSessionCacheMode"},
+            FunctionInfo{19, D<&ISslConnection::FlushSessionCache>, "FlushSessionCache"},
+            FunctionInfo{20, D<&ISslConnection::SetRenegotiationMode>, "SetRenegotiationMode"},
+            FunctionInfo{21, D<&ISslConnection::GetRenegotiationMode>, "GetRenegotiationMode"},
+            FunctionInfo{22, D<&ISslConnection::SetOption>, "SetOption"},
+            FunctionInfo{23, D<&ISslConnection::GetOption>, "GetOption"},
+            FunctionInfo{24, nullptr, "GetVerifyCertErrors"},
+            FunctionInfo{25, nullptr, "GetCipherInfo"},
+            FunctionInfo{26, D<&ISslConnection::SetNextAlpnProto>, "SetNextAlpnProto"},
+            FunctionInfo{27, D<&ISslConnection::GetNextAlpnProto>, "GetNextAlpnProto"},
+            FunctionInfo{28, nullptr, "SetDtlsSocketDescriptor"},
+            FunctionInfo{29, nullptr, "GetDtlsHandshakeTimeout"},
+            FunctionInfo{30, nullptr, "SetPrivateOption"},
+            FunctionInfo{31, nullptr, "SetSrtpCiphers"},
+            FunctionInfo{32, nullptr, "GetSrtpCipher"},
+            FunctionInfo{33, nullptr, "ExportKeyingMaterial"},
+            FunctionInfo{34, nullptr, "SetIoTimeout"},
+            FunctionInfo{35, nullptr, "GetIoTimeout"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -392,44 +430,7 @@ private:
         R_SUCCEED();
     }
 
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ISslConnection::SetSocketDescriptor>, "SetSocketDescriptor"},
-        FunctionInfo{1, D<&ISslConnection::SetHostName>, "SetHostName"},
-        FunctionInfo{2, D<&ISslConnection::SetVerifyOption>, "SetVerifyOption"},
-        FunctionInfo{3, D<&ISslConnection::SetIoMode>, "SetIoMode"},
-        FunctionInfo{4, D<&ISslConnection::GetSocketDescriptor>, "GetSocketDescriptor"},
-        FunctionInfo{5, D<&ISslConnection::GetHostName>, "GetHostName"},
-        FunctionInfo{6, nullptr, "GetVerifyOption"},
-        FunctionInfo{7, D<&ISslConnection::GetIoMode>, "GetIoMode"},
-        FunctionInfo{8, D<&ISslConnection::DoHandshake>, "DoHandshake"},
-        FunctionInfo{9, &ISslConnection::DoHandshakeGetServerCert, "DoHandshakeGetServerCert"},
-        FunctionInfo{10, D<&ISslConnection::Read>, "Read"},
-        FunctionInfo{11, D<&ISslConnection::Write>, "Write"},
-        FunctionInfo{12, D<&ISslConnection::Pending>, "Pending"},
-        FunctionInfo{13, D<&ISslConnection::Peek>, "Peek"},
-        FunctionInfo{14, D<&ISslConnection::Poll>, "Poll"},
-        FunctionInfo{15, D<&ISslConnection::GetVerifyCertError>, "GetVerifyCertError"},
-        FunctionInfo{16, D<&ISslConnection::GetNeededServerCertBufferSize>, "GetNeededServerCertBufferSize"},
-        FunctionInfo{17, D<&ISslConnection::SetSessionCacheMode>, "SetSessionCacheMode"},
-        FunctionInfo{18, D<&ISslConnection::GetSessionCacheMode>, "GetSessionCacheMode"},
-        FunctionInfo{19, D<&ISslConnection::FlushSessionCache>, "FlushSessionCache"},
-        FunctionInfo{20, D<&ISslConnection::SetRenegotiationMode>, "SetRenegotiationMode"},
-        FunctionInfo{21, D<&ISslConnection::GetRenegotiationMode>, "GetRenegotiationMode"},
-        FunctionInfo{22, D<&ISslConnection::SetOption>, "SetOption"},
-        FunctionInfo{23, D<&ISslConnection::GetOption>, "GetOption"},
-        FunctionInfo{24, nullptr, "GetVerifyCertErrors"},
-        FunctionInfo{25, nullptr, "GetCipherInfo"},
-        FunctionInfo{26, D<&ISslConnection::SetNextAlpnProto>, "SetNextAlpnProto"},
-        FunctionInfo{27, D<&ISslConnection::GetNextAlpnProto>, "GetNextAlpnProto"},
-        FunctionInfo{28, nullptr, "SetDtlsSocketDescriptor"},
-        FunctionInfo{29, nullptr, "GetDtlsHandshakeTimeout"},
-        FunctionInfo{30, nullptr, "SetPrivateOption"},
-        FunctionInfo{31, nullptr, "SetSrtpCiphers"},
-        FunctionInfo{32, nullptr, "GetSrtpCipher"},
-        FunctionInfo{33, nullptr, "ExportKeyingMaterial"},
-        FunctionInfo{34, nullptr, "SetIoTimeout"},
-        FunctionInfo{35, nullptr, "GetIoTimeout"}
-    );
+
     SslVersion ssl_version;
     std::shared_ptr<SslContextSharedData> shared_data;
     std::unique_ptr<SSLConnectionBackend> backend;
@@ -541,24 +542,24 @@ private:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, &ISslContext::SetOption, "SetOption"},
+            FunctionInfo{1, &ISslContext::GetOption, "GetOption"},
+            FunctionInfo{2, &ISslContext::CreateConnection, "CreateConnection"},
+            FunctionInfo{3, &ISslContext::GetConnectionCount, "GetConnectionCount"},
+            FunctionInfo{4, &ISslContext::ImportServerPki, "ImportServerPki"},
+            FunctionInfo{5, &ISslContext::ImportClientPki, "ImportClientPki"},
+            FunctionInfo{6, nullptr, "RemoveServerPki"},
+            FunctionInfo{7, nullptr, "RemoveClientPki"},
+            FunctionInfo{8, D<&ISslContext::RegisterInternalPki>, "RegisterInternalPki"},
+            FunctionInfo{9, nullptr, "AddPolicyOid"},
+            FunctionInfo{10, nullptr, "ImportCrl"},
+            FunctionInfo{11, nullptr, "RemoveCrl"},
+            FunctionInfo{12, nullptr, "ImportClientCertKeyPki"},
+            FunctionInfo{13, nullptr, "GeneratePrivateKeyAndCert"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, &ISslContext::SetOption, "SetOption"},
-        FunctionInfo{1, &ISslContext::GetOption, "GetOption"},
-        FunctionInfo{2, &ISslContext::CreateConnection, "CreateConnection"},
-        FunctionInfo{3, &ISslContext::GetConnectionCount, "GetConnectionCount"},
-        FunctionInfo{4, &ISslContext::ImportServerPki, "ImportServerPki"},
-        FunctionInfo{5, &ISslContext::ImportClientPki, "ImportClientPki"},
-        FunctionInfo{6, nullptr, "RemoveServerPki"},
-        FunctionInfo{7, nullptr, "RemoveClientPki"},
-        FunctionInfo{8, D<&ISslContext::RegisterInternalPki>, "RegisterInternalPki"},
-        FunctionInfo{9, nullptr, "AddPolicyOid"},
-        FunctionInfo{10, nullptr, "ImportCrl"},
-        FunctionInfo{11, nullptr, "RemoveCrl"},
-        FunctionInfo{12, nullptr, "ImportClientCertKeyPki"},
-        FunctionInfo{13, nullptr, "GeneratePrivateKeyAndCert"}
-    );
     SslVersion ssl_version;
     std::shared_ptr<SslContextSharedData> shared_data;
 };
@@ -568,6 +569,18 @@ public:
     explicit ISslService(Core::System& system_) : ServiceFramework{system_, "ssl"}, cert_store{system} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, &ISslService::CreateContext, "CreateContext"},
+            FunctionInfo{1, nullptr, "GetContextCount"},
+            FunctionInfo{2, D<&ISslService::GetCertificates>, "GetCertificates"},
+            FunctionInfo{3, D<&ISslService::GetCertificateBufSize>, "GetCertificateBufSize"},
+            FunctionInfo{4, nullptr, "DebugIoctl"},
+            FunctionInfo{5, &ISslService::SetInterfaceVersion, "SetInterfaceVersion"},
+            FunctionInfo{6, nullptr, "FlushSessionCache"},
+            FunctionInfo{7, nullptr, "SetDebugOption"},
+            FunctionInfo{8, nullptr, "GetDebugOption"},
+            FunctionInfo{8, nullptr, "ClearTls12FallbackFlag"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -614,18 +627,7 @@ private:
     }
 
 private:
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, &ISslService::CreateContext, "CreateContext"},
-        FunctionInfo{1, nullptr, "GetContextCount"},
-        FunctionInfo{2, D<&ISslService::GetCertificates>, "GetCertificates"},
-        FunctionInfo{3, D<&ISslService::GetCertificateBufSize>, "GetCertificateBufSize"},
-        FunctionInfo{4, nullptr, "DebugIoctl"},
-        FunctionInfo{5, &ISslService::SetInterfaceVersion, "SetInterfaceVersion"},
-        FunctionInfo{6, nullptr, "FlushSessionCache"},
-        FunctionInfo{7, nullptr, "SetDebugOption"},
-        FunctionInfo{8, nullptr, "GetDebugOption"},
-        FunctionInfo{8, nullptr, "ClearTls12FallbackFlag"}
-    );
+
     CertStore cert_store;
 };
 
@@ -704,24 +706,24 @@ public:
     };
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ISslServiceForSystem::CreateContext>, "CreateContext"},
+            FunctionInfo{1, D<&ISslServiceForSystem::GetContextCount>, "GetContextCount"},
+            FunctionInfo{2, D<&ISslServiceForSystem::GetCertificates>, "GetCertificates"},
+            FunctionInfo{3, D<&ISslServiceForSystem::GetCertificateBufSize>, "GetCertificateBufSize"},
+            FunctionInfo{4, D<&ISslServiceForSystem::DebugIoctl>, "DebugIoctl"},
+            FunctionInfo{5, D<&ISslServiceForSystem::SetInterfaceVersion>, "SetInterfaceVersion"},
+            FunctionInfo{6, D<&ISslServiceForSystem::FlushSessionCache>, "FlushSessionCache"},
+            FunctionInfo{7, D<&ISslServiceForSystem::SetDebugOption>, "SetDebugOption"},
+            FunctionInfo{8, D<&ISslServiceForSystem::GetDebugOption>, "GetDebugOption"},
+            FunctionInfo{9, D<&ISslServiceForSystem::ClearTls12FallbackFlag>, "ClearTls12FallbackFlag"},
+            FunctionInfo{100, D<&ISslServiceForSystem::CreateContextForSystem>, "CreateContextForSystem"},
+            FunctionInfo{101, D<&ISslServiceForSystem::SetThreadCoreMask>, "SetThreadCoreMask"},
+            FunctionInfo{102, D<&ISslServiceForSystem::GetThreadCoreMask>, "GetThreadCoreMask"},
+            FunctionInfo{103, D<&ISslServiceForSystem::VerifySignature>, "VerifySignature"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ISslServiceForSystem::CreateContext>, "CreateContext"},
-        FunctionInfo{1, D<&ISslServiceForSystem::GetContextCount>, "GetContextCount"},
-        FunctionInfo{2, D<&ISslServiceForSystem::GetCertificates>, "GetCertificates"},
-        FunctionInfo{3, D<&ISslServiceForSystem::GetCertificateBufSize>, "GetCertificateBufSize"},
-        FunctionInfo{4, D<&ISslServiceForSystem::DebugIoctl>, "DebugIoctl"},
-        FunctionInfo{5, D<&ISslServiceForSystem::SetInterfaceVersion>, "SetInterfaceVersion"},
-        FunctionInfo{6, D<&ISslServiceForSystem::FlushSessionCache>, "FlushSessionCache"},
-        FunctionInfo{7, D<&ISslServiceForSystem::SetDebugOption>, "SetDebugOption"},
-        FunctionInfo{8, D<&ISslServiceForSystem::GetDebugOption>, "GetDebugOption"},
-        FunctionInfo{9, D<&ISslServiceForSystem::ClearTls12FallbackFlag>, "ClearTls12FallbackFlag"},
-        FunctionInfo{100, D<&ISslServiceForSystem::CreateContextForSystem>, "CreateContextForSystem"},
-        FunctionInfo{101, D<&ISslServiceForSystem::SetThreadCoreMask>, "SetThreadCoreMask"},
-        FunctionInfo{102, D<&ISslServiceForSystem::GetThreadCoreMask>, "GetThreadCoreMask"},
-        FunctionInfo{103, D<&ISslServiceForSystem::VerifySignature>, "VerifySignature"}
-    );
 };
 
 void LoopProcess(Core::System& system) {

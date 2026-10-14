@@ -26,17 +26,17 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, nullptr, "SendOld"},
+            FunctionInfo{1, nullptr, "ReceiveOld"},
+            FunctionInfo{2, nullptr, "ExecuteCommandListOld"},
+            FunctionInfo{10, C<&I2CSession::Send>, "Send"},
+            FunctionInfo{11, nullptr, "Receive"},
+            FunctionInfo{12, nullptr, "ExecuteCommandList"},
+            FunctionInfo{13, nullptr, "SetRetryPolicy"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, nullptr, "SendOld"},
-        FunctionInfo{1, nullptr, "ReceiveOld"},
-        FunctionInfo{2, nullptr, "ExecuteCommandListOld"},
-        FunctionInfo{10, C<&I2CSession::Send>, "Send"},
-        FunctionInfo{11, nullptr, "Receive"},
-        FunctionInfo{12, nullptr, "ExecuteCommandList"},
-        FunctionInfo{13, nullptr, "SetRetryPolicy"}
-    );
 };
 
 enum class I2CDevice : u32 {
@@ -76,15 +76,15 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, C<&I2C::OpenSessionForDev>, "OpenSessionForDev"},
+            FunctionInfo{1, C<&I2C::OpenSession>, "OpenSession"},
+            FunctionInfo{2, C<&I2C::HasDevice>, "HasDevice"},
+            FunctionInfo{3, C<&I2C::HasDeviceForDev>, "HasDeviceForDev"},
+            FunctionInfo{4, C<&I2C::OpenSession2>, "OpenSession2"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, C<&I2C::OpenSessionForDev>, "OpenSessionForDev"},
-        FunctionInfo{1, C<&I2C::OpenSession>, "OpenSession"},
-        FunctionInfo{2, C<&I2C::HasDevice>, "HasDevice"},
-        FunctionInfo{3, C<&I2C::HasDeviceForDev>, "HasDeviceForDev"},
-        FunctionInfo{4, C<&I2C::OpenSession2>, "OpenSession2"}
-    );
 };
 
 void LoopProcess(Core::System& system) {

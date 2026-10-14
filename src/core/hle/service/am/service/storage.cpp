@@ -34,13 +34,13 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&IStorageAccessor::GetSize>, "GetSize"},
+            FunctionInfo{10, D<&IStorageAccessor::Write>, "Write"},
+            FunctionInfo{11, D<&IStorageAccessor::Read>, "Read"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&IStorageAccessor::GetSize>, "GetSize"},
-        FunctionInfo{10, D<&IStorageAccessor::Write>, "Write"},
-        FunctionInfo{11, D<&IStorageAccessor::Read>, "Read"}
-    );
 
     const std::shared_ptr<LibraryAppletStorage> m_impl;
 };
@@ -64,12 +64,12 @@ public:
     }
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static constexpr auto functions = CreateStaticMap(
+            FunctionInfo{0, D<&ITransferStorageAccessor::GetSize>, "GetSize"},
+            FunctionInfo{1, D<&ITransferStorageAccessor::GetHandle>, "GetHandle"}
+        );
         return HandlerTableGenerateWithFind(key, functions);
     }
-    static constexpr auto functions = CreateStaticMap(
-        FunctionInfo{0, D<&ITransferStorageAccessor::GetSize>, "GetSize"},
-        FunctionInfo{1, D<&ITransferStorageAccessor::GetHandle>, "GetHandle"}
-    );
 
     const std::shared_ptr<LibraryAppletStorage> m_impl;
 };

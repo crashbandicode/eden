@@ -4077,7 +4077,8 @@ void MainWindow::OnRecordGif() {
     const QString suggested = directory + QStringLiteral("/recording_") +
         QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_hh-mm-ss-zzz")) + QStringLiteral(".gif");
     const auto filename = QFileDialog::getSaveFileName(this, tr("Record GIF"), suggested,
-                                                       tr("GIF Animation (*.gif)"));
+                                                       tr("GIF Animation (*.gif)"), nullptr,
+                                                       QFileDialog::DontUseNativeDialog);
     if (filename.isEmpty()) return;
     QString error;
     if (!gif_recorder->Start(filename, 10, 640, 30000, error)) {

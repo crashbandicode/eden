@@ -158,6 +158,10 @@ GRenderWindow::~GRenderWindow() {
 }
 
 void GRenderWindow::OnFrameDisplayed() {
+    {
+        std::scoped_lock lock{macro_callback_mutex};
+        if (macro_frame_callback) macro_frame_callback();
+    }
     input_subsystem->GetTas()->UpdateThread();
     const InputCommon::TasInput::TasState new_tas_state =
         std::get<0>(input_subsystem->GetTas()->GetStatus());
@@ -172,6 +176,11 @@ void GRenderWindow::OnFrameDisplayed() {
         last_tas_state = new_tas_state;
         emit TasPlaybackStateChanged();
     }
+}
+
+void GRenderWindow::SetMacroFrameCallback(std::function<void()> callback) {
+    std::scoped_lock lock{macro_callback_mutex};
+    macro_frame_callback = std::move(callback);
 }
 
 bool GRenderWindow::IsShown() const {

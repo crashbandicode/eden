@@ -7,7 +7,9 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <utility>
 
 #include <QByteArray>
@@ -68,6 +70,8 @@ public:
 
     // EmuWindow implementation.
     void OnFrameDisplayed() override;
+    // Clearing this callback waits for an in-flight invocation to finish.
+    void SetMacroFrameCallback(std::function<void()> callback);
     bool IsShown() const override;
     std::unique_ptr<Core::Frontend::GraphicsContext> CreateSharedContext() const override;
 
@@ -140,6 +144,8 @@ signals:
     void TasPlaybackStateChanged();
 
 private:
+    std::mutex macro_callback_mutex;
+    std::function<void()> macro_frame_callback;
     void TouchBeginEvent(const QTouchEvent* event);
     void TouchUpdateEvent(const QTouchEvent* event);
     void TouchEndEvent();

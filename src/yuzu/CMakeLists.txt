@@ -173,6 +173,12 @@ add_executable(yuzu
     control_server.h
     gif_recorder.cpp
     gif_recorder.h
+    macro_file.cpp
+    macro_file.h
+    macro_recorder.cpp
+    macro_recorder.h
+    macro_dialog.cpp
+    macro_dialog.h
     gif_writer.cpp
     gif_writer.h
     control_adapter.cpp

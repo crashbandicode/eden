@@ -18,6 +18,7 @@
 #include "qt_common/render/emu_thread.h"
 #include "yuzu/control_adapter.h"
 #include "yuzu/gif_recorder.h"
+#include "yuzu/macro_recorder.h"
 #include "yuzu/control_input.h"
 #include "yuzu/control_server.h"
 #include "yuzu/main_window.h"
@@ -151,6 +152,8 @@ ControlAdapter::ControlAdapter(MainWindow& window_, ControlServer& server_)
     : QObject{&window_}, window{window_}, server{server_},
       input{std::make_unique<ControlInput>(*window.input_subsystem)} {
     telemetry_clock.start();
+    connect(window.macro_recorder.get(), &MacroRecorder::PlaybackStarting, this,
+            [this](int player) { input->ResetPlayer(player); });
     server.SetHandler([this](const QString& method, const QJsonObject& params) {
         return Handle(method, params);
     });
@@ -205,7 +208,15 @@ QJsonObject ControlAdapter::QueueGame(const QString& method, std::function<QJson
 }
 
 QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& params) {
+    if (method.startsWith(QStringLiteral("macro."))) {
+        return window.macro_recorder->Handle(method, params);
+    }
     if (method.startsWith(QStringLiteral("input."))) {
+        if (window.macro_recorder->OwnsInput() &&
+            method != QStringLiteral("input.schema") && method != QStringLiteral("input.state")) {
+            return CS::Error(QStringLiteral("input_busy"),
+                             QStringLiteral("Macro playback owns input; use macro.stop first"));
+        }
         return input->Handle(method, params);
     }
     if (method.startsWith(QStringLiteral("recording."))) {

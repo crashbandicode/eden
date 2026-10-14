@@ -55,3 +55,12 @@ Standalone Qt tests may use root/usr CMAKE_PREFIX_PATH and runner for relocated 
 
 `recording.start`, `recording.stop`, and `recording.status` capture animated game GIFs.
 See [GIF recording](docs/user/GIFRecording.md) for GUI and CLI usage, limits, and output semantics.
+
+## Input macros
+
+`macro.record`, `macro.marker`, `macro.record_from`, and `macro.stop` create named
+input recordings and independent branches. `macro.play` starts playback immediately
+by name or absolute file path; `macro.status` reports its progress. `macro.list`,
+`macro.inspect`, `macro.bind`, and `macro.shortcuts` manage the library and keyboard
+and gamepad bindings. These methods are separate from GIF `recording.*` methods.
+See [Input macros](docs/user/InputMacros.md) for GUI/CLI examples and frame timing.

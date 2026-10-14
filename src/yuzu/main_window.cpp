@@ -31,6 +31,8 @@
 #include "debugger/controller.h"
 #include "control_server.h"
 #include "yuzu/gif_recorder.h"
+#include "yuzu/macro_recorder.h"
+#include "yuzu/macro_dialog.h"
 
 #include "about_dialog.h"
 #include "data_dialog.h"
@@ -558,6 +560,8 @@ MainWindow::MainWindow(bool has_broken_vulkan)
 }
 
 MainWindow::~MainWindow() {
+    delete macro_dialog.data();
+    macro_recorder.reset();
     gif_recorder->Stop();
     gif_recorder.reset();
     // will get automatically deleted otherwise
@@ -929,6 +933,8 @@ void MainWindow::WebBrowserRequestExit() {
 void MainWindow::InitializeWidgets() {
     render_window = new GRenderWindow(this, input_subsystem);
     gif_recorder = std::make_unique<GifRecorder>(*render_window);
+    macro_recorder = std::make_unique<MacroRecorder>(*render_window, *input_subsystem, *this);
+    connect(this, &MainWindow::EmulationStopping, macro_recorder.get(), &MacroRecorder::Stop);
     connect(this, &MainWindow::EmulationStopping, gif_recorder.get(), &GifRecorder::Stop);
     connect(gif_recorder.get(), &GifRecorder::Changed, this, [this] {
         const bool recording = gif_recorder->IsRecording();
@@ -1633,6 +1639,7 @@ void MainWindow::ConnectMenuEvents() {
     connect_menu(ui->action_Application_Menu, &MainWindow::OnCreateHomeMenuApplicationMenuShortcut);
     connect_menu(ui->action_Capture_Screenshot, &MainWindow::OnCaptureScreenshot);
     connect_menu(ui->action_Record_GIF, &MainWindow::OnRecordGif);
+    connect_menu(ui->action_Input_Macros, &MainWindow::OnInputMacros);
 
     // TAS
     connect_menu(ui->action_TAS_Start, &MainWindow::OnTasStartStop);
@@ -3451,6 +3458,7 @@ void MainWindow::ToggleShowGameName() {
 }
 
 void MainWindow::OnConfigure() {
+    macro_recorder->Stop();
     const auto old_theme = UISettings::values.theme;
     const bool old_discord_presence = UISettings::values.enable_discord_presence.GetValue();
     const auto old_language_index = Settings::values.language_index.GetValue();
@@ -3587,6 +3595,11 @@ void MainWindow::OnTasStartStop() {
     if (!emulation_running) {
         return;
     }
+    if (macro_recorder->IsActive()) {
+        QMessageBox::information(this, tr("Input Macros"),
+                                 tr("Stop the input macro before starting TAS."));
+        return;
+    }
 
     // Disable system buttons to prevent TAS from executing a hotkey
     auto* controller =
@@ -3599,6 +3612,11 @@ void MainWindow::OnTasStartStop() {
 
 void MainWindow::OnTasRecord() {
     if (!emulation_running) {
+        return;
+    }
+    if (macro_recorder->IsActive()) {
+        QMessageBox::information(this, tr("Input Macros"),
+                                 tr("Stop the input macro before recording TAS."));
         return;
     }
     if (is_tas_recording_dialog_active) {
@@ -3749,6 +3767,7 @@ void MainWindow::OnConfigurePerGame() {
 }
 
 void MainWindow::OpenPerGameConfiguration(u64 title_id, const std::string& file_name) {
+    macro_recorder->Stop();
     const auto v_file = Core::GetGameFileFromPath(QtCommon::vfs, file_name);
 
     Settings::SetConfiguringGlobal(false);
@@ -4064,6 +4083,16 @@ void MainWindow::OnCreateHomeMenuDesktopShortcut() {
 
 void MainWindow::OnCreateHomeMenuApplicationMenuShortcut() {
     QtCommon::Game::CreateHomeMenuShortcut(QtCommon::Game::ShortcutTarget::Applications);
+}
+
+void MainWindow::OnInputMacros() {
+    if (!macro_dialog) {
+        macro_dialog = new MacroDialog(*macro_recorder, this, render_window);
+        macro_dialog->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    macro_dialog->show();
+    macro_dialog->raise();
+    macro_dialog->activateWindow();
 }
 
 void MainWindow::OnRecordGif() {
@@ -4621,6 +4650,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
     render_window->close();
     multiplayer_state->Close();
+    macro_recorder->Stop();
     QtCommon::system->HIDCore().UnloadInputDevices();
     Network::Shutdown();
 

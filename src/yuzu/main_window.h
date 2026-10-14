@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QTimer>
 #include <QTranslator>
@@ -160,6 +161,8 @@ private:
 };
 
 class GifRecorder;
+class MacroRecorder;
+class MacroDialog;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -426,6 +429,7 @@ private slots:
     void OnCreateHomeMenuApplicationMenuShortcut();
     void OnCaptureScreenshot();
     void OnRecordGif();
+    void OnInputMacros();
     void OnCheckFirmwareDecryption();
 #ifdef __unix__
     void OnCheckGraphicsBackend();
@@ -503,6 +507,8 @@ private:
 
     GRenderWindow* render_window = nullptr;
     std::unique_ptr<GifRecorder> gif_recorder;
+    std::unique_ptr<MacroRecorder> macro_recorder;
+    QPointer<MacroDialog> macro_dialog;
     GameList* game_list = nullptr;
     LoadingScreen* loading_screen = nullptr;
     QTimer shutdown_timer;

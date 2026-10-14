@@ -84,6 +84,35 @@ def main(argv=None):
     record_start.add_argument("--duration-ms", type=int, default=30000)
     record_commands.add_parser("stop")
     record_commands.add_parser("status")
+    macro = commands.add_parser("macro", help="record, branch, and play named input macros")
+    macro_commands = macro.add_subparsers(dest="macro_command", required=True)
+    for name in ("list", "status", "stop"):
+        macro_commands.add_parser(name)
+    for name in ("play", "inspect", "record-from", "bind"):
+        sub = macro_commands.add_parser(name)
+        source = sub.add_mutually_exclusive_group(required=True)
+        source.add_argument("--name", help="saved macro name")
+        source.add_argument("--path", help="absolute macro file path on the Eden host")
+        if name in ("play", "record-from"):
+            sub.add_argument("--player", type=int, choices=range(10))
+        if name == "record-from":
+            sub.add_argument("--marker", required=True)
+            sub.add_argument("--new-name", required=True)
+            sub.add_argument("--output-path")
+            sub.add_argument("--countdown-ms", type=int, default=3000)
+        if name == "bind":
+            sub.add_argument("--keyboard", default="", help="e.g. Ctrl+Alt+1; empty clears")
+            sub.add_argument("--gamepad", default="", help="e.g. l+r+plus; empty clears")
+    take = macro_commands.add_parser("record")
+    take.add_argument("name")
+    take.add_argument("--path")
+    take.add_argument("--player", type=int, choices=range(10), default=0)
+    take.add_argument("--countdown-ms", type=int, default=3000)
+    marker = macro_commands.add_parser("marker")
+    marker.add_argument("--name")
+    shortcuts = macro_commands.add_parser("shortcuts")
+    shortcuts.add_argument("--marker-keyboard")
+    shortcuts.add_argument("--marker-gamepad")
     screenshot = commands.add_parser("screenshot", help="capture a GUI window or screen")
     screenshot.add_argument("path")
     screenshot.add_argument("--target", default="active")
@@ -166,6 +195,13 @@ def main(argv=None):
             if args.record_command == "start":
                 params = {"path": args.path, "fps": args.fps, "width": args.width,
                           "duration_ms": args.duration_ms}
+        elif args.command == "macro":
+            method = "macro." + args.macro_command.replace("-", "_")
+            for key in ("name", "path", "player", "countdown_ms", "marker", "new_name",
+                        "output_path", "keyboard", "gamepad", "marker_keyboard", "marker_gamepad"):
+                value = getattr(args, key, None)
+                if value is not None:
+                    params[key] = value
         elif args.command == "screenshot":
             method, params = "ui.screenshot", {"path": os.path.abspath(args.path), "target": args.target}
         elif args.command in ("trigger", "click"):

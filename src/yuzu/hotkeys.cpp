@@ -187,6 +187,11 @@ bool ControllerShortcut::IsEnabled() const {
 }
 
 void ControllerShortcut::ControllerUpdateEvent(Core::HID::ControllerTriggerType type) {
+    // Replayed game inputs must not execute frontend hotkeys (pause, fullscreen, etc.).
+    if (emulated_controller->PlaybackExclusive()) {
+        active = false;
+        return;
+    }
     if (!is_enabled) {
         return;
     }

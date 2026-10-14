@@ -270,6 +270,17 @@ void ControlInput::Reset() {
     Expire();
 }
 
+void ControlInput::ResetPlayer(int player) {
+    if (player < 0 || player >= static_cast<int>(buttons.size())) return;
+    const auto index = static_cast<std::size_t>(player);
+    for (auto& expiry : buttons[index]) if (expiry) expiry = 1;
+    for (auto& expiry : sticks[index]) if (expiry) expiry = 1;
+    for (auto& expiry : motions[index]) if (expiry) expiry = 1;
+    for (auto& expiry : triggers[index]) if (expiry) expiry = 1;
+    if (rings[index]) rings[index] = 1;
+    Expire();
+}
+
 void ControlInput::Expire() {
     const auto now = std::max<qint64>(1, clock.elapsed());
     auto* gamepad = subsystem.GetVirtualGamepad();

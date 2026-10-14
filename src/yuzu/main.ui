@@ -227,6 +227,7 @@
     <addaction name="separator"/>
     <addaction name="action_Capture_Screenshot"/>
     <addaction name="action_Record_GIF"/>
+    <addaction name="action_Input_Macros"/>
     <addaction name="menuTAS"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -411,6 +412,11 @@
   <action name="action_Open_UserHandbook">
    <property name="text">
     <string>&amp;User Handbook</string>
+   </property>
+  </action>
+  <action name="action_Input_Macros">
+   <property name="text">
+    <string>Input Macros…</string>
    </property>
   </action>
   <action name="action_Record_GIF">

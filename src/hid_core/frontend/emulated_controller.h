@@ -175,6 +175,14 @@ struct ControllerUpdateCallback {
     bool is_npad_service;
 };
 
+// One coherent sample of the mapped pad. Copied under mapped_mutex.
+struct MappedInputSnapshot {
+    ButtonValues buttons{};
+    SticksValues sticks{};
+    TriggerValues triggers{};
+    std::array<Common::Input::MotionStatus, Settings::NativeMotion::NumMotions> motion{};
+};
+
 class EmulatedController {
 public:
     /**
@@ -312,6 +320,21 @@ public:
 
     /// Returns the latest motion status from the controller with parameters
     ControllerMotionValues GetMotionValues() const;
+
+    /// Buttons, sticks, triggers, and motion as last committed by device callbacks.
+    /// The copy is taken under one mutex shared with those callbacks.
+    MappedInputSnapshot MappedSnapshot(bool sample_turbo = false) const;
+
+    /// Ignore user and TAS updates on this controller. Virtual-pad updates still apply,
+    /// including virtual motion. Does not change any other controller.
+    void SetPlaybackExclusive(bool exclusive);
+    bool PlaybackExclusive() const;
+
+    /// False after UnloadInput until ReloadInput finishes.
+    bool InputDevicesLoaded() const;
+
+    /// Push the current user-device state through the mapped callbacks. Skips virtual devices.
+    void RefreshUserInput();
 
     /// Returns the latest color status from the controller with parameters
     ColorValues GetColorsValues() const;
@@ -526,7 +549,8 @@ private:
      * @param callback A CallbackStatus containing gyro and accelerometer data
      * @param index motion ID of the to be updated
      */
-    void SetMotion(const Common::Input::CallbackStatus& callback, std::size_t index);
+    void SetMotion(const Common::Input::CallbackStatus& callback, std::size_t index,
+                   bool virtual_source);
 
     /**
      * Updates the color status of the controller
@@ -579,7 +603,7 @@ private:
     const NpadIdType npad_id_type;
     NpadStyleTag supported_style_tag{NpadStyleSet::All};
     f32 motion_sensitivity{Core::HID::MotionInput::IsAtRestStandard};
-    u32 turbo_button_state{0};
+    std::atomic<u32> turbo_button_state{0};
     std::size_t nfc_handles{0};
     std::array<VibrationValue, 2> last_vibration_value{DEFAULT_VIBRATION_VALUE,
                                                        DEFAULT_VIBRATION_VALUE};
@@ -638,6 +662,11 @@ private:
     TriggerDevices virtual_trigger_devices;
     Common::ParamPackage virtual_ring_params;
     std::unique_ptr<Common::Input::InputDevice> virtual_ring_device;
+
+    // Held only around mapped-state reads and writes. Never held across TriggerOnChange,
+    // Connect, or RefreshUserInput. Recorder lock (if any) is taken before this one.
+    mutable std::mutex mapped_mutex;
+    bool playback_exclusive{false};
 
     mutable std::mutex callback_mutex;
     ::Common::unordered_map<int, ControllerUpdateCallback> callback_list;

@@ -17,6 +17,7 @@ public:
     ~ControlInput() override;
     QJsonObject Handle(const QString& method, const QJsonObject& params);
     void Reset();
+    void ResetPlayer(int player);
 
 private:
     void Expire();

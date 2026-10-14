@@ -41,3 +41,9 @@ pointers. This fork initializes immutable dispatch tables at runtime on MSVC,
 while GCC/Clang retain constant evaluation. Defining `EDEN_REPRO_BROKEN` in this
 standalone test restores the defective path as a negative control (expected to
 fail on MSVC 19.44). Both the normal MSVC and GCC test paths must pass.
+
+The 446-entry application-manager table uses a single array argument during
+construction. Passing those records as 446 separate arguments causes excessive
+MSVC compile time and memory use; the array path keeps the same Frozen map and
+lookup behavior. A standalone 446-entry reproduction compiled in 8.6 seconds
+and passed all lookups with this path.

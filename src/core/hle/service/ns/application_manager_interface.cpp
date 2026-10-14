@@ -26,7 +26,7 @@
 namespace Service::NS {
 
 std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationManagerInterface::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMap(
+    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
         FunctionInfo{0, D<&IApplicationManagerInterface::ListApplicationRecord>, "ListApplicationRecord"},
         FunctionInfo{1, nullptr, "GenerateApplicationRecordCount"},
         FunctionInfo{2, D<&IApplicationManagerInterface::GetApplicationRecordUpdateSystemEvent>, "GetApplicationRecordUpdateSystemEvent"},
@@ -473,7 +473,7 @@ std::optional<ServiceFrameworkBase::FunctionInfoBase> IApplicationManagerInterfa
         FunctionInfo{5000, nullptr, "Unknown5000", MakeVersionGate({18,0,0})},
         FunctionInfo{5001, nullptr, "Unknown5001", MakeVersionGate({18,0,0})},
         FunctionInfo{9999, nullptr, "GetApplicationCertificate", MakeVersionGate({10,0,0}, {10,2,0})}
-    );
+    });
     return HandlerTableGenerateWithFind(key, functions);
 }
 

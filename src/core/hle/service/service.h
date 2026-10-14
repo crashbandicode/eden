@@ -186,6 +186,24 @@ protected:
         };
     }
 
+    // Large runtime tables must not pass hundreds of records as separate arguments:
+    // MSVC 19.44 takes many minutes and several GiB compiling that call. Keep one
+    // array argument while producing the same immutable Frozen map.
+    template <std::size_t N, std::size_t... I>
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, N>
+    CreateStaticMapFromArrayImpl(const FunctionInfo (&args)[N], std::index_sequence<I...>) {
+        return frozen::map<u32, FunctionValueInfo<Self>, N>{
+            {args[I].expected_header,
+             FunctionValueInfo<Self>{args[I].handler_callback, args[I].name,
+                                     args[I].version_gating}}...};
+    }
+
+    template <std::size_t N>
+    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, N>
+    CreateStaticMapFromArray(const FunctionInfo (&args)[N]) {
+        return CreateStaticMapFromArrayImpl(args, std::make_index_sequence<N>{});
+    }
+
     // Used exclusively by NFC
     template<typename T, typename ...Ts>
         //requires (std::same_as<Ts, FunctionInfoTyped<T>> && ...)

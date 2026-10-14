@@ -40,10 +40,14 @@ struct Framework : Base {
         const char* name;
         u32 gate;
     };
-    template <class... Ts>
-    static EDEN_SERVICE_MAP_EVAL auto Map(Ts... args) {
-        return frozen::map<u32, Value, sizeof...(Ts)>{
-            {args.key, Value{args.callback, args.name, args.gate}}...};
+    template <std::size_t N, std::size_t... I>
+    static EDEN_SERVICE_MAP_EVAL auto MapImpl(const Input (&args)[N], std::index_sequence<I...>) {
+        return frozen::map<u32, Value, N>{
+            {args[I].key, Value{args[I].callback, args[I].name, args[I].gate}}...};
+    }
+    template <std::size_t N>
+    static EDEN_SERVICE_MAP_EVAL auto Map(const Input (&args)[N]) {
+        return MapImpl(args, std::make_index_sequence<N>{});
     }
 };
 struct Service : Framework<Service> {
@@ -52,14 +56,14 @@ struct Service : Framework<Service> {
     void C(Context& context) { context.value = 3; }
 
     static bool Check() {
-        static EDEN_SERVICE_TABLE auto map = Map(
+        static EDEN_SERVICE_TABLE auto map = Map({
             Input{0, &Service::A, "A"}, Input{1, &Service::B, "B"},
             Input{2, &Service::C, "C"}, Input{3, &Service::A, "A"},
             Input{4, nullptr, "null"}, Input{65000, nullptr, "null"},
             Input{65001, nullptr, "null"}, Input{65002, nullptr, "null"},
             Input{65003, nullptr, "null"}, Input{65004, nullptr, "null"},
             Input{65005, nullptr, "null"}, Input{65006, nullptr, "null"},
-            Input{65100, &Service::B, "B"}, Input{65101, nullptr, "null"});
+            Input{65100, &Service::B, "B"}, Input{65101, nullptr, "null"}});
         constexpr u32 expected[]{0, 1, 2, 3, 4, 65000, 65001, 65002, 65003,
                                  65004, 65005, 65006, 65100, 65101};
         std::size_t index{};

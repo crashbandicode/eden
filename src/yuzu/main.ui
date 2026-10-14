@@ -226,6 +226,7 @@
     <addaction name="menu_Create_Shortcuts"/>
     <addaction name="separator"/>
     <addaction name="action_Capture_Screenshot"/>
+    <addaction name="action_Record_GIF"/>
     <addaction name="menuTAS"/>
    </widget>
    <widget class="QMenu" name="menu_Help">
@@ -411,6 +412,10 @@
    <property name="text">
     <string>&amp;User Handbook</string>
    </property>
+  </action>
+  <action name="action_Record_GIF">
+   <property name="enabled"><bool>false</bool></property>
+   <property name="text"><string>Record GIF…</string></property>
   </action>
   <action name="action_Capture_Screenshot">
    <property name="enabled">

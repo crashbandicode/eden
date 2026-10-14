@@ -159,6 +159,8 @@ private:
     constexpr static int MaxMultiplier = 8;
 };
 
+class GifRecorder;
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -423,6 +425,7 @@ private slots:
     void OnCreateHomeMenuDesktopShortcut();
     void OnCreateHomeMenuApplicationMenuShortcut();
     void OnCaptureScreenshot();
+    void OnRecordGif();
     void OnCheckFirmwareDecryption();
 #ifdef __unix__
     void OnCheckGraphicsBackend();
@@ -499,6 +502,7 @@ private:
     MultiplayerState* multiplayer_state = nullptr;
 
     GRenderWindow* render_window = nullptr;
+    std::unique_ptr<GifRecorder> gif_recorder;
     GameList* game_list = nullptr;
     LoadingScreen* loading_screen = nullptr;
     QTimer shutdown_timer;

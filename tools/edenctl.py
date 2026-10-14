@@ -75,6 +75,15 @@ def main(argv=None):
     call.add_argument("method")
     call.add_argument("params", nargs="?", default="{}", help="JSON object, or - to read stdin")
     commands.add_parser("attach", help="read JSON requests from stdin; one JSON response per line")
+    recording = commands.add_parser("recording", help="record game frames to an animated GIF")
+    record_commands = recording.add_subparsers(dest="record_command", required=True)
+    record_start = record_commands.add_parser("start")
+    record_start.add_argument("path", help="absolute .gif path on the Eden host (must not exist)")
+    record_start.add_argument("--fps", type=int, default=10)
+    record_start.add_argument("--width", type=int, default=640)
+    record_start.add_argument("--duration-ms", type=int, default=30000)
+    record_commands.add_parser("stop")
+    record_commands.add_parser("status")
     screenshot = commands.add_parser("screenshot", help="capture a GUI window or screen")
     screenshot.add_argument("path")
     screenshot.add_argument("--target", default="active")
@@ -152,6 +161,11 @@ def main(argv=None):
             params = json.loads(sys.stdin.read() if args.params == "-" else args.params)
             if not isinstance(params, dict):
                 raise ValueError("params must be a JSON object")
+        elif args.command == "recording":
+            method = "recording." + args.record_command
+            if args.record_command == "start":
+                params = {"path": args.path, "fps": args.fps, "width": args.width,
+                          "duration_ms": args.duration_ms}
         elif args.command == "screenshot":
             method, params = "ui.screenshot", {"path": os.path.abspath(args.path), "target": args.target}
         elif args.command in ("trigger", "click"):

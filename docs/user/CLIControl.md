@@ -209,3 +209,8 @@ The manifest also retains resource samples every five seconds and the highest
 observed memory peak, since systemd may remove a successful transient unit before
 the final snapshot. A stop that exceeds its grace period reports `stop_timeout`;
 reaching the total lifetime reports `runtime_limit`.
+
+## GIF recording
+
+`recording.start`, `recording.stop`, and `recording.status` capture animated game GIFs.
+See [GIF recording](GIFRecording.md) for GUI and CLI usage, limits, and output semantics.

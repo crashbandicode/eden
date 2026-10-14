@@ -50,3 +50,8 @@ Build dependencies available without root under /home/intpa/eden-build-deps/root
 runner `/usr/bin/python3 /home/intpa/eden-build-deps/run.py COMMAND ARGS...` sets env.
 Full Eden build succeeded with one compiler job and a 4 GiB cgroup cap.
 Standalone Qt tests may use root/usr CMAKE_PREFIX_PATH and runner for relocated Qt.
+
+## GIF recording
+
+`recording.start`, `recording.stop`, and `recording.status` capture animated game GIFs.
+See [GIF recording](docs/user/GIFRecording.md) for GUI and CLI usage, limits, and output semantics.

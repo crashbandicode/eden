@@ -171,6 +171,10 @@ add_executable(yuzu
     main.cpp
     control_server.cpp
     control_server.h
+    gif_recorder.cpp
+    gif_recorder.h
+    gif_writer.cpp
+    gif_writer.h
     control_adapter.cpp
     control_adapter.h
     control_input.cpp

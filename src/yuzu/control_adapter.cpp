@@ -17,6 +17,7 @@
 #include "qt_common/qt_common.h"
 #include "qt_common/render/emu_thread.h"
 #include "yuzu/control_adapter.h"
+#include "yuzu/gif_recorder.h"
 #include "yuzu/control_input.h"
 #include "yuzu/control_server.h"
 #include "yuzu/main_window.h"
@@ -206,6 +207,29 @@ QJsonObject ControlAdapter::QueueGame(const QString& method, std::function<QJson
 QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& params) {
     if (method.startsWith(QStringLiteral("input."))) {
         return input->Handle(method, params);
+    }
+    if (method.startsWith(QStringLiteral("recording."))) {
+        if (method == QStringLiteral("recording.start")) {
+            const auto integer = [&](const QString& key, int fallback) {
+                const auto value = params.value(key);
+                if (value.isUndefined()) return fallback;
+                if (!value.isDouble() || !std::isfinite(value.toDouble()) ||
+                    value.toDouble() != std::trunc(value.toDouble()) ||
+                    value.toDouble() < 0 || value.toDouble() > 120000) return -1;
+                return value.toInt(-1);
+            };
+            QString error;
+            if (!window.gif_recorder->Start(params.value(QStringLiteral("path")).toString(),
+                    integer(QStringLiteral("fps"), 10), integer(QStringLiteral("width"), 640),
+                    integer(QStringLiteral("duration_ms"), 30000), error)) {
+                return CS::Error(QStringLiteral("recording_failed"), error);
+            }
+        } else if (method == QStringLiteral("recording.stop")) {
+            window.gif_recorder->Stop();
+        } else if (method != QStringLiteral("recording.status")) {
+            return CS::Error(QStringLiteral("unknown_method"), QStringLiteral("Unknown recording method"));
+        }
+        return CS::Success(window.gif_recorder->Status());
     }
     if (method == QStringLiteral("status")) {
         const bool powered = QtCommon::system->IsPoweredOn();

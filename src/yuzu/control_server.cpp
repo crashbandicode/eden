@@ -1015,8 +1015,12 @@ QJsonObject ControlServer::Dispatch(const QString& method, const QJsonObject& pa
                 QStringLiteral("game.load"), QStringLiteral("game.pause"), QStringLiteral("game.resume"), QStringLiteral("game.stop"), QStringLiteral("input.schema"),
                 QStringLiteral("input.state"), QStringLiteral("input.button"), QStringLiteral("input.stick"), QStringLiteral("input.motion"), QStringLiteral("input.touch"),
                 QStringLiteral("input.trigger"), QStringLiteral("input.ring"),
-                QStringLiteral("input.reset"), QStringLiteral("log.filter")})},
+                QStringLiteral("input.reset"), QStringLiteral("log.filter"),
+                QStringLiteral("recording.start"), QStringLiteral("recording.stop"), QStringLiteral("recording.status")})},
             {QStringLiteral("params"), QJsonObject{
+                {QStringLiteral("recording.start"), QStringLiteral("{path:absolute .gif, fps?:1..30=10, width?:160..1280=640, duration_ms?:100..120000=30000}; no overwrite; requires running loaded game")},
+                {QStringLiteral("recording.stop"), QStringLiteral("{} -> finalize GIF; idempotent")},
+                {QStringLiteral("recording.status"), QStringLiteral("{} -> state, path, frames, dropped_frames, elapsed_ms, duration_ms, fps, width, height, error")},
                 {QStringLiteral("ui.tree"), QStringLiteral("{target?, visible_only?:bool, class?:string, brief?:bool} -> QWidget, QAction and QShortcut objects; brief omits properties")},
                 {QStringLiteral("ui.actions"), QStringLiteral("same filters as ui.tree; QAction and QShortcut (hotkey-only commands) objects only")},
                 {QStringLiteral("ui.trigger"), QStringLiteral("{target} QAction or QShortcut. Items of an open popup menu follow the keyboard path (menu closes first); menubar menus open; result.path reports which")},

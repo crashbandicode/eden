@@ -30,6 +30,7 @@
 #include "debugger/console.h"
 #include "debugger/controller.h"
 #include "control_server.h"
+#include "yuzu/gif_recorder.h"
 
 #include "about_dialog.h"
 #include "data_dialog.h"
@@ -557,6 +558,8 @@ MainWindow::MainWindow(bool has_broken_vulkan)
 }
 
 MainWindow::~MainWindow() {
+    gif_recorder->Stop();
+    gif_recorder.reset();
     // will get automatically deleted otherwise
     if (render_window->parent() == nullptr) {
         delete render_window;
@@ -925,6 +928,18 @@ void MainWindow::WebBrowserRequestExit() {
 
 void MainWindow::InitializeWidgets() {
     render_window = new GRenderWindow(this, input_subsystem);
+    gif_recorder = std::make_unique<GifRecorder>(*render_window);
+    connect(this, &MainWindow::EmulationStopping, gif_recorder.get(), &GifRecorder::Stop);
+    connect(gif_recorder.get(), &GifRecorder::Changed, this, [this] {
+        const bool recording = gif_recorder->IsRecording();
+        ui->action_Record_GIF->setText(recording ? tr("Stop GIF Recording") : tr("Record GIF…"));
+        ui->action_Record_GIF->setEnabled(recording || (QtCommon::emu_thread && QtCommon::emu_thread->IsRunning()));
+        const auto result = gif_recorder->Status();
+        const auto error = result.value(QStringLiteral("error")).toString();
+        statusBar()->showMessage(recording ? tr("Recording GIF…") :
+            error.isEmpty() ? tr("GIF saved: %1").arg(result.value(QStringLiteral("path")).toString()) :
+                              tr("GIF recording failed: %1").arg(error), recording ? 0 : 10000);
+    });
     if (ControlServer::BackgroundMode()) {
         // Install these even while the render widget is a child, before a Vulkan
         // surface exists. Adding the bottom hint for the first time after boot
@@ -1617,6 +1632,7 @@ void MainWindow::ConnectMenuEvents() {
     connect_menu(ui->action_Desktop, &MainWindow::OnCreateHomeMenuDesktopShortcut);
     connect_menu(ui->action_Application_Menu, &MainWindow::OnCreateHomeMenuApplicationMenuShortcut);
     connect_menu(ui->action_Capture_Screenshot, &MainWindow::OnCaptureScreenshot);
+    connect_menu(ui->action_Record_GIF, &MainWindow::OnRecordGif);
 
     // TAS
     connect_menu(ui->action_TAS_Start, &MainWindow::OnTasStartStop);
@@ -1671,6 +1687,7 @@ void MainWindow::UpdateMenuState() {
     }
 
     ui->action_Capture_Screenshot->setEnabled(emulation_running && !is_paused);
+    ui->action_Record_GIF->setEnabled(gif_recorder->IsRecording() || (emulation_running && !is_paused));
 
     if (emulation_running && is_paused) {
         ui->action_Pause->setText(tr("&Continue"));
@@ -4047,6 +4064,25 @@ void MainWindow::OnCreateHomeMenuDesktopShortcut() {
 
 void MainWindow::OnCreateHomeMenuApplicationMenuShortcut() {
     QtCommon::Game::CreateHomeMenuShortcut(QtCommon::Game::ShortcutTarget::Applications);
+}
+
+void MainWindow::OnRecordGif() {
+    if (gif_recorder->IsRecording()) {
+        gif_recorder->Stop();
+        return;
+    }
+    const auto directory = QString::fromStdString(
+        Common::FS::GetEdenPathString(Common::FS::EdenPath::ScreenshotsDir));
+    if (!Common::FS::CreateDir(directory.toStdString())) return;
+    const QString suggested = directory + QStringLiteral("/recording_") +
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_hh-mm-ss-zzz")) + QStringLiteral(".gif");
+    const auto filename = QFileDialog::getSaveFileName(this, tr("Record GIF"), suggested,
+                                                       tr("GIF Animation (*.gif)"));
+    if (filename.isEmpty()) return;
+    QString error;
+    if (!gif_recorder->Start(filename, 10, 640, 30000, error)) {
+        QMessageBox::warning(this, tr("Record GIF"), error);
+    }
 }
 
 void MainWindow::OnCaptureScreenshot() {

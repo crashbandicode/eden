@@ -59,6 +59,8 @@ To contribute to Eden; be it financially, code, bug reports, or otherwise, see o
 
 We have a user manual! See our [User Handbook](./docs/user/README.md).
 
+Try the [input macro GIF walkthrough](./docs/user/InputMacrosTutorial.md) to record a route and create branches from it.
+
 ## Building
 
 See the [General Build Guide](docs/Build.md)

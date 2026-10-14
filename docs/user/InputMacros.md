@@ -2,9 +2,11 @@
 
 Open **Tools → Input Macros…** to record and replay a named controller sequence.
 
+New to macros? Follow the [short GIF walkthrough: reuse a route with branches](InputMacrosTutorial.md).
+
 1. Put the game at the starting menu or scene you want to reuse. Choose the player
    and enter a new recording name.
-2. Click **Record**. The **3–2–1** countdown gives you time to return to the game;
+2. Click **Record new**. The **3–2–1** countdown gives you time to return to the game;
    **red** means your mapped controller inputs are being recorded.
 3. Insert markers at useful branch points using the configured keyboard shortcut
    or gamepad combination. Both kinds of shortcut are supported. The default

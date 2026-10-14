@@ -16,6 +16,9 @@ A copy of this handbook is [available online](https://git.eden-emu.dev/eden-emu/
 - **[Settings](./Settings.md)**
 - **[Controllers](./Controllers.md)**
     - **[Controller profiles](./Controllers.md#configuring-controller-profiles)**
+- **[Input macros: GIF walkthrough](./InputMacrosTutorial.md)**
+- **[Input macro reference](./InputMacros.md)**
+- **[Record a GIF](./GIFRecording.md)**
 - **[Audio](Audio.md)**
 - **[Graphics](Graphics.md)**
 - **[Installing Mods](./Mods.md)**

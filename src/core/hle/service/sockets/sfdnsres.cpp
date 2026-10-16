@@ -16,6 +16,7 @@
 #include "core/hle/service/sockets/sockets.h"
 #include "core/hle/service/sockets/sockets_translate.h"
 #include "core/internal_network/network.h"
+#include "core/internal_network/nso_lan.h"
 #include "core/memory.h"
 
 namespace Service::Sockets {
@@ -176,20 +177,23 @@ static std::pair<u32, GetAddrInfoError> GetHostByNameRequestImpl(HLERequestConte
 
     LOG_WARNING(
         Service,
-        "called with ignored parameters: use_nsd_resolve={}, cancel_handle={}, process_id={}",
+        "called: use_nsd_resolve={}, ignored cancel_handle={}, process_id={}",
         parameters.use_nsd_resolve, parameters.cancel_handle, parameters.process_id);
 
     const auto host_buffer = ctx.ReadBuffer(0);
     const std::string host = Common::StringFromBuffer(host_buffer);
     // For now, ignore options, which are in input buffer 1 for GetHostByNameRequestWithOptions.
 
-    // Prevent resolution of Nintendo servers
-    if (IsBlockedHost(host)) {
+    const auto fixture_host = Network::NsoLan::ResolveHost(
+        parameters.use_nsd_resolve ? Network::NsoLan::ResolveServiceName(host) : host);
+    // Fixture mode never falls through to the host resolver for an unmapped name.
+    if ((Network::NsoLan::IsRequested() && !fixture_host) ||
+        (!Network::NsoLan::IsRequested() && IsBlockedHost(host))) {
         LOG_WARNING(Network, "Resolution of hostname {} requested, returning EAI_AGAIN", host);
         return {0, GetAddrInfoError::AGAIN};
     }
 
-    auto res_v = Network::GetAddressInfo(host, /*service*/ std::nullopt);
+    auto res_v = Network::GetAddressInfo(fixture_host.value_or(host), /*service*/ std::nullopt);
     if (auto* res = std::get_if<std::vector<Network::AddrInfo>>(&res_v)) {
         const std::vector<u8> data = SerializeAddrInfoAsHostEnt(*res, host);
         const u32 data_size = u32(data.size());
@@ -290,17 +294,16 @@ static std::pair<u32, GetAddrInfoError> GetAddrInfoRequestImpl(HLERequestContext
 
     LOG_WARNING(
         Service,
-        "called with ignored parameters: use_nsd_resolve={}, cancel_handle={}, process_id={}",
+        "called: use_nsd_resolve={}, ignored cancel_handle={}, process_id={}",
         parameters.use_nsd_resolve, parameters.cancel_handle, parameters.process_id);
-
-    // TODO: If use_nsd_resolve is true, pass the name through NSD::Resolve
-    // before looking up.
 
     const auto host_buffer = ctx.ReadBuffer(0);
     const std::string host = Common::StringFromBuffer(host_buffer);
 
-    // Prevent resolution of Nintendo servers
-    if (IsBlockedHost(host)) {
+    const auto fixture_host = Network::NsoLan::ResolveHost(
+        parameters.use_nsd_resolve ? Network::NsoLan::ResolveServiceName(host) : host);
+    if ((Network::NsoLan::IsRequested() && !fixture_host) ||
+        (!Network::NsoLan::IsRequested() && IsBlockedHost(host))) {
         LOG_WARNING(Network, "Resolution of hostname {} requested, returning EAI_AGAIN", host);
         return {0, GetAddrInfoError::AGAIN};
     }
@@ -313,7 +316,7 @@ static std::pair<u32, GetAddrInfoError> GetAddrInfoRequestImpl(HLERequestContext
 
     // Serialized hints are also passed in a buffer, but are ignored for now.
 
-    auto res_v = Network::GetAddressInfo(host, service);
+    auto res_v = Network::GetAddressInfo(fixture_host.value_or(host), service);
     if (auto* res = std::get_if<std::vector<Network::AddrInfo>>(&res_v)) {
         const std::vector<u8> data = SerializeAddrInfo(*res, host);
         const u32 data_size = u32(data.size());

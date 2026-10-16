@@ -19,6 +19,7 @@
 #include "core/hle/service/sockets/bsd.h"
 #include "core/hle/service/sockets/sockets_translate.h"
 #include "core/internal_network/network.h"
+#include "core/internal_network/nso_lan.h"
 #include "core/internal_network/socket_proxy.h"
 #include "core/internal_network/sockets.h"
 #include "network/network.h"
@@ -649,6 +650,12 @@ std::pair<s32, Errno> BSD_USA::AcceptImpl(s32 fd, std::vector<u8>& write_buffer)
         return {-1, Translate(bsd_errno)};
     }
 
+    if (!Network::NsoLan::RouteDestination(result.sockaddr_in)) {
+        // Reject before publishing the accepted socket to the guest. The temporary socket
+        // owns and closes its descriptor on this path, including invalid fixture configs.
+        return {-1, Errno::CONNREFUSED};
+    }
+
     file_descriptors[new_fd] = FileDescriptor{};
     FileDescriptor& new_descriptor = *file_descriptors[new_fd];
     new_descriptor.socket = std::move(result.socket);
@@ -688,7 +695,12 @@ Errno BSD_USA::ConnectImpl(s32 fd, std::span<const u8> addr) {
 
     auto addr_in = GetValue<SockAddrIn>(addr);
 
-    const Errno result = Translate(file_descriptors[fd]->socket->Connect(Translate(addr_in)));
+    const auto destination = Network::NsoLan::RouteDestination(Translate(addr_in));
+    if (!destination) {
+        LOG_WARNING(Service, "NSO LAN fixture denied an unconfigured destination");
+        return Errno::CONNREFUSED;
+    }
+    const Errno result = Translate(file_descriptors[fd]->socket->Connect(*destination));
 
     if (result == Errno::ISCONN) {
         LOG_DEBUG(Service, "returned ISCONN - socket already connected");
@@ -985,6 +997,11 @@ std::pair<s32, Errno> BSD_USA::SendToImpl(s32 fd, u32 flags, std::span<const u8>
         ASSERT(addr.size() >= 16);
         auto guest_addr_in = GetValue<SockAddrIn>(addr);
         addr_in = Translate(guest_addr_in);
+        const auto destination = Network::NsoLan::RouteDestination(addr_in);
+        if (!destination) {
+            return {-1, Errno::CONNREFUSED};
+        }
+        addr_in = *destination;
         p_addr_in = &addr_in;
     }
 

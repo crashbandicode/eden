@@ -389,6 +389,8 @@ add_library(core STATIC
     hle/kernel/svc_types.h
     hle/result.h
     hle/service/acc/acc.cpp
+    hle/service/acc/nso_lan_token.cpp
+    hle/service/acc/nso_lan_token.h
     hle/service/acc/acc.h
     hle/service/acc/async_context.cpp
     hle/service/acc/async_context.h
@@ -1055,6 +1057,8 @@ add_library(core STATIC
     internal_network/emu_net_state.h
     internal_network/network.cpp
     internal_network/network.h
+    internal_network/nso_lan.cpp
+    internal_network/nso_lan.h
     internal_network/network_interface.cpp
     internal_network/network_interface.h
     internal_network/socket_proxy.cpp

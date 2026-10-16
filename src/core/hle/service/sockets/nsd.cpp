@@ -8,6 +8,7 @@
 #include "core/hle/service/sockets/nsd.h"
 
 #include "common/string_util.h"
+#include "core/internal_network/nso_lan.h"
 
 namespace Service::Sockets {
 
@@ -32,11 +33,9 @@ NSD::NSD(Core::System& system_, const char* name) : ServiceFramework{system_, na
 }
 
 static std::string ResolveImpl(const std::string& fqdn_in) {
-    // The real implementation makes various substitutions.
-    // For now we just return the string as-is, which is good enough when not
-    // connecting to real Nintendo servers.
+    // Preserve the normal stub; the opt-in LAN fixture expands only explicitly mapped names.
     LOG_WARNING(Service, "(STUBBED) called, fqdn_in={}", fqdn_in);
-    return fqdn_in;
+    return Network::NsoLan::ResolveServiceName(fqdn_in);
 }
 
 static Result ResolveCommon(const std::string& fqdn_in, std::array<char, 0x100>& fqdn_out) {

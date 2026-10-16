@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 
 #include "common/common_types.h"
 #include "common/fs/file.h"
@@ -23,10 +24,13 @@
 #include "core/hle/service/acc/acc.h"
 #include "core/hle/service/acc/async_context.h"
 #include "core/hle/service/acc/errors.h"
+#include "core/hle/service/acc/nso_lan_token.h"
 #include "core/hle/service/acc/profile_manager.h"
 #include "core/hle/service/cmif_serialization.h"
 #include "core/hle/service/glue/glue_manager.h"
 #include "core/hle/service/server_manager.h"
+#include "core/hle/kernel/k_event.h"
+#include "core/internal_network/nso_lan.h"
 #include "core/loader/loader.h"
 
 namespace Service::Account {
@@ -85,7 +89,8 @@ private:
 
     Result GetAccountId(Out<u64> out_account_id) {
         LOG_WARNING(Service_ACC, "(STUBBED) called");
-        *out_account_id = account_id.Hash();
+        const auto& fixture = Network::NsoLan::GetConfiguration();
+        *out_account_id = fixture ? fixture->account_id : account_id.Hash();
         R_SUCCEED();
     }
 
@@ -665,6 +670,60 @@ protected:
     }
 };
 
+// Completed local fixture operation. The event stays signaled until the object is closed;
+// cancellation after completion has no effect on the result or license kind.
+class NsoLanLicenseContext final : public ServiceFramework<NsoLanLicenseContext> {
+public:
+    explicit NsoLanLicenseContext(Core::System& system_)
+        : ServiceFramework{system_, "IAsyncNetworkServiceLicenseKindContext"},
+          service_context{system_, "NsoLanLicenseContext"} {
+        completion_event = service_context.CreateEvent("NsoLanLicenseContext:CompletionEvent");
+        completion_event->Signal(system.Kernel());
+    }
+
+    ~NsoLanLicenseContext() override {
+        service_context.CloseEvent(completion_event);
+    }
+
+    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
+            FunctionInfo{0, &NsoLanLicenseContext::GetSystemEvent, "GetSystemEvent"},
+            FunctionInfo{1, &NsoLanLicenseContext::GetResult, "Cancel"},
+            FunctionInfo{2, &NsoLanLicenseContext::HasDone, "HasDone"},
+            FunctionInfo{3, &NsoLanLicenseContext::GetResult, "GetResult"},
+            FunctionInfo{100, &NsoLanLicenseContext::GetLicenseKind, "GetNetworkServiceLicenseKind"}
+        });
+        return HandlerTableGenerateWithFind(key, functions);
+    }
+
+private:
+    void GetSystemEvent(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 2, 1};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, completion_event->GetReadableEvent());
+    }
+
+    void GetResult(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    void HasDone(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 3};
+        rb.Push(ResultSuccess);
+        rb.Push(true);
+    }
+
+    void GetLicenseKind(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 3};
+        rb.Push(ResultSuccess);
+        rb.Push<u32>(1); // Subscribed in this explicitly requested synthetic fixture.
+    }
+
+    KernelHelpers::ServiceContext service_context;
+    Kernel::KEvent* completion_event;
+};
+
 class IManagerForApplication final : public ServiceFramework<IManagerForApplication> {
 public:
     explicit IManagerForApplication(Core::System& system_,
@@ -674,6 +733,13 @@ public:
           profile_manager{profile_manager_} {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        if (key == 170 && Network::NsoLan::GetConfiguration()) {
+            static EDEN_SERVICE_TABLE auto fixture_functions = CreateStaticMapFromArray({
+                FunctionInfo{170, &IManagerForApplication::LoadNetworkServiceLicenseKindAsync,
+                             "LoadNetworkServiceLicenseKindAsync"}
+            });
+            return HandlerTableGenerateWithFind(key, fixture_functions);
+        }
         return HandlerTableGenerateWithFind(key, functions);
     }
 
@@ -689,7 +755,8 @@ private:
 
         IPC::ResponseBuilder rb{ctx, 4};
         rb.Push(ResultSuccess);
-        rb.PushRaw<u64>(profile_manager->GetLastOpenedUser().Hash());
+        const auto& fixture = Network::NsoLan::GetConfiguration();
+        rb.PushRaw<u64>(fixture ? fixture->account_id : profile_manager->GetLastOpenedUser().Hash());
     }
 
     void EnsureIdTokenCacheAsync(HLERequestContext& ctx) {
@@ -701,12 +768,20 @@ private:
     }
 
     void LoadIdTokenCacheDeprecated(HLERequestContext& ctx) {
+        if (Network::NsoLan::GetConfiguration()) {
+            LoadFixtureIdToken(ctx);
+            return;
+        }
         LOG_WARNING(Service_ACC, "(STUBBED) called");
 
         ensure_token_id->LoadIdTokenCache(ctx);
     }
 
     void LoadIdTokenCache(HLERequestContext& ctx) {
+        if (Network::NsoLan::GetConfiguration()) {
+            LoadFixtureIdToken(ctx);
+            return;
+        }
         LOG_WARNING(Service_ACC, "(STUBBED) called");
 
         std::vector<u8> token_data(0x100);
@@ -732,7 +807,45 @@ private:
 
         IPC::ResponseBuilder rb{ctx, 4};
         rb.Push(ResultSuccess);
-        rb.PushRaw<u64>(profile_manager->GetLastOpenedUser().Hash());
+        const auto& fixture = Network::NsoLan::GetConfiguration();
+        rb.PushRaw<u64>(fixture ? fixture->account_id : profile_manager->GetLastOpenedUser().Hash());
+    }
+
+    void LoadFixtureIdToken(HLERequestContext& ctx) {
+        const auto& fixture = Network::NsoLan::GetConfiguration();
+        const auto now = std::chrono::duration_cast<std::chrono::seconds>(
+                             std::chrono::system_clock::now().time_since_epoch()).count();
+        if (!fixture_token || fixture_token->expires_at <= now + 60) {
+            const auto program_id = system.GetApplicationProcessProgramID();
+            const FileSys::PatchManager patches{program_id, system.GetFileSystemController(),
+                                               system.GetContentProvider()};
+            const auto metadata = patches.GetControlMetadata();
+            const auto version = metadata.first ? metadata.first->GetVersionString() : std::string{};
+            fixture_token = NsoLan::CreateIdToken(fixture->account_id, now, version, program_id);
+        }
+        if (!fixture_token) {
+            IPC::ResponseBuilder rb{ctx, 3};
+            rb.Push(ResultAccountUpdateFailed);
+            rb.Push<u32>(0);
+            return;
+        }
+        // WriteBuffer otherwise truncates silently. Reject before publishing any token bytes.
+        if (!ctx.CanWriteBuffer() || ctx.GetWriteBufferSize() < fixture_token->value.size()) {
+            IPC::ResponseBuilder rb{ctx, 3};
+            rb.Push(ResultInvalidArrayLength);
+            rb.Push<u32>(0);
+            return;
+        }
+        const auto written = ctx.WriteBuffer(fixture_token->value.data(), fixture_token->value.size());
+        IPC::ResponseBuilder rb{ctx, 3};
+        rb.Push(written == fixture_token->value.size() ? ResultSuccess : ResultAccountUpdateFailed);
+        rb.Push(static_cast<u32>(written));
+    }
+
+    void LoadNetworkServiceLicenseKindAsync(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 2, 0, 1};
+        rb.Push(ResultSuccess);
+        rb.PushIpcInterface<NsoLanLicenseContext>(ctx, system);
     }
 
     void StoreOpenContext(HLERequestContext& ctx) {
@@ -758,6 +871,7 @@ private:
     });
     std::shared_ptr<EnsureTokenIdCacheAsyncInterface> ensure_token_id{};
     std::shared_ptr<ProfileManager> profile_manager;
+    std::optional<NsoLan::IdToken> fixture_token;
 };
 
 // 6.0.0+
@@ -940,6 +1054,19 @@ public:
             IPC::ResponseBuilder rb{ctx, 2, 0, 1};
             rb.Push(ResultSuccess);
             rb.PushIpcInterface<IManagerForApplication>(ctx, system, profile_manager);
+        }
+
+        void CheckFixtureNetworkServiceAvailabilityAsync(HLERequestContext& ctx) {
+            IPC::RequestParser rp{ctx};
+            const auto uuid = rp.PopRaw<Common::UUID>();
+            if (uuid.IsInvalid() || !profile_manager->UserExists(uuid)) {
+                IPC::ResponseBuilder rb{ctx, 2};
+                rb.Push(ResultInvalidUserId);
+                return;
+            }
+            IPC::ResponseBuilder rb{ctx, 2, 0, 1};
+            rb.Push(ResultSuccess);
+            rb.PushIpcInterface<EnsureTokenIdCacheAsyncInterface>(ctx, system);
         }
 
         void IsUserAccountSwitchLocked(HLERequestContext& ctx) {
@@ -1348,6 +1475,13 @@ public:
         : Interface(std::move(module_), std::move(profile_manager_), system_, "acc:u0") {}
 
     std::optional<FunctionInfoBase> FindRequest(u32 key) override {
+        if (key == 103 && Network::NsoLan::GetConfiguration()) {
+            static EDEN_SERVICE_TABLE auto fixture_functions = CreateStaticMapFromArray({
+                FunctionInfo{103, &ACC_U0::CheckFixtureNetworkServiceAvailabilityAsync,
+                             "CheckNetworkServiceAvailabilityAsync", MakeVersionGate({4,0,0})}
+            });
+            return HandlerTableGenerateWithFind(key, fixture_functions);
+        }
         return HandlerTableGenerateWithFind(key, functions);
     }
     ~ACC_U0() override = default;

@@ -19,9 +19,13 @@ Example (replace these example private addresses with your own LAN addresses):
   "dns": {
     "g23380901-lp1.s.n.srv.nintendo.net": "192.168.10.20",
     "nncs1-lp1.n.n.srv.nintendo.net": "192.168.10.20",
-    "nncs2-lp1.n.n.srv.nintendo.net": "192.168.10.21"
+    "nncs2-lp1.n.n.srv.nintendo.net": "192.168.10.21",
+    "api-lp1.znc.srv.nintendo.net": "192.168.10.21"
   },
-  "port_redirects": [{"address": "192.168.10.20", "from": 443, "to": 8443}]
+  "port_redirects": [
+    {"address": "192.168.10.20", "from": 443, "to": 8443},
+    {"address": "192.168.10.21", "from": 443, "to": 8444}
+  ]
 }
 ```
 
@@ -63,6 +67,65 @@ HTTP 503 and the observed public arena proceeded without voice chat. Do not infe
 voice-chat support or invent a successful API response. No global DNS/firewall
 changes or real Nintendo/Nextendo accounts are required by the fixture.
 
+### Operator procedure
+
+1. Start the private companion using its versioned deployment instructions. It
+   needs auth TLS, secure matchmaking and two NAT-check addresses. For Arena,
+   start its unsupported-voice-chat diagnostic on the second address, port8444
+   in the example above. Keep TLS/auth and diagnostic port mappings distinct.
+   Initialization data required by that companion must be supplied separately;
+   the emulator source does not include it.
+2. Prepare one isolated writable Eden profile per host, with matching game,
+   update and mod versions. Use account49153 on one host and49154 on the other,
+   with corresponding companion identities. Configure controllers in each
+   private profile. Doubles requires two connected local controllers per host.
+3. Write a separate config for each host using the schema above. Include both
+   peer addresses and every service address. Start each isolated Eden with the
+   config variable set only for that process. In PowerShell7, for example:
+
+   ```powershell
+   $previousFixture = [Environment]::GetEnvironmentVariable('EDEN_NSO_LAN_CONFIG', 'Process')
+   try {
+       $env:EDEN_NSO_LAN_CONFIG = '/path/to/slot/fixture.json'
+       & '/path/to/isolated-eden/eden' # Windows: the isolated eden.exe
+   } finally {
+       [Environment]::SetEnvironmentVariable('EDEN_NSO_LAN_CONFIG', $previousFixture, 'Process')
+   }
+   ```
+
+4. Enter **Online → Smash → Quickplay → Solo** on both games. The first player
+   waits until the second searches. For doubles choose **Co-op** and join both
+   local controllers on each machine. For background search choose
+   **Background Matchmaking**, configure it and confirm; search continues while
+   browsing supported game menus. For arenas, create a public arena on one host
+   and browse/join it on the other, then move both players into the ring and ready.
+5. To stop, leave the session and close both isolated games before stopping the
+   companion. Launch normally without the variable to return to ordinary Eden.
+   This is an emulator change plus a companion service, not an Eden plugin or a
+   new NRO. Existing NSO Deluxe may be tested without modifying its binary.
+
+### Agent validation and rollout gates
+
+Reserve separate profiles, displays and bounded run slots; preserve other
+operators' processes. Record the source commit, exact emulator and companion
+hashes, game/mod versions, identities, topology and run deadlines. Never print
+tokens, keys or game payloads. Do not infer game input delivery from a successful
+control RPC. Capture actual game screens on both peers.
+
+Required acceptance includes first-player waiting/second-player pairing,
+Quickplay gameplay/results/direct rematch, Background gameplay/results/search
+continuation, Arena create/join/two completed rounds/lobby return/leave/close,
+and **doubles: two local players per host, full2v2 match, matching results and
+requeue into another playable match**. Repeat completed doubles matches and
+capture any early exit before treating reliability as accepted. A timed-out
+rematch prompt followed by a new search is not proof of selecting rematch.
+Also verify the fixture-disabled path and invalid-config helper probes.
+
+Publish only after the agreed gates pass. Stage versioned artifacts and retain
+rollback versions; wait for existing Eden processes to close before changing
+normal installations. Keep fixture configuration out of global environments and
+preserve normal profiles. Report untested modes separately from accepted gates.
+
 ## Current acceptance limits (2026-10-16)
 
 Real Smash Ultimate clients on Windows and Ubuntu reached synchronized Quickplay
@@ -73,8 +136,10 @@ into another match. Both private profiles require two connected controllers.
 
 Other doubles attempts returned to character select early for unknown reasons;
 stable repeated full matches and a dedicated rematch prompt are not established.
-Background matchmaking reached gameplay but an unsporting-behavior warning was
-observed; its results/rematch gate remains pending. Four-player input delivery
+Background matchmaking completed a full match with matching winner results and
+continued searching into another playable match; direct timed rematch selection
+remains unverified. Earlier unsporting-behavior warnings remain recorded.
+Four-player input delivery
 requires real game evidence: `input.state` is lease bookkeeping and frontend
 readback is not guest delivery. Arena teams, room-code joins, broader NAT layouts
 and full NSO Deluxe coverage are not established. Canonical merge builds and normal

@@ -131,20 +131,31 @@ preserve normal profiles. Report untested modes separately from accepted gates.
 Real Smash Ultimate clients on Windows and Ubuntu reached synchronized Quickplay
 1v1 gameplay. A public Battle Arena completed two full matches, matching results,
 return to lobby, guest leave and host closure. Two local players per host in
-Quickplay Co-op completed one full match with matching team results and requeued
-into another match. Both private profiles require two connected controllers.
+Quickplay Co-op completed three consecutive full matches on the final release
+packages, with matching team results captured on both hosts for the last two
+rounds and direct rematches into subsequent gameplay. Both private profiles
+require two connected controllers.
 
-Other doubles attempts returned to character select early for unknown reasons;
-stable repeated full matches and a dedicated rematch prompt are not established.
+Earlier doubles attempts returned to character select early for unknown reasons;
+another attempt showed an explicit inactivity disconnect after a delayed test
+driver. Those failures remain part of the record. The accepted consecutive
+sequence used timely controls and captured the actual rematch prompt.
 Background matchmaking completed a full match with matching winner results and
 continued searching into another playable match; direct timed rematch selection
-remains unverified. Earlier unsporting-behavior warnings remain recorded.
+remains unverified. A final-package singles match completed through sudden death
+with matching winner results; selecting the timed Rematch-Yes prompt on both
+clients led directly into another playable match. Both applications subsequently
+exited normally through their Exit commands with exit status 0.
+Earlier unsporting-behavior warnings remain recorded.
 Four-player input delivery
 requires real game evidence: `input.state` is lease bookkeeping and frontend
 readback is not guest delivery. Arena teams, room-code joins, broader NAT layouts
-and full NSO Deluxe coverage are not established. Canonical merge builds and normal
-installation acceptance are separate work; the earlier task-private binaries do
-not validate a newly integrated commit.
+and full NSO Deluxe coverage are not established. Windows and Linux release
+builds of integrated commit `289c4684e7` were verified from the same frozen source;
+final-package Quickplay and doubles were exercised. Arena and background
+observations used the preceding private build with identical production code.
+These observations satisfy the bounded runtime gates above. Normal installation
+rollout and broader reliability remain separate from this acceptance.
 
 ## Standalone regression probes
 

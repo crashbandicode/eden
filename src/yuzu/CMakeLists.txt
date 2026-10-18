@@ -19,6 +19,8 @@ add_executable(yuzu
     about_dialog.cpp
     about_dialog.h
     aboutdialog.ui
+    lan_online.cpp
+    lan_online.h
     applets/qt_amiibo_settings.cpp
     applets/qt_amiibo_settings.h
     applets/qt_amiibo_settings.ui

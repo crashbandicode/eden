@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "core/internal_network/nso_lan.h"
 #include <iostream>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 
 using namespace Network;
@@ -13,7 +15,51 @@ int main(int argc, char** argv) {
     const SockAddrIn public_ip{.family=Domain::INET, .ip={8,8,8,8}, .portno=443};
     const std::string service_template = "g23380901-%.s.n.srv.nintendo.net";
     const std::string service_resolved = "g23380901-lp1.s.n.srv.nintendo.net";
-    if (mode == "disabled") {
+    if (mode == "automatic" || mode == "automatic-invalid" || mode == "automatic-conflict") {
+        Check(argc == 3, "automatic input missing");
+        std::ifstream input{argv[2]};
+        Check(input.good(), "automatic input unreadable");
+        const std::string text{std::istreambuf_iterator<char>{input}, {}};
+        // Exercise publication after a prior caller has cached the disabled legacy state.
+        const bool requested_before = NsoLan::IsRequested();
+        const bool installed = NsoLan::InstallAutomaticConfiguration(
+            text, "/run/user/1000/eden-lan/i-test");
+        if (mode != "automatic") {
+            Check(!installed, "invalid/conflicting automatic configuration accepted");
+            Check(NsoLan::IsRequested() == requested_before, "failed publication changed request state");
+            Check(!NsoLan::GetAutomaticTransport(), "failed publication exposed transport");
+        } else {
+            Check(!requested_before && installed && NsoLan::IsRequested(), "automatic publication failed");
+            const auto* transport = NsoLan::GetAutomaticTransport();
+            Check(transport && transport->instance_address == IPv4Address{10,253,1,2}, "automatic identity");
+            Check(NsoLan::GetConfiguration()->account_id == 49153, "automatic account");
+            const SockAddrIn auth{.family=Domain::INET, .ip={10,254,0,1}, .portno=443};
+            const auto tcp = NsoLan::RouteDestination(auth, false);
+            Check(tcp && tcp->ip == IPv4Address{127,0,0,1} && tcp->portno == 38443,
+                  "automatic TLS must use local proxy");
+            const auto udp = NsoLan::RouteDestination(auth, true);
+            Check(udp && udp->ip == auth.ip && udp->portno == auth.portno,
+                  "automatic UDP must retain logical endpoint");
+            const SockAddrIn peer{.family=Domain::INET, .ip={10,253,7,8}, .portno=30123};
+            const auto routed_peer = NsoLan::RouteDestination(peer, true);
+            Check(routed_peer && routed_peer->ip == peer.ip && routed_peer->portno == peer.portno,
+                  "dynamic peer must reach broker");
+            Check(!NsoLan::RouteDestination(peer, false), "virtual peer escaped over native TCP");
+            Check(!NsoLan::RouteDestination({.family=Domain::INET, .ip={10,254,0,1}, .portno=80}, false),
+                  "unmapped service port escaped to native TCP");
+            Check(!NsoLan::RouteDestination({.family=Domain::INET, .ip={10,254,0,2}, .portno=443}, false),
+                  "unmapped service escaped to native TCP");
+            Check(!NsoLan::RouteDestination({.family=Domain::INET, .ip={127,0,0,1}, .portno=38443}, false),
+                  "direct guest loopback connection admitted");
+            Check(!NsoLan::RouteDestination(public_ip, true), "automatic public UDP escaped");
+            Check(!NsoLan::RouteDestination(local, true), "unregistered physical LAN UDP escaped");
+            Check(NsoLan::ResolveHost(service_resolved) == "10.254.0.1", "automatic service DNS");
+            Check(!NsoLan::ResolveHost("unknown.nintendo.net"), "automatic unknown DNS escaped");
+            Check(!NsoLan::InstallAutomaticConfiguration(text, "/run/user/1000/eden-lan/i-test"),
+                  "configuration was replaced after publication");
+            Check(NsoLan::GetAutomaticTransport() == transport, "published transport pointer invalidated");
+        }
+    } else if (mode == "disabled") {
         Check(!NsoLan::IsRequested(), "disabled requested");
         const auto routed = NsoLan::RouteDestination(public_ip);
         Check(routed.has_value(), "disabled behavior changed");

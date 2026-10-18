@@ -31,6 +31,8 @@
 #include "debugger/controller.h"
 #include "control_server.h"
 #include "yuzu/gif_recorder.h"
+#include "yuzu/lan_online.h"
+#include <QScopedValueRollback>
 #include "yuzu/macro_recorder.h"
 #include "yuzu/macro_dialog.h"
 
@@ -1928,8 +1930,14 @@ bool MainWindow::SelectAndSetCurrentUser(
     return true;
 }
 
+
 void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletParameters params,
                           StartGameType type) {
+    if (boot_in_progress) {
+        LOG_WARNING(Frontend, "Ignoring a re-entrant game boot");
+        return;
+    }
+    const QScopedValueRollback<bool> boot_guard{boot_in_progress, true};
     LOG_INFO(Frontend, "Eden starting...");
 
     if (params.program_id == 0 ||
@@ -1983,6 +1991,11 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     // behavior of asking.
     user_flag_cmd_line = false;
 
+    const auto lan_error = LanOnline::Prepare(this, title_id);
+    if (!lan_error.isEmpty()) {
+        QMessageBox::warning(this, tr("LAN Online"), lan_error);
+        return;
+    }
     if (!LoadROM(filename, params)) {
         return;
     }

@@ -29,11 +29,10 @@
 #include "common/assert.h"
 #include "common/common_types.h"
 #include "common/logging.h"
-#include "common/settings.h"
 #include "core/internal_network/network.h"
 #include "core/internal_network/network_interface.h"
+#include "core/internal_network/nso_lan.h"
 #include "core/internal_network/sockets.h"
-#include "network/network.h"
 
 namespace Network {
 
@@ -120,6 +119,12 @@ bool EnableNonBlock(SOCKET fd, bool enable) {
 
 Errno TranslateNativeError(int e, CallType call_type = CallType::Other) {
     switch (e) {
+    case WSAEACCES:
+        return Errno::ACCES;
+    case WSAEADDRINUSE:
+        return Errno::ADDRINUSE;
+    case WSAEADDRNOTAVAIL:
+        return Errno::ADDRNOTAVAIL;
     case 0:
         return Errno::SUCCESS;
     case WSAEBADF:
@@ -265,6 +270,13 @@ bool EnableNonBlock(int fd, bool enable) {
 
 Errno TranslateNativeError(int e, CallType call_type = CallType::Other) {
     switch (e) {
+    case EACCES:
+    case EPERM:
+        return Errno::ACCES;
+    case EADDRINUSE:
+        return Errno::ADDRINUSE;
+    case EADDRNOTAVAIL:
+        return Errno::ADDRNOTAVAIL;
     case 0:
         return Errno::SUCCESS;
     case EBADF:
@@ -707,6 +719,9 @@ void RestartSocketOperations() {
 }
 
 std::optional<IPv4Address> GetHostIPv4Address() {
+    if (const auto* automatic = NsoLan::GetAutomaticTransport()) {
+        return automatic->instance_address;
+    }
     const auto network_interface = Network::GetSelectedNetworkInterface();
     if (!network_interface.has_value()) {
         // Only print the error once to avoid log spam

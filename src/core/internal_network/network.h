@@ -51,6 +51,9 @@ enum class Errno {
     INPROGRESS,
     ISCONN,
     OTHER,
+    ACCES,
+    ADDRINUSE,
+    ADDRNOTAVAIL,
 };
 
 enum class GetAddrInfoError {

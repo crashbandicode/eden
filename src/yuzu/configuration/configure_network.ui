@@ -42,6 +42,26 @@
           </property>
          </widget>
         </item>
+        <item row="3" column="0" colspan="2">
+         <widget class="QCheckBox" name="lan_online">
+          <property name="text">
+           <string>LAN Online (Linux preview)</string>
+          </property>
+          <property name="toolTip">
+           <string>Find other Eden players automatically for online game modes on your local network. Requires the LAN Online package. Restart Eden after changing this setting.</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
+         <widget class="QCheckBox" name="lan_online_tls">
+          <property name="text">
+           <string>Encrypt LAN lobby connections (TLS)</string>
+          </property>
+          <property name="toolTip">
+           <string>Use the same setting on every instance; different settings create separate lobbies. Encrypts lobby connections between PCs against eavesdropping, but does not verify who runs the lobby. Local Unix transport and gameplay packets are unchanged. Restart Eden after changing this setting.</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>

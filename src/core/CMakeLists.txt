@@ -1101,6 +1101,11 @@ add_library(core STATIC
     tools/renderdoc.cpp
     tools/renderdoc.h)
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(core PRIVATE internal_network/nso_lan_socket.cpp internal_network/nso_lan_socket.h)
+    target_compile_definitions(core PRIVATE EDEN_LAN_ONLINE_SOCKET)
+endif()
+
 if (ENABLE_WIFI_SCAN)
     target_sources(core PRIVATE internal_network/wifi_scanner.cpp)
     if (LINUX)

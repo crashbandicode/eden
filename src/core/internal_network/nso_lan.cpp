@@ -2,11 +2,14 @@
 #include "core/internal_network/nso_lan.h"
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <cstdlib>
 #include <fstream>
+#include <filesystem>
 #include <iterator>
 #include <limits>
+#include <mutex>
 #include <nlohmann/json.hpp>
 
 namespace Network::NsoLan {
@@ -59,6 +62,17 @@ struct State {
     std::optional<Configuration> config;
 };
 
+struct AutomaticState {
+    std::mutex mutex;
+    std::optional<Configuration> config;
+    std::atomic<bool> ready{false};
+};
+
+AutomaticState& GetAutomaticState() {
+    static AutomaticState state;
+    return state;
+}
+
 const State& GetState() {
     static const State state = [] {
         State value;
@@ -76,6 +90,9 @@ const State& GetState() {
         text.resize(static_cast<std::size_t>(input.gcount()));
         if (text.size() <= 65536) {
             value.config = ParseConfiguration(text);
+            if (value.config && value.config->automatic_transport) {
+                value.config.reset(); // The managed transport cannot be activated by a legacy file.
+            }
         }
         return value;
     }();
@@ -91,7 +108,8 @@ std::optional<Configuration> ParseConfiguration(std::string_view text) {
             return std::nullopt;
         }
         Configuration config{.account_id = json.at("account_id").get<u64>(),
-                             .dns = {}, .allowed_ips = {}, .ports = {}};
+                             .dns = {}, .allowed_ips = {}, .ports = {},
+                             .automatic_transport = {}};
         if (config.account_id == 0 || config.account_id > std::numeric_limits<u32>::max()) {
             return std::nullopt;
         }
@@ -133,8 +151,43 @@ std::optional<Configuration> ParseConfiguration(std::string_view text) {
                     })) {
                     return std::nullopt;
                 }
-                config.ports.push_back({*ip, static_cast<u16>(from), static_cast<u16>(to)});
+                std::optional<IPv4Address> target;
+                if (item.contains("target_address")) {
+                    target = ParsePrivateAddress(item.at("target_address").get<std::string>());
+                    if (!target || !Contains(config, *target)) {
+                        return std::nullopt;
+                    }
+                }
+                config.ports.push_back({*ip, static_cast<u16>(from), static_cast<u16>(to), target});
             }
+        }
+        if (json.contains("auto_transport")) {
+            const auto& transport = json.at("auto_transport");
+            const auto address = ParsePrivateAddress(transport.at("instance_ip").get<std::string>());
+            const auto control = transport.at("control_socket").get<std::string>();
+            const auto datagram = transport.at("datagram_socket").get<std::string>();
+            const std::filesystem::path control_path{control}, datagram_path{datagram};
+            if (!address || (*address)[0] != 10 || (*address)[1] != 253 ||
+                *address == IPv4Address{10, 253, 0, 0} ||
+                *address == IPv4Address{10, 253, 255, 255} ||
+                !Contains(config, *address) || control.empty() || datagram.empty() ||
+                control.size() >= 108 || datagram.size() >= 108 ||
+                control.find('\0') != std::string::npos || datagram.find('\0') != std::string::npos ||
+                !control_path.is_absolute() || !datagram_path.is_absolute() ||
+                control_path.lexically_normal() != control_path ||
+                datagram_path.lexically_normal() != datagram_path ||
+                control_path.parent_path() != datagram_path.parent_path() ||
+                control_path.filename() != "control.sock" || datagram_path.filename() != "data.sock") {
+                return std::nullopt;
+            }
+            for (const auto& redirect : config.ports) {
+                if (redirect.target_address != IPv4Address{127, 0, 0, 1} ||
+                    (redirect.address != IPv4Address{10, 254, 0, 1} &&
+                     redirect.address != IPv4Address{10, 254, 0, 2})) {
+                    return std::nullopt;
+                }
+            }
+            config.automatic_transport = AutomaticTransport{control, datagram, *address};
         }
         return config;
     } catch (const nlohmann::json::exception&) {
@@ -143,11 +196,40 @@ std::optional<Configuration> ParseConfiguration(std::string_view text) {
 }
 
 bool IsRequested() {
-    return GetState().requested;
+    return GetAutomaticState().ready.load(std::memory_order_acquire) || GetState().requested;
 }
 
 const std::optional<Configuration>& GetConfiguration() {
+    const auto& automatic = GetAutomaticState();
+    if (automatic.ready.load(std::memory_order_acquire)) {
+        return automatic.config;
+    }
     return GetState().config;
+}
+
+bool InstallAutomaticConfiguration(std::string_view text, std::string_view expected_directory) {
+    if (GetState().requested || text.size() > 65536) {
+        return false;
+    }
+    auto config = ParseConfiguration(text);
+    if (!config || !config->automatic_transport || expected_directory.empty() ||
+        std::filesystem::path{config->automatic_transport->control_socket}.parent_path() !=
+            std::filesystem::path{expected_directory}) {
+        return false;
+    }
+    auto& automatic = GetAutomaticState();
+    const std::lock_guard guard{automatic.mutex};
+    if (automatic.ready.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    automatic.config = std::move(config);
+    automatic.ready.store(true, std::memory_order_release);
+    return true;
+}
+
+const AutomaticTransport* GetAutomaticTransport() {
+    const auto& config = GetConfiguration();
+    return config && config->automatic_transport ? &*config->automatic_transport : nullptr;
 }
 
 std::optional<std::string> ResolveHost(std::string_view host) {
@@ -181,19 +263,35 @@ std::string ResolveServiceName(std::string_view service_name) {
     return config->dns.contains(NormalizeHost(result)) ? result : std::string{service_name};
 }
 
-std::optional<SockAddrIn> RouteDestination(SockAddrIn address) {
+std::optional<SockAddrIn> RouteDestination(SockAddrIn address, bool datagram) {
     if (!IsRequested()) {
         return address;
     }
     const auto& config = GetConfiguration();
-    if (!config || address.family != Domain::INET || !Contains(*config, address.ip)) {
+    if (!config || address.family != Domain::INET) {
         return std::nullopt;
+    }
+    const bool virtual_peer = config->automatic_transport && address.ip[0] == 10 &&
+                              address.ip[1] == 253;
+    // Logical peer addresses are delivered only through the datagram broker,
+    // never passed to the host's native TCP routing table.
+    if ((virtual_peer && !datagram) || (!virtual_peer && !Contains(*config, address.ip))) {
+        return std::nullopt;
+    }
+    if (config->automatic_transport && datagram) {
+        return address;
     }
     for (const auto& entry : config->ports) {
         if (entry.address == address.ip && entry.from == address.portno) {
             address.portno = entry.to;
-            break;
+            if (entry.target_address) {
+                address.ip = *entry.target_address;
+            }
+            return address;
         }
+    }
+    if (config->automatic_transport) {
+        return std::nullopt; // Native TCP can reach only the explicitly mapped local proxies.
     }
     return address;
 }

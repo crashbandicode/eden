@@ -326,7 +326,7 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
         return CS::Success(QJsonObject{{QStringLiteral("filter"), value}});
     }
     if (method.startsWith(QStringLiteral("game."))) {
-        if (game_job_pending) {
+        if (game_job_pending || window.IsBootInProgress()) {
             return CS::Error(QStringLiteral("busy"), QStringLiteral("Another game operation is still running; inspect jobs.list and active dialogs"));
         }
         if (QApplication::activeModalWidget()) {

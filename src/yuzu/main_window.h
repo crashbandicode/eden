@@ -173,6 +173,7 @@ class MainWindow : public QMainWindow {
     static const int max_recent_files_item = 10;
 
 public:
+    bool IsBootInProgress() const { return boot_in_progress; }
     void filterBarSetChecked(bool state);
     void UpdateUITheme();
     explicit MainWindow(bool has_broken_vulkan);
@@ -257,6 +258,7 @@ public slots:
     void OnTasStateChanged();
 
 private:
+    bool boot_in_progress = false;
     /// Updates an action's shortcut and text to reflect an updated hotkey from the hotkey registry.
     void LinkActionShortcut(QAction* action, const QString& action_name,
                             const bool tas_allowed = false);

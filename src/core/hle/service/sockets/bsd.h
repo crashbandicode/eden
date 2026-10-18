@@ -13,6 +13,7 @@
 #include "common/common_types.h"
 #include "common/socket_types.h"
 #include "core/hle/service/service.h"
+#include "core/hle/service/sockets/descriptor_table.h"
 #include "core/hle/service/sockets/sockets.h"
 #include "network/network.h"
 
@@ -40,15 +41,6 @@ public:
     std::optional<std::shared_ptr<Network::SocketBase>> GetSocket(s32 fd);
 
 private:
-    /// Maximum number of file descriptors
-    static constexpr size_t MAX_FD = 128;
-
-    struct FileDescriptor {
-        std::shared_ptr<Network::SocketBase> socket;
-        s32 flags = 0;
-        bool is_connection_based = false;
-    };
-
     struct PollWork {
         void Execute(BSD_USA* bsd);
         void Response(HLERequestContext& ctx);
@@ -174,12 +166,13 @@ private:
     std::pair<s32, Errno> SendToImpl(s32 fd, u32 flags, std::span<const u8> message,
                                      std::span<const u8> addr);
 
-    s32 FindFreeFileDescriptorHandle() noexcept;
-    bool IsFileDescriptorValid(s32 fd) const noexcept;
+    /// Strong snapshot of a valid descriptor, or nullopt (logged) when fd is invalid.
+    std::optional<DescriptorTable::Entry> GetDescriptor(s32 fd) const;
 
     void BuildErrnoResponse(HLERequestContext& ctx, Errno bsd_errno) const noexcept;
 
-    static inline std::array<std::optional<FileDescriptor>, MAX_FD> file_descriptors{};
+    /// Shared by bsd:s, bsd:u, bsd:a and SSL; LockService does not serialize their host threads.
+    static inline DescriptorTable file_descriptors{};
 
     /// Callback to parse and handle a received wifi packet.
     void OnProxyPacketReceived(const Network::ProxyPacket& packet);

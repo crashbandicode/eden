@@ -139,6 +139,8 @@ struct Values {
                                       true};
 
     Setting<bool> check_for_updates{linkage, true, "check_for_updates", Category::UiGeneral};
+    // Frontend-only: chooses the managed LAN runtime's cross-PC control transport.
+    Setting<bool> lan_online_tls{linkage, false, "lan_online_tls", Category::UiGeneral};
 
     // Linux/MinGW may support (requires libdl support)
     SwitchableSetting<bool> enable_gamemode{linkage,

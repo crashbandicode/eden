@@ -5,6 +5,7 @@
 #include "core/internal_network/emu_net_state.h"
 #include "core/internal_network/network.h"
 #include "core/internal_network/network_interface.h"
+#include "core/internal_network/nso_lan.h"
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -39,6 +40,21 @@ u8 QualityToBars(u8 q) {
 void RefreshFromHost() {
     auto& st = Network::EmuNetState::Get();
     std::scoped_lock lk{st.mtx};
+
+    if (const auto* automatic = NsoLan::GetAutomaticTransport()) {
+        st.connected = !Settings::values.airplane_mode.GetValue();
+        st.via_wifi = false;
+        st.wifi_enabled = false;
+        st.ethernet_enabled = st.connected;
+        std::memset(st.ssid, 0, sizeof(st.ssid));
+        std::strncpy(st.ssid, "Eden LAN Online", sizeof(st.ssid) - 1);
+        st.secure = false;
+        st.bars = st.connected ? 3 : 0;
+        st.ip = automatic->instance_address;
+        st.mask = {255, 255, 0, 0};
+        st.gw = {}; // The point-to-point overlay has no guest-visible IP router.
+        return;
+    }
 
     const auto sel = GetSelectedNetworkInterface();
 

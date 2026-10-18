@@ -8,12 +8,18 @@
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/internal_network/network_interface.h"
+#include "qt_common/config/uisettings.h"
 #include "ui_configure_network.h"
 #include "yuzu/configuration/configure_network.h"
 
 ConfigureNetwork::ConfigureNetwork(const Core::System& system_, QWidget* parent)
     : QWidget(parent), ui(std::make_unique<Ui::ConfigureNetwork>()), system{system_} {
     ui->setupUi(this);
+    connect(ui->lan_online, &QCheckBox::clicked, this, [this](bool enabled) {
+        if (enabled) {
+            ui->airplane_mode->setChecked(false);
+        }
+    });
     for (const auto& iface : Network::GetAvailableNetworkInterfaces())
         ui->network_interface->addItem(QString::fromStdString(iface.name));
     this->SetConfiguration();
@@ -24,6 +30,8 @@ ConfigureNetwork::~ConfigureNetwork() = default;
 void ConfigureNetwork::ApplyConfiguration() {
     Settings::values.network_interface = ui->network_interface->currentText().toStdString();
     Settings::values.airplane_mode = ui->airplane_mode->isChecked();
+    Settings::values.lan_online = ui->lan_online->isChecked();
+    UISettings::values.lan_online_tls = ui->lan_online_tls->isChecked();
 }
 
 void ConfigureNetwork::changeEvent(QEvent* event) {
@@ -45,4 +53,12 @@ void ConfigureNetwork::SetConfiguration() {
     ui->network_interface->setCurrentText(QString::fromStdString(network_interface));
     ui->network_interface->setEnabled(runtime_lock);
     ui->airplane_mode->setChecked(airplane_mode);
+    ui->lan_online->setChecked(Settings::values.lan_online.GetValue());
+    ui->lan_online->setEnabled(runtime_lock);
+    ui->lan_online_tls->setChecked(UISettings::values.lan_online_tls.GetValue());
+    ui->lan_online_tls->setEnabled(runtime_lock);
+#ifndef __linux__
+    ui->lan_online->setEnabled(false);
+    ui->lan_online_tls->setEnabled(false);
+#endif
 }

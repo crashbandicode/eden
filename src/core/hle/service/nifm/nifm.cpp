@@ -15,6 +15,7 @@
 #include "core/internal_network/emu_net_state.h"
 #include "core/internal_network/network.h"
 #include "core/internal_network/network_interface.h"
+#include "core/internal_network/nso_lan.h"
 #include "core/internal_network/wifi_scanner.h"
 #include "network/network.h"
 
@@ -220,6 +221,25 @@ struct PendingProfile {
     u8 ssid_len{};
     std::array<char, 0x41> passphrase{};
 };
+
+static SfNetworkProfileData AutomaticNetworkProfile() {
+    Network::RefreshFromHost();
+    const auto& state = Network::EmuNetState::Get();
+    SfNetworkProfileData profile{};
+    profile.ip_setting_data.ip_address_setting.is_automatic = true;
+    profile.ip_setting_data.ip_address_setting.ip_address = state.ip;
+    profile.ip_setting_data.ip_address_setting.subnet_mask = state.mask;
+    profile.ip_setting_data.ip_address_setting.default_gateway = state.gw;
+    profile.ip_setting_data.dns_setting.is_automatic = true;
+    profile.ip_setting_data.dns_setting.primary_dns = {10, 254, 0, 1};
+    profile.ip_setting_data.dns_setting.secondary_dns = {10, 254, 0, 2};
+    profile.ip_setting_data.mtu = 1500;
+    profile.uuid = MakeUuidFromName(state.ssid);
+    std::strncpy(profile.network_name.data(), state.ssid, profile.network_name.size() - 1);
+    profile.profile_type = static_cast<u8>(NetworkProfileType::User);
+    profile.interface_type = static_cast<u8>(NetworkInterfaceType::Ethernet);
+    return profile;
+}
 
 constexpr Result ResultPendingConnection{ErrorModule::NIFM, 111};
 constexpr Result ResultInvalidInput{ErrorModule::NIFM, 112};
@@ -550,6 +570,12 @@ void IGeneralService::CreateRequest(HLERequestContext& ctx) {
 
 void IGeneralService::GetCurrentNetworkProfile(HLERequestContext& ctx) {
 
+    if (Network::NsoLan::GetAutomaticTransport()) {
+        ctx.WriteBuffer(AutomaticNetworkProfile());
+        IPC::ResponseBuilder{ctx, 2}.Push(ResultSuccess);
+        return;
+    }
+
     Network::RefreshFromHost();
     const auto net_iface = Network::GetSelectedNetworkInterface();
     const auto& st = Network::EmuNetState::Get();
@@ -575,7 +601,7 @@ void IGeneralService::GetCurrentNetworkProfile(HLERequestContext& ctx) {
         std::strncpy(profile.network_name.data(), st.ssid, sizeof(profile.network_name) - 1);
 
         if (auto room_member = Network::GetRoomMember().lock()) {
-            if (room_member->IsConnected()) {
+            if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
                 profile.ip_setting_data.ip_address_setting.ip_address =
                     room_member->GetFakeIpAddress();
             }
@@ -631,8 +657,9 @@ void IGeneralService::EnumerateNetworkInterfaces(HLERequestContext& ctx) {
 
 void IGeneralService::EnumerateNetworkProfiles(HLERequestContext& ctx) {
     const auto adapter = Network::GetSelectedNetworkInterface();
+    const bool automatic = Network::NsoLan::GetAutomaticTransport() != nullptr;
 
-    if (!adapter) {
+    if (!adapter && !automatic) {
         IPC::ResponseBuilder rb{ctx, 3};
         rb.Push(ResultSuccess);
         rb.Push(0);
@@ -644,7 +671,7 @@ void IGeneralService::EnumerateNetworkProfiles(HLERequestContext& ctx) {
     std::vector<u128> uuids;
     uuids.reserve(count);
 
-    uuids.push_back(MakeUuidFromName(adapter.value().name));
+    uuids.push_back(automatic ? AutomaticNetworkProfile().uuid : MakeUuidFromName(adapter->name));
 
     const size_t guest_sz = ctx.GetWriteBufferSize();
     if (guest_sz && uuids.size()) {
@@ -668,6 +695,9 @@ void IGeneralService::GetNetworkProfile(HLERequestContext& ctx) {
     const auto net_iface = Network::GetSelectedNetworkInterface();
 
     SfNetworkProfileData profile = [&] {
+        if (Network::NsoLan::GetAutomaticTransport()) {
+            return AutomaticNetworkProfile();
+        }
         if (!net_iface) {
             return SfNetworkProfileData{};
         }
@@ -715,7 +745,7 @@ void IGeneralService::GetNetworkProfile(HLERequestContext& ctx) {
     }();
 
     if (auto room_member = Network::GetRoomMember().lock()) {
-        if (room_member->IsConnected()) {
+        if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
             profile.ip_setting_data.ip_address_setting.ip_address = room_member->GetFakeIpAddress();
         }
     }
@@ -856,7 +886,7 @@ void IGeneralService::GetCurrentIpAddress(HLERequestContext& ctx) {
     }
 
     if (auto room_member = Network::GetRoomMember().lock()) {
-        if (room_member->IsConnected()) {
+        if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
             ipv4 = room_member->GetFakeIpAddress();
         }
     }
@@ -904,7 +934,9 @@ void IGeneralService::GetCurrentIpConfigInfo(HLERequestContext& ctx) {
         info.dns.secondary_dns = {8, 8, 8, 8};
     }
 
-    if (auto room_member = Network::GetRoomMember().lock()) {
+    if (Network::NsoLan::GetAutomaticTransport()) {
+        info.dns = AutomaticNetworkProfile().ip_setting_data.dns_setting;
+    } else if (auto room_member = Network::GetRoomMember().lock()) {
         if (room_member->IsConnected()) {
             info.ip.ip_address = room_member->GetFakeIpAddress();
         }

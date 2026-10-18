@@ -21,6 +21,42 @@ def run(args, **kwargs):
     return subprocess.run(args, check=True, timeout=kwargs.pop("timeout", 120), **kwargs)
 
 
+LAN_REPLIES = ('0x6e_7.bin', '0x6e_9.bin', '0x6e_10.bin', '0x6e_11.bin',
+               '0x73_21.bin', '0x73_60.bin', '0x73_61.bin', '0x73_84.bin', '0x73_95.bin')
+
+
+def package_lan_runtime(app, runtime, assets, notices):
+    """Private opt-in bundle. Never discover or copy credentials from the host."""
+    if runtime.is_symlink() or not runtime.is_file() or not os.access(runtime, os.X_OK):
+        raise ValueError('LAN runtime must be a regular executable file')
+    for name in LAN_REPLIES:
+        source = assets / name
+        if source.is_symlink() or not source.is_file() or not 1 <= source.stat().st_size <= 2**20:
+            raise ValueError('LAN support directory is incomplete or invalid')
+    if not (notices / 'NOTICE.md').is_file() or not (notices / 'licenses').is_dir():
+        raise ValueError('LAN companion notices and licenses are required')
+    destination = app / 'usr/bin/eden-lan-runtime'
+    shutil.copy2(runtime, destination)
+    destination.chmod(0o755)
+    support = app / 'usr/share/eden/lan-online/init'
+    support.mkdir(parents=True)
+    for name in LAN_REPLIES:
+        shutil.copyfile(assets / name, support / name)
+        # SquashFS is packed with --all-root; support data must remain readable by the launcher.
+        (support / name).chmod(0o644)
+    licensing = app / 'usr/share/licenses/eden-lan-runtime'
+    licensing.mkdir(parents=True)
+    shutil.copy2(notices / 'NOTICE.md', licensing / 'NOTICE.md')
+    shutil.copytree(notices / 'licenses', licensing / 'licenses')
+    # The separately licensed private companion is not relicensed as Eden code.
+    vendor_license = notices / 'third_party/nextendo-nex/LICENSE.md'
+    if not vendor_license.is_file():
+        raise ValueError('LAN companion vendor license is required')
+    shutil.copy2(vendor_license, licensing / 'nextendo-LICENSE.md')
+    return {'runtime_sha256': hashlib.file_digest(destination.open('rb'), 'sha256').hexdigest(),
+            'support_files': len(LAN_REPLIES), 'distribution': 'private companion bundle'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
@@ -29,7 +65,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="new directory")
     parser.add_argument("--name", default="Eden-CLI-Control-20261005-x86_64.AppImage",
                         help="AppImage filename (without directories)")
+    parser.add_argument('--lan-runtime', type=Path, help='private static Linux LAN runtime executable')
+    parser.add_argument('--lan-assets', type=Path, help='private directory with nine reviewed support replies')
+    parser.add_argument('--lan-notices', type=Path, help='companion source package containing its license notices')
     args = parser.parse_args()
+    if any((args.lan_runtime, args.lan_assets, args.lan_notices)) and not all(
+            (args.lan_runtime, args.lan_assets, args.lan_notices)):
+        parser.error('--lan-runtime, --lan-assets and --lan-notices must be supplied together')
     if Path(args.name).name != args.name or not args.name.endswith(".AppImage"):
         parser.error("--name must be an .AppImage filename without directories")
     source = Path(__file__).resolve().parents[2]
@@ -101,6 +143,8 @@ def main():
     (share / "metainfo").mkdir()
     shutil.copy2(source / "dist/dev.eden_emu.eden.metainfo.xml", share / "metainfo")
     (share / "licenses/eden").mkdir(parents=True)
+    (share / "doc/eden").mkdir(parents=True)
+    shutil.copy2(source / "docs/LAN_ONLINE.md", share / "doc/eden/LAN_ONLINE.md")
     shutil.copy2(source / "LICENSE.txt", share / "licenses/eden/LICENSE.txt")
     shutil.copytree(source / "LICENSES", share / "licenses/eden/LICENSES")
     # Include package copyright notices, without copying unrelated manuals.
@@ -113,6 +157,9 @@ def main():
                 "runtime_sha256": hashlib.file_digest(args.runtime.open("rb"), "sha256").hexdigest(),
                 "libraries": libraries, "host_libraries": sorted(host_libraries),
                 "target": "Ubuntu 26.04 x86_64 (glibc 2.43)"}
+    if args.lan_runtime:
+        manifest['lan_online'] = package_lan_runtime(app, args.lan_runtime,
+                                                    args.lan_assets, args.lan_notices)
     (output / "package-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copy2(output / "package-manifest.json", share / "package-manifest.json")
     payload = output / "payload.squashfs"

@@ -52,6 +52,8 @@ enum class Exception {
     /// Attempted to execute a code block at an address for which MemoryReadCode returned std::nullopt.
     /// (Intended to be used to emulate memory protection faults.)
     NoExecuteFault,
+    /// A host diagnostic tracepoint, before the real guest instruction executes.
+    Tracepoint,
 };
 
 enum class DataCacheOperation {
@@ -92,6 +94,9 @@ struct UserCallbacks {
     virtual std::optional<std::uint32_t> MemoryReadCode(VAddr vaddr) {
         return std::uint32_t(MemoryRead(vaddr, sizeof(std::uint32_t)));
     }
+
+    // Queried only while translating. The caller invalidates cached code on arm.
+    virtual bool IsTracepoint(VAddr /*vaddr*/) { return false; }
 
     // Reads through these callbacks may not be aligned.
     virtual std::uint64_t MemoryRead(VAddr vaddr, std::size_t size) = 0;

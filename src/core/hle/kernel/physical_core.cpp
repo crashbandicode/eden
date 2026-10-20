@@ -4,10 +4,13 @@
 // SPDX-FileCopyrightText: Copyright 2020 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
+
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/debugger/debugger.h"
+#include "core/debugger/guest_tracepoint.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_thread.h"
 #include "core/hle/kernel/kernel.h"
@@ -103,6 +106,36 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
             }
 
             ExitContext();
+        }
+
+        if (True(hr & Core::HaltReason::Tracepoint)) {
+            // A tracepoint is a host translation boundary, not a guest BRK.
+            // RaiseException sets PC to the trace address + 4 without executing
+            // the instruction. Read after Run returns so host FP exception flags
+            // have been synchronized, then rewind only that PC.
+            auto& context = thread->GetContext();
+            interface->GetContext(context);
+            context.pc -= sizeof(u32);
+            interface->SetContext(context);
+            Core::GuestTracepoint::Registers registers{};
+            std::copy(context.r.begin(), context.r.end(), registers.begin());
+            registers[29] = context.fp;
+            registers[30] = context.lr;
+            registers[31] = context.sp;
+            registers[32] = context.pc;
+            registers[33] = context.pstate;
+            system.GetGuestTracepoint().Capture(
+                process->GetProcessId(), thread->GetThreadId(), registers,
+                [process](u64 address, std::span<u8> bytes) {
+                    // Deliberately CPU-visible bytes. GPU flushing would turn a
+                    // bounded diagnostic into a potentially blocking readback.
+                    auto& memory = process->GetMemory();
+                    return memory.IsValidVirtualAddressRange(address, bytes.size()) &&
+                           memory.ReadBlockUnsafe(address, bytes.data(), bytes.size());
+                });
+            // Invalidation is queued by Dynarmic and applied before it re-enters
+            // generated code. Stale tracepoints on other cores do the same.
+            interface->InvalidateCacheRange(context.pc, sizeof(u32));
         }
 
         // Determine why we stopped.

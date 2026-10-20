@@ -22,6 +22,7 @@
 #include "core/core_timing.h"
 #include "core/cpu_manager.h"
 #include "core/debugger/debugger.h"
+#include "core/debugger/guest_tracepoint.h"
 #include "core/device_memory.h"
 #include "core/file_sys/fs_filesystem.h"
 #include "core/file_sys/patch_manager.h"
@@ -413,6 +414,7 @@ struct System::Impl {
 
     void ShutdownMainProcess() {
         SetShuttingDown(true);
+        guest_tracepoint.Cancel();
         Common::ADPF::Shutdown();
 
         // Reset per-game flags
@@ -498,6 +500,7 @@ struct System::Impl {
 
     std::optional<Service::Services> services;
     std::optional<Core::Debugger> debugger;
+    Core::GuestTracepoint guest_tracepoint;
     std::optional<Service::KernelHelpers::ServiceContext> general_channel_context;
     std::optional<Service::Event> general_channel_event;
     std::optional<Core::PerfStats> perf_stats;
@@ -945,6 +948,10 @@ Core::Debugger& System::GetDebugger() {
 
 const Core::Debugger& System::GetDebugger() const {
     return *impl->debugger;
+}
+
+Core::GuestTracepoint& System::GetGuestTracepoint() {
+    return impl->guest_tracepoint;
 }
 
 Tools::RenderdocAPI& System::GetRenderdocAPI() {

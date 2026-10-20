@@ -75,6 +75,20 @@ def main(argv=None):
     call.add_argument("method")
     call.add_argument("params", nargs="?", default="{}", help="JSON object, or - to read stdin")
     commands.add_parser("attach", help="read JSON requests from stdin; one JSON response per line")
+    tracepoint = commands.add_parser("tracepoint", help="capture one bounded guest instruction hit and automatically continue")
+    trace_commands = tracepoint.add_subparsers(dest="trace_command", required=True)
+    trace_arm = trace_commands.add_parser("arm")
+    trace_arm.add_argument("address", help="guest instruction address, decimal or 0x hexadecimal")
+    trace_arm.add_argument("--register", dest="registers", action="append", required=True,
+                           choices=[f"x{i}" for i in range(31)] + ["sp", "pc", "pstate"])
+    trace_memory = trace_arm.add_mutually_exclusive_group()
+    trace_memory.add_argument("--memory-address", help="fixed guest buffer address")
+    trace_memory.add_argument("--memory-register", choices=[f"x{i}" for i in range(31)] + ["sp", "pc"])
+    trace_arm.add_argument("--memory-offset", type=int)
+    trace_arm.add_argument("--memory-size", type=int, help="1..4096 bytes; defaults to 64 when a buffer is selected")
+    trace_arm.add_argument("--timeout-ms", type=int, default=5000, help="1..30000; one hit maximum")
+    trace_commands.add_parser("status")
+    trace_commands.add_parser("cancel")
     recording = commands.add_parser("recording", help="record game frames to an animated GIF")
     record_commands = recording.add_subparsers(dest="record_command", required=True)
     record_start = record_commands.add_parser("start")
@@ -190,6 +204,14 @@ def main(argv=None):
             params = json.loads(sys.stdin.read() if args.params == "-" else args.params)
             if not isinstance(params, dict):
                 raise ValueError("params must be a JSON object")
+        elif args.command == "tracepoint":
+            method = "tracepoint." + args.trace_command
+            if args.trace_command == "arm":
+                for key in ("address", "registers", "memory_address", "memory_register",
+                            "memory_offset", "memory_size", "timeout_ms"):
+                    value = getattr(args, key, None)
+                    if value is not None:
+                        params[key] = value
         elif args.command == "recording":
             method = "recording." + args.record_command
             if args.record_command == "start":

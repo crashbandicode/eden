@@ -13,6 +13,7 @@
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
 #include "core/core_timing.h"
+#include "core/debugger/guest_tracepoint.h"
 #include "core/hle/kernel/k_process.h"
 #include "dynarmic/interface/A64/config.h"
 
@@ -69,6 +70,10 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
         last_code_addr = aligned_vaddr;
     }
     return cached_code_page.inst[(vaddr & Core::Memory::YUZU_PAGEMASK) / sizeof(u32)];
+}
+
+bool DynarmicCallbacks64::IsTracepoint(u64 vaddr) {
+    return m_parent.m_system.GetGuestTracepoint().ShouldInstrument(m_process->GetProcessId(), vaddr);
 }
 
 void DynarmicCallbacks64::MemoryWrite(Dynarmic::A64::VAddr vaddr, u64 value, std::size_t size) {
@@ -132,6 +137,11 @@ void DynarmicCallbacks64::InstructionCacheOperationRaised(Dynarmic::A64::Instruc
 
 void DynarmicCallbacks64::ExceptionRaised(u64 pc, Dynarmic::A64::Exception exception) {
     switch (exception) {
+    case Dynarmic::A64::Exception::Tracepoint:
+        // Read the complete context only after Run returns: host FP exception
+        // flags are synchronized at that boundary.
+        m_parent.m_jit->HaltExecution(Tracepoint);
+        return;
     case Dynarmic::A64::Exception::WaitForInterrupt:
     case Dynarmic::A64::Exception::WaitForEvent:
     case Dynarmic::A64::Exception::SendEvent:

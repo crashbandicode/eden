@@ -38,6 +38,13 @@ target_include_directories(gpu-write-read-trace-tests PRIVATE ..)
 target_link_libraries(gpu-write-read-trace-tests PRIVATE Threads::Threads)
 add_test(NAME gpu-write-read-trace-tests COMMAND gpu-write-read-trace-tests)
 
+add_executable(guest-tracepoint-tests
+    core/guest_tracepoint.cpp
+    ../core/debugger/guest_tracepoint.cpp)
+target_include_directories(guest-tracepoint-tests PRIVATE ..)
+target_link_libraries(guest-tracepoint-tests PRIVATE Threads::Threads)
+add_test(NAME guest-tracepoint-tests COMMAND guest-tracepoint-tests)
+
 # needed for vma
 if (NOT MSVC)
     target_compile_options(tests PRIVATE

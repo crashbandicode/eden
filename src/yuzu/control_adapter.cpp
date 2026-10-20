@@ -6,11 +6,13 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QRegularExpression>
+#include <QTimer>
 
 #include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
 #include "core/core.h"
+#include "core/debugger/guest_tracepoint.h"
 #include "core/hle/service/am/applet_manager.h"
 #include "core/perf_stats.h"
 #include "qt_common/config/uisettings.h"
@@ -21,6 +23,7 @@
 #include "yuzu/macro_recorder.h"
 #include "yuzu/control_input.h"
 #include "yuzu/control_server.h"
+#include "yuzu/control_tracepoint.h"
 #include "yuzu/main_window.h"
 #include "yuzu/bootmanager.h"
 #include "video_core/shader_notify.h"
@@ -152,6 +155,12 @@ ControlAdapter::ControlAdapter(MainWindow& window_, ControlServer& server_)
     : QObject{&window_}, window{window_}, server{server_},
       input{std::make_unique<ControlInput>(*window.input_subsystem)} {
     telemetry_clock.start();
+    auto* trace_timer = new QTimer(this);
+    trace_timer->setInterval(50);
+    connect(trace_timer, &QTimer::timeout, this, [] {
+        QtCommon::system->GetGuestTracepoint().Poll();
+    });
+    trace_timer->start();
     connect(window.macro_recorder.get(), &MacroRecorder::PlaybackStarting, this,
             [this](int player) { input->ResetPlayer(player); });
     server.SetHandler([this](const QString& method, const QJsonObject& params) {
@@ -208,6 +217,14 @@ QJsonObject ControlAdapter::QueueGame(const QString& method, std::function<QJson
 }
 
 QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& params) {
+    if (method.startsWith(QStringLiteral("tracepoint."))) {
+        if (method == QStringLiteral("tracepoint.arm") &&
+            (game_job_pending || window.IsBootInProgress() ||
+             !QtCommon::emu_thread || !QtCommon::emu_thread->IsRunning())) {
+            return CS::Error(QStringLiteral("not_running"), QStringLiteral("A game must be running"));
+        }
+        return HandleGuestTracepoint(*QtCommon::system, method, params);
+    }
     if (method.startsWith(QStringLiteral("macro."))) {
         return window.macro_recorder->Handle(method, params);
     }

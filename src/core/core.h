@@ -117,6 +117,7 @@ namespace Core {
 
 class CpuManager;
 class Debugger;
+class GuestTracepoint;
 class DeviceMemory;
 class ExclusiveMonitor;
 class GPUDirtyMemoryManager;
@@ -379,6 +380,7 @@ public:
 
     [[nodiscard]] Core::Debugger& GetDebugger();
     [[nodiscard]] const Core::Debugger& GetDebugger() const;
+    [[nodiscard]] Core::GuestTracepoint& GetGuestTracepoint();
 
     [[nodiscard]] Tools::RenderdocAPI& GetRenderdocAPI();
 

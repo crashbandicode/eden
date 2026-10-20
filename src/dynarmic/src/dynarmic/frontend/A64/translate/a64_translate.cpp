@@ -18,13 +18,20 @@ namespace Dynarmic::A64 {
 
 void Translate(IR::Block& block, LocationDescriptor descriptor, MemoryReadCodeFuncType memory_read_code, TranslationOptions options) {
     const bool single_step = descriptor.SingleStepping();
+    const auto is_tracepoint = std::move(options.is_tracepoint);
     TranslatorVisitor visitor{block, descriptor, std::move(options)};
 
     bool should_continue = true;
     do {
         const u64 pc = visitor.ir.current_location->PC();
         if (const auto instruction = memory_read_code(pc)) {
-            if (auto decoder = Decode<TranslatorVisitor, bool>(visitor, *instruction)) {
+            if (is_tracepoint && is_tracepoint(pc)) {
+                should_continue = visitor.RaiseException(Exception::Tracepoint);
+                // Include this address in the invalidation range, but do not
+                // charge a guest instruction that has not executed.
+                visitor.ir.current_location = visitor.ir.current_location->AdvancePC(4);
+                break;
+            } else if (auto decoder = Decode<TranslatorVisitor, bool>(visitor, *instruction)) {
                 should_continue = *decoder;
             } else {
                 should_continue = visitor.RaiseException(Exception::UnallocatedEncoding);

@@ -40,6 +40,7 @@ public:
     u64 MemoryRead(u64 vaddr, size_t size) override;
     Dynarmic::A64::Vector MemoryRead128(u64 vaddr) override;
     std::optional<u32> MemoryReadCode(u64 vaddr) override;
+    bool IsTracepoint(u64 vaddr) override;
     void InstructionSynchronizationBarrierRaised() override {
         last_code_addr = u64(-1); //reset back, force refetch
     }

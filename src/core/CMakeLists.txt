@@ -40,6 +40,8 @@ add_library(core STATIC
     debugger/debugger.cpp
     debugger/debugger.h
     debugger/debugger_interface.h
+    debugger/guest_tracepoint.cpp
+    debugger/guest_tracepoint.h
     debugger/gdbstub.cpp
     debugger/gdbstub.h
     debugger/gdbstub_arch.cpp

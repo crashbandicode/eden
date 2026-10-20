@@ -185,6 +185,8 @@ add_executable(yuzu
     gif_writer.h
     control_adapter.cpp
     control_adapter.h
+    control_tracepoint.cpp
+    control_tracepoint.h
     control_input.cpp
     control_input.h
 

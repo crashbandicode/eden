@@ -86,7 +86,8 @@ def main(argv=None):
     trace_memory.add_argument("--memory-register", choices=[f"x{i}" for i in range(31)] + ["sp", "pc"])
     trace_arm.add_argument("--memory-offset", type=int)
     trace_arm.add_argument("--memory-size", type=int, help="1..4096 bytes; defaults to 64 when a buffer is selected")
-    trace_arm.add_argument("--timeout-ms", type=int, default=5000, help="1..30000; one hit maximum")
+    trace_arm.add_argument("--timeout-ms", type=int, default=5000,
+                           help="1..600000 ms (up to 10 minutes; default 5000); one hit maximum")
     trace_commands.add_parser("status")
     trace_commands.add_parser("cancel")
     recording = commands.add_parser("recording", help="record game frames to an animated GIF")

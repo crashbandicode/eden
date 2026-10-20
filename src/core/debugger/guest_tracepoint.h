@@ -23,7 +23,7 @@ class GuestTracepoint {
 public:
     using Clock = std::chrono::steady_clock;
     static constexpr u32 MaxMemoryBytes = 4096;
-    static constexpr u32 MaxTimeoutMs = 30000;
+    static constexpr u32 MaxTimeoutMs = 600000; // 10 minutes
     static constexpr u8 RegisterCount = 34; // x0..x30, sp, pc, pstate
     using Registers = std::array<u64, RegisterCount>;
     using MemoryReader = std::function<bool(u64, std::span<u8>)>;

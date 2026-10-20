@@ -28,6 +28,25 @@ class TracepointCLI(unittest.TestCase):
                 "memory_size": 32, "timeout_ms": 1200,
             })
 
+    def test_timeout_values_are_forwarded_exactly(self):
+        cases = (
+            (("--timeout-ms", "300000"), 300000),
+            (("--timeout-ms", "600000"), 600000),
+            ((), 5000),
+        )
+        for timeout_args, expected_timeout in cases:
+            with self.subTest(timeout_ms=expected_timeout):
+                with patch.object(edenctl.Client, "request", return_value={"ok": True}) as request:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(edenctl.main([
+                            "--socket", "/tmp/tracepoint-test.sock", "tracepoint", "arm",
+                            "0x1000", "--register", "x0", *timeout_args,
+                        ]), 0)
+                    request.assert_called_once_with("tracepoint.arm", {
+                        "address": "0x1000", "registers": ["x0"],
+                        "timeout_ms": expected_timeout,
+                    })
+
     def test_status_and_cancel(self):
         for command in ("status", "cancel"):
             with self.subTest(command=command):

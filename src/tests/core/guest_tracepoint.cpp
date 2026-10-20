@@ -101,6 +101,91 @@ int main() {
     }
     std::cout << "PASS deadline and cancellation suppress capture\n";
     {
+        Trace::Config defaults;
+        Require(defaults.timeout_ms == 5000);
+
+        unsigned long_reads{};
+        const auto read_long = [&](u64 address, std::span<u8> bytes) {
+            ++long_reads;
+            Require(address == 0x2000 && bytes.size() == 8);
+            std::fill(bytes.begin(), bytes.end(), 0xa5);
+            return true;
+        };
+        const std::array<u32, 2> timeout_values{300000, 600000};
+        const std::array<u32, 2> late_capture_ms{299999, 599999};
+        for (std::size_t i = 0; i < timeout_values.size(); ++i) {
+            Trace trace;
+            auto long_config = config;
+            long_config.timeout_ms = timeout_values[i];
+            Require(trace.Arm(4, long_config, now).empty());
+
+            const auto past_old_limit = trace.Status(now + 30001ms);
+            Require(past_old_limit.state == Trace::State::Armed);
+            Require(past_old_limit.remaining_ms == timeout_values[i] - 30001);
+            Require(trace.ShouldInstrument(4, 0x1000));
+
+            const auto late = now + std::chrono::milliseconds{
+                static_cast<std::chrono::milliseconds::rep>(late_capture_ms[i])};
+            const auto just_before_deadline = trace.Status(late);
+            Require(just_before_deadline.state == Trace::State::Armed &&
+                    just_before_deadline.remaining_ms == 1);
+            const auto reads_before_capture = long_reads;
+            trace.Capture(4, 12, registers, read_long, late);
+            const auto captured = trace.Status(late);
+            Require(captured.state == Trace::State::Captured && captured.thread_id == 12);
+            Require(captured.values == std::vector<u64>({123, 0x1122334455667788, 0x3000, 0x1000, 0xa0000000}));
+            Require(captured.memory == std::vector<u8>(8, 0xa5));
+            Require(long_reads == reads_before_capture + 1);
+        }
+    }
+    std::cout << "PASS five- and ten-minute deadlines stay armed and capture before expiry\n";
+    {
+        auto long_config = config;
+        long_config.timeout_ms = 600000;
+        Trace trace;
+        Require(trace.Arm(4, long_config, now).empty());
+        const auto before_invalid = trace.Status(now + 30001ms);
+        Require(before_invalid.state == Trace::State::Armed && before_invalid.remaining_ms == 569999);
+
+        auto too_long = long_config;
+        too_long.timeout_ms = 600001;
+        Require(trace.Arm(4, too_long, now + 30001ms) == "invalid_tracepoint");
+        auto zero_timeout = long_config;
+        zero_timeout.timeout_ms = 0;
+        Require(trace.Arm(4, zero_timeout, now + 30001ms) == "invalid_tracepoint");
+
+        const auto after_invalid = trace.Status(now + 30001ms);
+        Require(after_invalid.id == before_invalid.id && after_invalid.process_id == before_invalid.process_id);
+        Require(after_invalid.state == Trace::State::Armed && after_invalid.config.address == long_config.address);
+        Require(after_invalid.config.registers == long_config.registers);
+        Require(after_invalid.config.memory_address == long_config.memory_address);
+        Require(after_invalid.config.memory_register == long_config.memory_register);
+        Require(after_invalid.config.memory_offset == long_config.memory_offset);
+        Require(after_invalid.config.memory_size == long_config.memory_size);
+        Require(after_invalid.config.timeout_ms == long_config.timeout_ms);
+        Require(after_invalid.remaining_ms == before_invalid.remaining_ms && after_invalid.remaining_ms == 569999);
+        const auto last_millisecond = trace.Status(now + 599999ms);
+        Require(last_millisecond.state == Trace::State::Armed && last_millisecond.remaining_ms == 1);
+
+        const auto reads_before_expiry = reads;
+        trace.Capture(4, 13, registers, read, now + 600000ms);
+        const auto expired = trace.Status(now + 600000ms);
+        Require(expired.state == Trace::State::Expired && expired.remaining_ms == 0);
+        Require(reads == reads_before_expiry && !trace.ShouldInstrument(4, 0x1000));
+
+        Trace cancelled;
+        Require(cancelled.Arm(4, long_config, now).empty());
+        const auto active_before_cancel = cancelled.Status(now + 30001ms);
+        Require(active_before_cancel.state == Trace::State::Armed && active_before_cancel.remaining_ms == 569999);
+        cancelled.Cancel();
+        const auto reads_before_cancelled_hit = reads;
+        cancelled.Capture(4, 14, registers, read, now + 30002ms);
+        const auto cancelled_result = cancelled.Status(now + 30002ms);
+        Require(cancelled_result.state == Trace::State::Cancelled && cancelled_result.id == active_before_cancel.id);
+        Require(reads == reads_before_cancelled_hit && !cancelled.ShouldInstrument(4, 0x1000));
+    }
+    std::cout << "PASS exact maximum expiry, rejected timeout preservation, and cancellation\n";
+    {
         Trace trace;
         Require(trace.Arm(4, config, now).empty());
         std::atomic<unsigned> concurrent_reads{};

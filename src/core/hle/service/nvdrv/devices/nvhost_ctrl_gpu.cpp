@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
 #include <algorithm>
 #include <cstring>
 #include "common/assert.h"
@@ -12,6 +13,7 @@
 #include "core/core_timing.h"
 #include "core/hle/service/nvdrv/devices/ioctl_serialization.h"
 #include "core/hle/service/nvdrv/devices/nvhost_ctrl_gpu.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/nvdrv/nvdrv.h"
 
 namespace Service::Nvidia::Devices {
@@ -113,6 +115,9 @@ NvResult nvhost_ctrl_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8>
     default:
         break;
     }
+    if (nx2_caller && command.group == 'G' && command.cmd == 0x1F) {
+        return Nx2GetEngineInfo(input, output, inline_output);
+    }
     if (nx2_caller) {
         // Switch 2 NvRm uses ioctls Switch 1 never had; answer them with a zeroed success so
         // device setup can continue, and log each one.
@@ -125,6 +130,41 @@ NvResult nvhost_ctrl_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8>
     UNIMPLEMENTED_MSG("Unimplemented ioctl={:08X}, group={:01X}, command={:01X}", command.raw,
                       command.group, command.cmd);
     return NvResult::NotImplemented;
+}
+
+// nvgpu GET_ENGINE_INFO as the Switch 2 NvRm uses it: args {u32 buf_size, u32 reserved,
+// u64 buf_addr}, queried once for the size and once with an inline output buffer of 16-byte items
+// {u32 engine_id, u32 engine_instance, s32 runlist_id, u32 reserved}. NvRm picks the channel
+// runlist from this list. Report the graphics engine (runlist 0) and an async copy engine (1).
+NvResult nvhost_ctrl_gpu::Nx2GetEngineInfo(std::span<const u8> input, std::span<u8> output,
+                                           std::span<u8> inline_output) {
+    struct Item {
+        u32 engine_id;
+        u32 engine_instance;
+        s32 runlist_id;
+        u32 reserved;
+    };
+    static constexpr std::array<Item, 2> items{{
+        {0, 0, 0, 0}, // NVGPU_ENGINE_GR
+        {2, 0, 1, 0}, // NVGPU_ENGINE_ASYNC_COPY
+    }};
+    constexpr u32 needed = static_cast<u32>(items.size() * sizeof(Item));
+
+    u32 buf_size{};
+    if (input.size() >= sizeof(buf_size)) {
+        std::memcpy(&buf_size, input.data(), sizeof(buf_size));
+    }
+    LOG_WARNING(Service_NVDRV, "(STUBBED) Switch 2 GetEngineInfo buf_size={:#x} inline_out={:#x}",
+                buf_size, inline_output.size());
+    if (buf_size >= needed && inline_output.size() >= needed) {
+        std::memcpy(inline_output.data(), items.data(), needed);
+    }
+    std::fill(output.begin(), output.end(), u8{0});
+    std::copy_n(input.begin(), std::min(input.size(), output.size()), output.begin());
+    if (output.size() >= sizeof(needed)) {
+        std::memcpy(output.data(), &needed, sizeof(needed));
+    }
+    return NvResult::Success;
 }
 
 void nvhost_ctrl_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {}
@@ -149,6 +189,7 @@ void ApplyNx2Characteristics(GC& gc) {
     gc.gpfifo_class = 0xC56F;      // AMPERE_CHANNEL_GPFIFO_A
     gc.dma_copy_class = 0xC7B5;    // AMPERE_DMA_COPY_B
     gc.chipname = 0x6631306167;    // "ga10f"
+    gc.flags |= 0x100;             // NVGPU_GPU_FLAGS_SUPPORT_TSG: NvRm binds channels to a TSG
 
     // The Switch 2 layout keeps nine s16 interface versions at 0x70..0x80 (like nvgpu's
     // *_ioctl_nr_last); its NvRm requires e.g. [0x78] >= 6 and enables features above 0xa, 0x1f
@@ -248,6 +289,7 @@ NvResult nvhost_ctrl_gpu::GetCharacteristics3(
     params.gpu_characteristics_buf_addr = 0xdeadbeef; // Cannot be 0 (UNUSED)
     if (nx2) {
         nx2_caller = true;
+        g_nx2_driver = true;
         ApplyNx2Characteristics(params.gc);
         params.gpu_characteristics_buf_size = Nx2CharacteristicsSize;
         LOG_WARNING(Service_NVDRV, "Switch 2 caller, reporting Ampere chip 0x17E");

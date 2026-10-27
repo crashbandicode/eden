@@ -100,6 +100,35 @@ def main():
                     print(f"  t pc={r['pc']:#x} x0={r['x0']:#x} x8={r['x8']:#x}")
                 if stop_at is not None and r["pc"] == stop_at:
                     break
+        elif op == "breakwhen":
+            # breakwhen <addr> <reg> <value> [max]: stop at addr only when reg == value.
+            addr, reg, want = int(parts[1], 16), parts[2], int(parts[3], 16)
+            for _ in range(int(parts[4]) if len(parts) > 4 else 50):
+                rsp.cmd(f"Z0,{addr:x},4")
+                rsp.cmd("c")
+                regs = rsp.regs()
+                if regs.get("pc") != addr:
+                    print("  breakwhen: stopped elsewhere at", hex(regs.get("pc", 0)))
+                    break
+                if regs.get(reg) == want:
+                    print(f"  breakwhen: hit with {reg}={want:#x}")
+                    break
+                rsp.cmd(f"z0,{addr:x},4")
+                rsp.cmd("s")
+            print("  " + " ".join(f"{k}={v:#x}" for k, v in regs.items() if k in ("pc", "x0", "x1", "x2", "x19", "x20", "x21", "x22", "x24", "x30")))
+        elif op == "flow":
+            # flow N stop_hex: single-step N instructions, print only non-sequential pcs (branches)
+            n, stop_at = int(parts[1]), int(parts[2], 16)
+            prev = rsp.regs().get("pc", 0)
+            for _ in range(n):
+                rsp.cmd("s")
+                r = rsp.regs()
+                pc = r.get("pc", 0)
+                if pc != prev + 4:
+                    print(f"  f {prev:#x} -> {pc:#x} x0={r.get('x0', 0):#x}")
+                prev = pc
+                if pc == stop_at:
+                    break
         elif op == "continue":
             print("stop:", rsp.cmd("c"))
         elif op == "x0":

@@ -14,6 +14,7 @@
 #include "core/hle/service/nvdrv/core/syncpoint_manager.h"
 #include "core/hle/service/nvdrv/devices/ioctl_serialization.h"
 #include "core/hle/service/nvdrv/devices/nvhost_gpu.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/nvdrv/nvdrv.h"
 #include "core/memory.h"
 #include "video_core/control/channel_state.h"
@@ -101,6 +102,9 @@ NvResult nvhost_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> inpu
         }
         break;
     }
+    if (g_nx2_driver) {
+        return Nx2UnknownIoctl("nvhost-gpu", command, input, output);
+    }
     UNIMPLEMENTED_MSG("Unimplemented ioctl={:08X}", command.raw);
     return NvResult::NotImplemented;
 };
@@ -116,12 +120,19 @@ NvResult nvhost_gpu::Ioctl2(DeviceFD fd, Ioctl command, std::span<const u8> inpu
         }
         break;
     }
+    if (g_nx2_driver) {
+        return Nx2UnknownIoctl("nvhost-gpu", command, input, output);
+    }
     UNIMPLEMENTED_MSG("Unimplemented ioctl={:08X}", command.raw);
     return NvResult::NotImplemented;
 }
 
 NvResult nvhost_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8> input,
                             std::span<u8> output, std::span<u8> inline_output) {
+    if (g_nx2_driver) {
+        std::fill(inline_output.begin(), inline_output.end(), u8{0});
+        return Nx2UnknownIoctl("nvhost-gpu", command, input, output);
+    }
     UNIMPLEMENTED_MSG("Unimplemented ioctl={:08X}", command.raw);
     return NvResult::NotImplemented;
 }
@@ -276,6 +287,35 @@ NvResult nvhost_gpu::AllocateObjectContext(IoctlAllocObjCtx& params) {
 
         constexpr u32 allowed_mask{};
         params.flags = allowed_mask;
+    }
+
+    if (g_nx2_driver) {
+        // Switch 2 NvRm asks for Ampere classes, or class 0 (it reads the class numbers from a
+        // characteristics layout we don't know yet). Map them onto the Maxwell engine slots.
+        u32 mapped = params.class_num;
+        switch (params.class_num) {
+        case 0xC797: case 0xC697: case 0xC597: mapped = static_cast<u32>(CtxClasses::Ctx3D); break;
+        case 0xC7C0: case 0xC6C0: case 0xC5C0: mapped = static_cast<u32>(CtxClasses::CtxCompute); break;
+        case 0xC7B5: case 0xC6B5: case 0xC5B5: mapped = static_cast<u32>(CtxClasses::CtxDMA); break;
+        case 0xC56F: case 0xC76F: mapped = static_cast<u32>(CtxClasses::CtxChannelGPFIFO); break;
+        case 0: {
+            for (const auto candidate : {CtxClasses::Ctx3D, CtxClasses::CtxCompute, CtxClasses::CtxDMA,
+                                         CtxClasses::Ctx2D, CtxClasses::CtxKepler}) {
+                const auto index = GetObjectContextClassNumberIndex(candidate);
+                if (index >= 0 && !ctxObjs[index].has_value()) {
+                    mapped = static_cast<u32>(candidate);
+                    break;
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+        if (mapped != params.class_num) {
+            LOG_WARNING(Service_NVDRV, "Switch 2 object class {:#x} -> {:#x}", params.class_num, mapped);
+            params.class_num = mapped;
+        }
     }
 
     s32_le ctx_class_number_index =

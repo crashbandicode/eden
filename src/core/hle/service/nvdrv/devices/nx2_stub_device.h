@@ -4,12 +4,26 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <string>
 
 #include "common/logging.h"
 #include "core/hle/service/nvdrv/devices/nvdevice.h"
 
 namespace Service::Nvidia::Devices {
+
+// Set once a Switch 2 NvRm has identified itself (0xD0-byte GetCharacteristics). Devices then
+// answer ioctls they don't know with a logged, input-echoing success instead of NotImplemented.
+inline std::atomic<bool> g_nx2_driver{false};
+
+inline NvResult Nx2UnknownIoctl(const char* device, Ioctl command, std::span<const u8> input,
+                                std::span<u8> output) {
+    LOG_WARNING(Service_NVDRV, "(STUBBED) Switch 2 {} ioctl={:08X} group={:01X} command={:02X} in={:#x}",
+                device, command.raw, command.group, command.cmd, input.size());
+    std::fill(output.begin(), output.end(), u8{0});
+    std::copy_n(input.begin(), std::min(input.size(), output.size()), output.begin());
+    return NvResult::Success;
+}
 
 // Device node that Switch 2 nvgpu drivers open but Switch 1 never had (e.g. /dev/nvhost-tsg-gpu).
 // Every ioctl succeeds with a zeroed reply and is logged, so the driver's use of it shows up.

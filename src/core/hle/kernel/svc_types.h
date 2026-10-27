@@ -157,6 +157,13 @@ enum class InfoType : u32 {
     IsSvcPermitted = 26,
     IoRegionHint = 27,
     AliasRegionExtraSize = 28,
+    // Switch 2 kernels: address/size of a region the SDK queries between the alias and
+    // ASLR regions during nnosInitialize. Meaning not known yet.
+    Nx2RegionAddress = 29,
+    Nx2RegionSize = 30,
+    // Switch 2 kernels: queried by nn::os::detail::VammManager::Initialize and used as the size
+    // of its first MapPhysicalMemory. Meaning not known yet.
+    Nx2VammSize = 33,
 
     TransferMemoryHint = 34,
 

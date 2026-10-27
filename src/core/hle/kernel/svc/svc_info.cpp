@@ -40,6 +40,9 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
     case InfoType::UsedNonSystemMemorySize:
     case InfoType::IsApplication:
     case InfoType::FreeThreadCount:
+    case InfoType::Nx2RegionAddress:
+    case InfoType::Nx2RegionSize:
+    case InfoType::Nx2VammSize:
     case InfoType::AliasRegionExtraSize: {
         R_UNLESS(info_sub_id == 0, ResultInvalidEnumValue);
 
@@ -65,6 +68,22 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
             R_SUCCEED();
         case InfoType::HeapRegionSize:
             *result = process->GetPageTable().GetHeapRegionSize();
+            R_SUCCEED();
+        case InfoType::Nx2RegionAddress:
+            // Unknown Switch 2 region; report an empty one just past the alias region.
+            *result = GetInteger(process->GetPageTable().GetAliasRegionStart()) +
+                      process->GetPageTable().GetAliasRegionSize();
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 29, returning {:#x}", *result);
+            R_SUCCEED();
+        case InfoType::Nx2RegionSize:
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 30, returning 0");
+            *result = 0;
+            R_SUCCEED();
+        case InfoType::Nx2VammSize:
+            // Used as the size of VAMM's initial MapPhysicalMemory, so it must be non-zero.
+            // The real value is unknown; 2 MiB is the smallest size that keeps it block-aligned.
+            *result = 0x200000;
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 33, returning {:#x}", *result);
             R_SUCCEED();
         case InfoType::AslrRegionAddress:
             *result = GetInteger(process->GetPageTable().GetAliasCodeRegionStart());

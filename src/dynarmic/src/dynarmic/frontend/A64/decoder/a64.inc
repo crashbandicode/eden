@@ -2,6 +2,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // DO NOT REORDER
 
+// ARMv8.1+ encodings used by Switch 2 code. Kept first so they win over broader patterns.
+INST(LDAPR_sz, "LDAPRB, LDAPRH, LDAPR", "zz11100010111111110000nnnnnttttt")
+INST(AtomicMemOp, "LDADD/LDCLR/LDEOR/LDSET/LDSMAX/LDSMIN/LDUMAX/LDUMIN/SWP", "zz111000AR1sssssoooo00nnnnnttttt")
+INST(CompareAndSwap, "CASB, CASH, CAS", "zz0010001L1sssssO11111nnnnnttttt")
+INST(CompareAndSwapPair, "CASP", "0z0010000L1sssssO11111nnnnnttttt")
+INST(PACAUT_reg, "PACIA/PACIB/PACDA/PACDB/AUTIA/AUTIB/AUTDA/AUTDB", "110110101100000100Zooonnnnnddddd")
+INST(XPAC_1, "XPACI, XPACD", "110110101100000101000D11111ddddd")
+INST(PACGA, "PACGA", "10011010110mmmmm001100nnnnnddddd")
+INST(RETA, "RETAA, RETAB", "110101100101111100001M1111111111")
+INST(BRA_BLRA, "BRAA/BRAB/BLRAA/BLRAB (+Z)", "1101011Z00L1111100001Mnnnnnmmmmm")
+INST(LDRA, "LDRAA, LDRAB", "11111000MS1iiiiiiiiiW1nnnnnttttt")
+INST(STG_family, "STG/STZG/ST2G/STZ2G/LDG", "11011001oo1iiiiiiiiixxnnnnnttttt")
+INST(STGP, "STGP", "0110100xx0iiiiiiiuuuuunnnnnttttt")
+INST(IRG, "IRG", "10011010110mmmmm000100nnnnnddddd")
+INST(GMI, "GMI", "10011010110mmmmm000101nnnnnddddd")
+INST(ADDG, "ADDG", "1001000110iiiiii00ttttnnnnnddddd")
+INST(SUBG, "SUBG", "1101000110iiiiii00ttttnnnnnddddd")
+
 INST(FMOV_3, "FMOV (vector, immediate)", "0Q00111100000abc111111defghddddd")
 INST(FMOV_2, "FMOV (vector, immediate)", "0Qo0111100000abc111101defghddddd")
 INST(MOVI, "MOVI, MVNI, ORR, BIC (vector, immediate)", "0Qo0111100000abcmmmm01defghddddd")

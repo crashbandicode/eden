@@ -81,76 +81,75 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 23 | (title 4) NVN -> NvRm device open | nvsrv is the nvdrv INvDrvServices protocol; serve it with Eden's nvdrv, initialised without `Initialize` | nvdrv-backed `nx2:nvsrv` |
 | 24 | NvRm chip check | Switch 2 NvRm asks for a 0xD0-byte characteristics block and accepts chips 0x17E/0x12B/0x12E, but NVN needs the Ampere one; s16 interface versions at 0x70..0x80 must be >= 6 etc. | report chip 0x17E, Ampere classes, versions 0x40; unknown ctrl-gpu ioctls zero-stubbed for such callers |
 | 25 | NvRm address space | AllocAsEx(flags 5, no big pages, [0x8000000, 0xC000000000), split 0); NVN then reserves 4 KiB VA up to 512 GiB; Eden's split/limit handling made the reported regions unusable | small pages up to the end, absolute big-page limit |
-
-Also changed: `svcGetInfo` 29/30 now report the upper half of the alias region instead of an
-empty region (guess: VAMM address space). It made no visible difference for title 1.
+| 26 | (title 4) NvRm channel setup | nvhost-gpu ioctls 0x1F/0x20, `/dev/nvhost-tsg-gpu`, GetEngineInfo, object class 0 | logged echo for unknown ioctls once an nx2 driver is seen; GR + async-copy engines; Ampere/class-0 objects on Maxwell slots (70f1651, 82dbd88) |
+| 27 | GPU memory | svc 0x80 (make memory GPU-accessible), gpu sub-session 101 (register range) and 211 (job) | stubs (608f0d6) |
+| 28 | `syncpt::sdk::InitializeEx` -> `InterProcessEvent::Signal` abort E401 | gsv 204's first handle is attached *writable* (client -> server request), the second readable; the shared page has u64 values (RO+0xc), armed bits (RW+0x18, RO+0x1c) and summary words | gsv 204 returns a writable event, lays out the page, a 500 us poller mirrors host1x values and acknowledges armed waits (88367ea) |
+| 29 | `NvOsEventPoolWait` E401 | syncpt 22(slot) must return an event; 201(slot, ~syncpoint, value, mode) / 202(slot) request/cancel a signal | slot events via host1x guest actions (88367ea) |
+| 30 | GPU never executed submissions | Switch 2 never maps through nvhost-as-gpu: memory registered with gpu sub 101 is used at GPU VA == CPU VA | `Nx2GpuMemoryRegistry` identity-maps every range into each GMMU; SMMU physical range 33 -> 34 bits for 10/12 GB layouts (88367ea) |
+| 31 | Puller | binds Ampere classes C797/C7C0/C7B5 and class 0; NVN2 uploads Turing+ (MME64) macros, which Eden's Fermi macro JIT runs as garbage until it crashes | Ampere classes run on the Maxwell engines; macros skipped while `Tegra::g_nx2_ampere` (88367ea) |
+| 32 | NVN device init waits on syncpoint 1 >= 1 | submits use `increment_value` (bit 8) and signal completion only with semaphore releases | Eden appends the syncpoint increments for such submits (88367ea) |
+| 33 | `wsi::ounce::NativeWindow::Acquire` on a null window | gsv 1510 is `gsv::shim::CalculateRequirements`; size 0 made window init fail | block-linear size/alignment, 4 bytes/pixel (5fb37b5) |
+| 34 | `NvOsEventPoolWait` E401 (second channel) | nvhost-gpu QueryEvent 7 | per-channel event (5fb37b5) |
+| 35 | CPU spins in NVN for `[0x2106028010] >= 3` | queues release progress to page P+0x1000 and wait (GPU acquire + CPU poll) on the same offset in page P | puller mirrors releases into the first two-page gpu region (5fb37b5; guess, works) |
+| 36 | font header check on a wild pointer | `pl:u` 2010 `GetBuiltInFontData` (bool at offset 0, then {flags, u32 offset, u32 size}) and 2000 (font shared memory + size) | plain TTF copies of Eden's shared fonts after the BFTTF data (5fb37b5) |
+| 37 | null "SoundResource" heap (300 MB) | `nninitStartup` sizes the heap as total - used - 0x195000000; Eden capped total at the 8 GiB heap region, leaving 1.55 GiB | Switch 2 processes count the alias region in max memory (5fb37b5) |
+| 38 | game waits for service `aud:u` | Switch 2 audio entry (`nn::audio::CreateUserClientSessionByHipc`); cmd 2 returns an IAudioRendererManager | `INx2AudioUserClient` backed by Eden's audren (2e6c39c) |
+| 39 | every audio `RequestUpdate` fails | updates tagged `REv?` (lowercase v), renderer opened with `REV?` | compare revision numbers (2e6c39c) |
+| 40 | main thread parked in `ExecuteVirtualMachineMapBufferEx` | gpu sub 211's job slot is request word 17, not word 2 | signal word 17's event (2e6c39c) |
+| 41 | "too many files open" reading RomFS | eden-cli never raised the CRT stdio limit | `_setmaxstdio(8192)` (2e6c39c) |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
-(12 GB). With the default 4 GB layout title 1 picks a 1.6 GB heap; with 12 GB it picks 6.5 GB.
-Both stop at the same point. No GPU/nvdrv call is reached yet in any title.
+(12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
+`EDEN_NX2_PULLER_TRACE`, `EDEN_NX2_METHOD_TRACE`, `EDEN_NX2_HIDE_WINDOW`.
 
 ## Where it stops now
 
 All runs: `EDEN_NX2_AUTO_STUB=1`, 12 GB memory layout, loose ExeFS with the sibling `romfs/`.
 
-**Title 4** (`fourth switch game\exefs`, 0400380020056000) gets furthest. Path:
-rtld -> nn::init -> nnosInitialize -> VAMM -> nn::oe (applet proxy, window, focus, graphics
-scale) -> fsp-srv + RomFS reads -> `nnMain` -> `nn::gs::sdk::BootGraphicsSystem` (gsv, nvsrv,
-syncpt, gpu sessions all booted) -> `nn::vi::Initialize` (vi2, default display opened) ->
-`nn::vi::CreateLayer` (layer + 7 timestamp recorders) -> RomFS asset loading, hid (touch 1920x1080,
-npad), acc, aoc -> NVN device init:
-- NvRm opens `/dev/nvhost-ctrl-gpu`, GetCharacteristics3 (Ampere 0x17E), GetTPCMasks3, 0x4713,
-  0x471F, QueryEvent; gpu 41 ("NvRmGpu"), 33, 203, 202; opens `/dev/nvhost-as-gpu`, AllocAsEx,
-  GetVARegions (count, then data). `NvRmGpuDeviceOpen` and `NvRmGpuAddressSpaceCreate` succeed;
-  the 4 KiB VA reservation validates.
-- **Stops:** NVN's GPU init (`sdk+0x667a40`, called from `sdk+0x65cbd8`) still takes its failure
-  path afterwards, tears the device down (two nvdrv Close calls), and NVN later calls
-  `NvRmGpuDeviceZbcAddColor` through a null device (`sdk+0x667ccc`, PC=0). The exact failing step
-  after the address space is not pinned yet (no AllocSpace ioctl is issued).
-- Debugging this needs `EDEN_NX2_AUTO_STUB=1`, `tools/nx2/gdbrsp.py` against Eden's gdbstub
-  (`use_gdbstub=true`, fixed `rng_seed`, sdk at 0x84F30000), and `nso_syms.py` to resolve PLT
-  imports (vtable targets via breakpoints).
+**Title 4** (`fourth switch game\exefs`, 0400380020056000) **runs its main loop**: it stays up for
+the whole 90 s test, polls input (`hid` 214, auto-stubbed) every 16 ms and drives the audio
+renderer every frame. Boot order now: nn::init -> nn::oe -> fs/RomFS -> graphics system (gsv,
+nvsrv, syncpt, gpu, vi2) -> NVN device, two GPU channels, window with 4K swapchain images ->
+fonts (its own `.bfotf` plus system fonts via pl:u 2010) -> heaps (incl. 300 MB sound) -> aud:u
+audio renderer -> Gyml sequence files -> main loop.
+- GPU submissions are executed by Eden's puller/engines (Ampere classes on Maxwell engines),
+  syncpoints and queue semaphores advance, but Turing+ macros are skipped and nothing is presented.
+- At ~12.4 s one NVN render path writes commands to address 0 (command memory with no CPU
+  mapping) and calls a null out-of-memory callback (`sdk+0x638814`, from game `main+0x3201560`).
+  The loop thread keeps running.
 
-**Title 3** (`third switch game\exefs`, 04005B902517C000): same path, plus `GetPseudoDeviceId`
-(fixed); last checked at `nn::nvsrv::BootWithRemoteMemory`, before the later gsv/gpu/vi2 work, so
-it should now get about as far as title 4.
+**Title 3**: last checked before the graphics work; should now track title 4.
 
 **Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`): stops earlier, inside
-`nnMain` (`nnMain+0x40 .. +0xb74`): it builds an SDK allocator object at address 0 (writes to
-0x0..0xF8, sdk vtable) and calls through its null function pointer (`main+0xF04E8`). The chain at
-`main+0xCF25A8` sets a fixed 0x1BD600000 (7.46 GB) budget. No failing SVC or IPC precedes it, so
-some Switch 2 memory API returns a null base without an error.
+`nnMain` (`nnMain+0x40 .. +0xb74`): it builds an SDK allocator object at address 0 and calls
+through its null function pointer (`main+0xF04E8`). Worth retrying now that Switch 2 processes
+get the larger memory budget (it sets a fixed 0x1BD600000 budget at `main+0xCF25A8`).
 
-**Title 2** (`second switch game`, base and `updates`): main/sdk/subsdk0 segments fail LZ4 and
-SHA-256 checks; can't be run from these files.
+**Title 2**: main/sdk/subsdk0 fail LZ4 and SHA-256 checks; can't be run from these files.
 
 ## What a picture needs
 
-Everything from `gsv` on is placeholder IPC: commands succeed with empty replies. The graphics
-stack is now being booted against servers that do nothing. A title screen needs:
-1. A real `gsv`/`nvsrv`/`syncpt` model: what each TIPC/CMIF command takes and returns (handles,
-   shared memory, events, syncpoint ids). This replaces Switch 1's `nvdrv` ioctl interface.
-2. NVN2 command buffers decoded and executed: Ampere-class 3D/compute/copy engines, which Eden's
-   `video_core` (Maxwell/Pascal) doesn't implement, plus a display/present path (vi/hos-binder or
-   its Switch 2 replacement).
-3. Shader translation for the Ampere SASS the game ships.
-That's the bulk of a Switch 2 emulator and well beyond boot fixes.
+1. **Present path**: gsv 315/423/429/435/111 (window buffer create/register) and vi2 present must
+   hand the swapchain image to Eden's display, so whatever the GPU wrote appears.
+2. **Turing+ macro engine (MME64)**: NVN2 uses macros for much of its 3D state; Eden only has the
+   Fermi-era macro ISA. Mesa's `nouveau/mme` (tu104) documents the encoding.
+3. **Ampere shader frontend**: NVN2 ships Ampere SASS (128-bit Volta+ encoding); Eden's shader
+   recompiler only decodes Maxwell. This is the largest piece.
+4. **Ampere 3D-class method differences** versus Maxwell B197, texture/RT formats from gsv image
+   preferences.
 
 ## Prioritized next steps
 
-0. **Finish NVN device init** on title 4 (see the stop above), then GPU channel creation
-   (`/dev/nvhost-gpu`, GPFIFO submission) and the vi2 present path. The first realistic
-   milestone is a cleared frame: clears need no shaders.
-1. **Keep walking title 4's graphics boot** with the IPC trace: each `nx2:` stub call in the log
-   is a command whose reply layout is needed. Use `nso_syms.py` + `nso_dis.py` on the SDK caller
-   to read the expected reply words (as done for 1402/202).
-2. **Title 1 null allocator**: break at `main+0xCF25A8` and find which SDK memory call returns a
-   null base; likely tied to the guessed svcGetInfo 29/30/33 meanings.
-3. **Pin down svcGetInfo 29/30/31/32/33** from the SDK code that consumes them.
-4. **New app-layer commands**: `IApplicationProxy` 40, `ISelfController` 2400, `IGraphicsScale`
-   1050, `IApplicationFunctions` 320/321 are auto-stubbed; check their real outputs.
-5. **Six cores** instead of folding 4/5 onto 0/1.
-6. **Rare SIMD encodings** still undecoded (~60-110 per title in sdk).
+0. **Render path null command memory** at ~12.4 s (title 4): find which NVN memory pool's CPU
+   pointer is null (nvnMemoryPoolMap through nn::gpu mapping jobs) and give it the mapping.
+1. **Present**: decode gsv 315/423/429/435/111 and vi2 present/acquire, and blit the presented
+   image through Eden's renderer. First visible milestone: the game's clear colour.
+2. **MME64 interpreter** behind `g_nx2_ampere` (replace the skip in `Maxwell3D::CallMacroMethod`).
+3. **Ampere SASS decoder** for the shader recompiler.
+4. **Title 1 / title 3** retests with the current tree.
+5. Confirm the guesses: syncpt page layout, semaphore mirror page, gsv 1510 pixel formats,
+   aud:u command numbers, pl:u built-in font type numbering, svcGetInfo 29-33.
+6. **Six cores** instead of folding 4/5 onto 0/1; rare SIMD encodings still undecoded.
 7. Upstream-worthy pieces independent of Switch 2: MSVC 14.51 build fixes, eden-cli SDL3
-   lifetime fixes, ExeFS loader fixes (directory detection, RomFS, fs registration), FAC/FAH
-   offset fix, GetPseudoDeviceId without NACP.
+   lifetime fixes and `_setmaxstdio`, ExeFS loader fixes, FAC/FAH offset fix, GetPseudoDeviceId
+   without NACP.

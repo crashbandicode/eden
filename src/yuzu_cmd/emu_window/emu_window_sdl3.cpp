@@ -39,7 +39,10 @@ EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Co
     }, this);
     mouse_timer = SDL_AddTimer(100, [](void *userdata, SDL_TimerID, Uint32) -> Uint32 {
         auto* this_ = (EmuWindow_SDL3*)userdata;
-        this_->input_subsystem->GetMouse()->NotifyChanged();
+        // The timer can fire before the input subsystem has created its mouse driver.
+        if (auto* const mouse = this_->input_subsystem->GetMouse()) {
+            mouse->NotifyChanged();
+        }
         return 100;
     }, this);
 }

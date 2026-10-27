@@ -2516,7 +2516,7 @@ void Call(Core::System& system, u32 imm) {
         // Switch 2 only. nn::gpu::sdk::CreateGpuAccessibleMemory and nn::gs native memory call it
         // as (address, size, mask = 0x20, attr = 0x20), like svcSetMemoryAttribute with a new
         // "GPU accessible" attribute. Emulated guest memory is always GPU-visible: accept it.
-        LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 svc 0x80 addr={:#x} size={:#x} mask={:#x} attr={:#x}",
+        LOG_DEBUG(Kernel_SVC, "(STUBBED) Switch 2 svc 0x80 addr={:#x} size={:#x} mask={:#x} attr={:#x}",
                     GetArg64(args, 0), GetArg64(args, 1), GetArg64(args, 2), GetArg64(args, 3));
         args[0] = 0;
     } else if (process.Is64Bit()) {

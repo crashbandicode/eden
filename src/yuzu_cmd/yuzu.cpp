@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -173,6 +174,9 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         freopen("CONOUT$", "wb", stdout);
         freopen("CONOUT$", "wb", stderr);
     }
+    // Raise the CRT's open-file limit like the Qt frontend: loose RomFS folders keep thousands of
+    // files open through the VFS cache.
+    _setmaxstdio(8192);
 #endif
 
     Common::Log::Initialize();

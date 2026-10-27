@@ -127,7 +127,7 @@ void nvhost_as_gpu::Nx2MapIdentity(u64 address, u64 size) {
         smmu.Map(device_address, address, size, session->asid, true);
     }
     gmmu->Map(address, device_address, size, Tegra::PTEKind::PITCH, false);
-    LOG_INFO(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x} mapped at the same GPU address", address,
+    LOG_DEBUG(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x} mapped at the same GPU address", address,
              size);
 }
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}

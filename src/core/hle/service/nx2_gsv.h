@@ -289,7 +289,7 @@ private:
         const auto* b = ctx.CommandBuffer();
         const u64 start = u64{b[2]} | (u64{b[3]} << 32);
         const u64 last = u64{b[4]} | (u64{b[5]} << 32);
-        LOG_WARNING(Service, "nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}", start,
+        LOG_DEBUG(Service, "nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}", start,
                     last, b[6], b[7]);
         if (last > start) {
             Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Register(start, last - start + 1);
@@ -306,12 +306,15 @@ private:
         rb.Push(ResultSuccess);
     }
 
-    // Sub 211: job submission; word 2 is the job/event id the SDK then waits on. Nothing runs
-    // here, so complete it at once.
+    // Sub 211: job submission (nn::gpu::sdk job tracking). Word 2 is a constant id; word 17 is
+    // the job slot whose event (gpu TIPC 12) the SDK then waits on. Nothing runs here, so
+    // complete it at once.
     void SubSubmitJob(HLERequestContext& ctx) {
-        const u32 id = ctx.CommandBuffer()[2];
-        LOG_WARNING(Service, "(STUBBED) nx2:gpu sub 211 id={}, signalling completion", id);
-        EventFor(id)->Signal(system.Kernel());
+        const auto* cmd_buf = ctx.CommandBuffer();
+        const u32 slot = cmd_buf[17];
+        LOG_DEBUG(Service, "(STUBBED) nx2:gpu sub 211 [2]={} slot={}, signalling completion",
+                  cmd_buf[2], slot);
+        EventFor(slot)->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }

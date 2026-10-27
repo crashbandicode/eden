@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <array>
+#include <vector>
+
 #include "core/core.h"
 #include "core/hle/kernel/k_client_session.h"
 #include "core/hle/kernel/k_process.h"
@@ -151,6 +154,51 @@ private:
     std::array<Kernel::KEvent*, NumIds> m_events{};
 };
 
+// Placeholder for the Switch 2 display session (nn::vi2::sdk), handed out by gsv 305. Reply
+// shapes read from the SDK: TIPC 1 -> u32 < 0x400, TIPC 3 -> u32 < 8, TIPC 11/31(u32) and
+// 32(handle, u32) -> one handle at word 3 then the result. Handles returned here are events (a
+// guess); everything else is auto-stubbed through the nx2: prefix.
+class INx2Vi2Session final : public ServiceFramework<INx2Vi2Session> {
+public:
+    explicit INx2Vi2Session(Core::System& system_)
+        : ServiceFramework{system_, "nx2:vi2"}, m_context{system_, "nx2:vi2"} {
+        RegisterHandlersTipc({
+            {1, &INx2Vi2Session::ReturnOne, "Unknown1"},
+            {3, &INx2Vi2Session::ReturnOne, "GetDisplayCount (guessed)"},
+            {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
+            {31, &INx2Vi2Session::ReturnEvent, "Unknown31"},
+            {32, &INx2Vi2Session::ReturnEvent, "Unknown32"},
+        });
+    }
+
+    ~INx2Vi2Session() override {
+        for (auto* event : m_events) {
+            m_context.CloseEvent(event);
+        }
+    }
+
+private:
+    void ReturnOne(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {}, returning 1", ctx.GetCommand());
+        IPC::ResponseBuilder rb{ctx, 3};
+        rb.Push(ResultSuccess);
+        rb.Push<u32>(1);
+    }
+
+    void ReturnEvent(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {} [2]={:#x} [3]={:#x}, returning an event",
+                    ctx.GetCommand(), ctx.CommandBuffer()[2], ctx.CommandBuffer()[3]);
+        auto* event = m_context.CreateEvent(fmt::format("nx2:vi2:Event{}", m_events.size()));
+        m_events.push_back(event);
+        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, event->GetReadableEvent());
+    }
+
+    KernelHelpers::ServiceContext m_context;
+    std::vector<Kernel::KEvent*> m_events;
+};
+
 // Placeholder for the Switch 2 graphics-system server that nn::gsv::BootWithRemoteMemory talks
 // to over TIPC. Nothing behind it is emulated: commands succeed and are logged, so boot can show
 // what comes next. Commands 202 and 1402 hand out the syncpt and nvsrv sessions the SDK uses.
@@ -164,6 +212,7 @@ public:
             {101, &INx2GraphicsSystemSession::Stub, "Unknown101"},
             {202, &INx2GraphicsSystemSession::OpenSyncptSession, "OpenSyncptSession (guessed)"},
             {204, &INx2GraphicsSystemSession::AttachSyncptMemory, "AttachSyncptMemory (guessed)"},
+            {305, &INx2GraphicsSystemSession::OpenViSession, "OpenViSession (guessed)"},
             {497, &INx2GraphicsSystemSession::OpenGpuSession, "OpenGpuSession (guessed)"},
             {1402, &INx2GraphicsSystemSession::OpenNvsrvSession, "OpenNvsrvSession (guessed)"},
         });
@@ -232,6 +281,16 @@ private:
         rb.Push(ResultSuccess);
         rb.PushCopyObjects(ctx, m_syncpt_events[0]->GetReadableEvent(),
                            m_syncpt_events[1]->GetReadableEvent());
+    }
+
+    void OpenViSession(HLERequestContext& ctx) {
+        // Used by nn::vi2::sdk::Initialize; takes one u64, returns a session (handle at word 3,
+        // result at word 4).
+        const auto* cmd_buf = ctx.CommandBuffer();
+        const size_t data = TipcDataOffset(cmd_buf);
+        LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC 305 arg={:#x}, returning a nx2:vi2 session",
+                    u64{cmd_buf[data]} | (u64{cmd_buf[data + 1]} << 32));
+        ReturnRawSession(system, ctx, std::make_shared<INx2Vi2Session>(system));
     }
 
     void OpenGpuSession(HLERequestContext& ctx) {

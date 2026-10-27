@@ -353,10 +353,11 @@ Result IApplicationFunctions::GetPseudoDeviceId(Out<Common::UUID> out_pseudo_dev
     // This should be hashed with the device specific hash
     // for now this will do
     const auto res = FileSys::PatchManager::GetMetadataFromBaseOrUpdate(system, m_applet->program_id);
-    R_UNLESS(res.first != nullptr, ResultUnknown);
     std::array<u8, EVP_MAX_MD_SIZE> hash;
     unsigned int hash_len = 0;
-    auto const seed = res.first->raw.seed_for_pseudo_device_id;
+    // Loose ExeFS boots have no control.nacp; seed from the program id instead of failing.
+    auto const seed = res.first != nullptr ? res.first->raw.seed_for_pseudo_device_id
+                                           : m_applet->program_id;
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     auto const algorithm = EVP_sha1();
     EVP_DigestInit_ex(ctx, algorithm, nullptr);

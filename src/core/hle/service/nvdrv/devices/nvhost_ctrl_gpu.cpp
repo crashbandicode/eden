@@ -142,8 +142,8 @@ void ApplyNx2Characteristics(GC& gc) {
     gc.arch = 0x170;               // Ampere
     gc.impl = 0xE;                 // chip id 0x17E as listed in the Switch 2 NvRm chip table
     gc.num_tpc_per_gpc = 0x6;
-    gc.sm_arch_sm_version = 0x807; // sm_87 (guess)
-    gc.sm_arch_spa_version = 0x807;
+    gc.sm_arch_sm_version = 0x808; // NVN2 only accepts SM 0x808 (its class table lookup)
+    gc.sm_arch_spa_version = 0x808;
     gc.threed_class = 0xC797;      // AMPERE_B
     gc.compute_class = 0xC7C0;     // AMPERE_COMPUTE_B
     gc.gpfifo_class = 0xC56F;      // AMPERE_CHANNEL_GPFIFO_A

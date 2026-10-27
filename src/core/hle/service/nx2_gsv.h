@@ -112,6 +112,9 @@ public:
             {22, &INx2GpuSession::OpenSubSession, "OpenSubSession (guessed)"},
             {33, &INx2GpuSession::GetCount33, "Unknown33 (u32 count)"},
             {203, &INx2GpuSession::GetVaRange, "GetVaRange (guessed)"},
+            // Sub-session commands (gpu 22 hands out a second session to this same object).
+            {101, &INx2GpuSession::SubRegisterMemory, "Sub101 RegisterMemory (guessed)"},
+            {211, &INx2GpuSession::SubSubmitJob, "Sub211 SubmitJob (guessed)"},
         });
     }
 
@@ -161,22 +164,42 @@ private:
     }
 
     // Used by nn::gpu::sdk::CreateGpuAddressSpace: three u64s after the result, a kind (< 5, 0 =
-    // none) and what looks like a GPU VA range. Report kind 1, [0x10000000, +64 GiB).
+    // none) and the GPU VA range of the in-process VirtualMachine that serves AllocSpace
+    // (nn::gpu::sdk::util::ExecuteVirtualMachineAllocSpace). NVN reserves fixed VA from 0x8000000
+    // up to 512 GiB, so report the same range NvRm gives AllocAsEx: [0x8000000, 0xC000000000).
     void GetVaRange(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 203 [2]={:#x}", ctx.CommandBuffer()[2]);
         constexpr u64 kind = 1;
-        constexpr u64 start = 0x10000000ULL;
-        constexpr u64 size = 64ULL << 30;
+        constexpr u64 start = 0x8000000ULL;
+        constexpr u64 size = 0xC000000000ULL - start;
         TipcReplyWords(ctx, {static_cast<u32>(kind), static_cast<u32>(kind >> 32),
                              static_cast<u32>(start), static_cast<u32>(start >> 32),
                              static_cast<u32>(size), static_cast<u32>(size >> 32)});
     }
 
     void OpenSubSession(HLERequestContext& ctx) {
-        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 22, returning a nx2:gpu-sub session");
-        ReturnRawSession(system, ctx,
-                         std::make_shared<INx2StubInterface>(
-                             system, INx2StubInterface::InternName("nx2:gpu-sub")));
+        // Served by this object so sub-session jobs can signal the per-id events.
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 22, returning a sub-session on nx2:gpu");
+        ReturnRawSession(system, ctx, std::static_pointer_cast<INx2GpuSession>(shared_from_this()));
+    }
+
+    // Sub 101: (start u64, last u64, flags...) after CreateGpuAccessibleMemory's svc 0x80.
+    void SubRegisterMemory(HLERequestContext& ctx) {
+        const auto* b = ctx.CommandBuffer();
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}",
+                    u64{b[2]} | (u64{b[3]} << 32), u64{b[4]} | (u64{b[5]} << 32), b[6], b[7]);
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    // Sub 211: job submission; word 2 is the job/event id the SDK then waits on. Nothing runs
+    // here, so complete it at once.
+    void SubSubmitJob(HLERequestContext& ctx) {
+        const u32 id = ctx.CommandBuffer()[2];
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu sub 211 id={}, signalling completion", id);
+        EventFor(id)->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
     }
 
     KernelHelpers::ServiceContext m_context;

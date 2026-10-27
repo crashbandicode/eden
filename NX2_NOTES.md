@@ -74,6 +74,13 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 16 | (title 4) `nn::gs::sdk::BootGraphicsSystem` -> `nn::os::GetRemoteMemoryUsage` abort | `svcGetInfo` 31/32 (remote memory for gsv/nvsrv) | return 0 for both (logged) |
 | 17 | (title 4) `nn::gsv::BootWithRemoteMemory` abort | it sends TIPC on a session handle from `ISelfController` 2000, which had no handler | `ISelfController` 2000 returns a raw session to `INx2GraphicsSystemSession` (`nx2_gsv.h`), which accepts every command |
 | 18 | (title 3) `nn::oe::GetPseudoDeviceId` abort | needs control.nacp, which loose ExeFS lacks | seed from program id |
+| 19 | (title 4) `nn::syncpt::sdk::InitializeEx` | gsv 202 must return the syncpt session; gsv 204 takes two transfer memories and must leave a header (version 1, count, offsets) in the read-only one and return two events; syncpt 1 returns a u32 < 0x400 | `INx2SyncptSession`, gsv 202/204 |
+| 20 | (title 4) `nn::gpu::sdk::BootWithRemoteMemory` | gsv 497 returns the GPU session; gpu 11 (id range), 12(id) event, 21(id) start + wait on that event, 22 another session | `INx2GpuSession` |
+| 21 | (title 4) `nn::vi2::sdk::Initialize` / `nn::vi::CreateLayer` | gsv 305 returns the vi2 session; vi2 1/3/5 return small u32s (5 = timestamp recorder count, 7 needed by LayerHistory), 11/31/32 return handles | `INx2Vi2Session` |
+| 22 | all TIPC replies with data | Eden bug: `ResponseBuilder::Push(Result)` writes the 2-word CMIF result, so TIPC data lands one word late and past the copied size | `TipcReplyWords` |
+| 23 | (title 4) NVN -> NvRm device open | nvsrv is the nvdrv INvDrvServices protocol; serve it with Eden's nvdrv, initialised without `Initialize` | nvdrv-backed `nx2:nvsrv` |
+| 24 | NvRm chip check | Switch 2 NvRm asks for a 0xD0-byte characteristics block and accepts chips 0x17E/0x12B/0x12E, but NVN needs the Ampere one; s16 interface versions at 0x70..0x80 must be >= 6 etc. | report chip 0x17E, Ampere classes, versions 0x40; unknown ctrl-gpu ioctls zero-stubbed for such callers |
+| 25 | NvRm address space | AllocAsEx(flags 5, no big pages, [0x8000000, 0xC000000000), split 0); NVN then reserves 4 KiB VA up to 512 GiB; Eden's split/limit handling made the reported regions unusable | small pages up to the end, absolute big-page limit |
 
 Also changed: `svcGetInfo` 29/30 now report the upper half of the alias region instead of an
 empty region (guess: VAMM address space). It made no visible difference for title 1.
@@ -88,17 +95,25 @@ All runs: `EDEN_NX2_AUTO_STUB=1`, 12 GB memory layout, loose ExeFS with the sibl
 
 **Title 4** (`fourth switch game\exefs`, 0400380020056000) gets furthest. Path:
 rtld -> nn::init -> nnosInitialize -> VAMM -> nn::oe (applet proxy, window, focus, graphics
-scale) -> fsp-srv + RomFS reads -> `nnMain` -> `nn::gs::sdk::BootGraphicsSystem`:
-- `nn::os::GetRemoteMemoryUsage` (svcGetInfo 31/32) -> stubbed 0/0.
-- `nn::gsv::BootWithRemoteMemory`: gets a session from `ISelfController` 2000 and sends TIPC
-  4 (region, process handle, pid), 11, 101, 1501, 1502. Placeholder `nx2:gsv` accepts all.
-- `nn::nvsrv::BootWithRemoteMemory`: `gsv` 1402 returns the nvsrv session (handle at word 3,
-  result at word 4); nvsrv command 13 follows. Placeholder `nx2:nvsrv` accepts all.
-- `nn::syncpt::sdk::InitializeEx`: `gsv` 201, then 202 returns the syncpt session (same reply
-  layout). Placeholder `nx2:syncpt`. See the end of this section for the latest stop.
+scale) -> fsp-srv + RomFS reads -> `nnMain` -> `nn::gs::sdk::BootGraphicsSystem` (gsv, nvsrv,
+syncpt, gpu sessions all booted) -> `nn::vi::Initialize` (vi2, default display opened) ->
+`nn::vi::CreateLayer` (layer + 7 timestamp recorders) -> RomFS asset loading, hid (touch 1920x1080,
+npad), acc, aoc -> NVN device init:
+- NvRm opens `/dev/nvhost-ctrl-gpu`, GetCharacteristics3 (Ampere 0x17E), GetTPCMasks3, 0x4713,
+  0x471F, QueryEvent; gpu 41 ("NvRmGpu"), 33, 203, 202; opens `/dev/nvhost-as-gpu`, AllocAsEx,
+  GetVARegions (count, then data). `NvRmGpuDeviceOpen` and `NvRmGpuAddressSpaceCreate` succeed;
+  the 4 KiB VA reservation validates.
+- **Stops:** NVN's GPU init (`sdk+0x667a40`, called from `sdk+0x65cbd8`) still takes its failure
+  path afterwards, tears the device down (two nvdrv Close calls), and NVN later calls
+  `NvRmGpuDeviceZbcAddColor` through a null device (`sdk+0x667ccc`, PC=0). The exact failing step
+  after the address space is not pinned yet (no AllocSpace ioctl is issued).
+- Debugging this needs `EDEN_NX2_AUTO_STUB=1`, `tools/nx2/gdbrsp.py` against Eden's gdbstub
+  (`use_gdbstub=true`, fixed `rng_seed`, sdk at 0x84F30000), and `nso_syms.py` to resolve PLT
+  imports (vtable targets via breakpoints).
 
 **Title 3** (`third switch game\exefs`, 04005B902517C000): same path, plus `GetPseudoDeviceId`
-(fixed), and reaches `nn::nvsrv::BootWithRemoteMemory` like title 4.
+(fixed); last checked at `nn::nvsrv::BootWithRemoteMemory`, before the later gsv/gpu/vi2 work, so
+it should now get about as far as title 4.
 
 **Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`): stops earlier, inside
 `nnMain` (`nnMain+0x40 .. +0xb74`): it builds an SDK allocator object at address 0 (writes to
@@ -123,6 +138,9 @@ That's the bulk of a Switch 2 emulator and well beyond boot fixes.
 
 ## Prioritized next steps
 
+0. **Finish NVN device init** on title 4 (see the stop above), then GPU channel creation
+   (`/dev/nvhost-gpu`, GPFIFO submission) and the vi2 present path. The first realistic
+   milestone is a cleared frame: clears need no shaders.
 1. **Keep walking title 4's graphics boot** with the IPC trace: each `nx2:` stub call in the log
    is a command whose reply layout is needed. Use `nso_syms.py` + `nso_dis.py` on the SDK caller
    to read the expected reply words (as done for 1402/202).

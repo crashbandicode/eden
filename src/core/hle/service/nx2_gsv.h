@@ -86,6 +86,7 @@ public:
 // Placeholder for the Switch 2 syncpoint server (nn::syncpt), handed out by gsv 202. TIPC 1
 // returns a u32 the SDK requires to be < 0x400 and then passes min(value, 63) to TIPC 21.
 // Everything else is auto-stubbed through the nx2: prefix.
+// - TIPC 0(u64): handshake, echo the token (newer SDKs).
 // - TIPC 22(u32 slot): an event handle for that slot (copy handle at word 3, result at word 4).
 //   NVN's NvOsEventPool asks for slots and multi-waits on them.
 // - TIPC 201(slot, counter, u64 value, mode): signal the slot's event once the counter reaches
@@ -97,6 +98,7 @@ public:
     explicit INx2SyncptSession(Core::System& system_)
         : ServiceFramework{system_, "nx2:syncpt"}, m_context{system_, "nx2:syncpt"} {
         RegisterHandlersTipc({
+            {0, &INx2SyncptSession::Handshake, "Handshake"},
             {1, &INx2SyncptSession::GetCount, "GetCount (guessed)"},
             {22, &INx2SyncptSession::GetSlotEvent, "GetSlotEvent (guessed)"},
             {201, &INx2SyncptSession::RequestSlotEvent, "RequestSlotEvent (guessed)"},
@@ -114,6 +116,13 @@ public:
     }
 
 private:
+    // Newer SDKs (title 1) open with TIPC 0(u64 token) and abort unless the reply echoes it.
+    void Handshake(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        LOG_INFO(Service, "nx2:syncpt TIPC 0 handshake {:#x}", u64{w[2]} | (u64{w[3]} << 32));
+        TipcReplyWords(ctx, {w[2], w[3]});
+    }
+
     void GetCount(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:syncpt TIPC 1, returning 32");
         TipcReplyWords(ctx, {32});
@@ -212,6 +221,8 @@ public:
             {21, &INx2GpuSession::Start, "Start (guessed)"},
             {22, &INx2GpuSession::OpenSubSession, "OpenSubSession (guessed)"},
             {33, &INx2GpuSession::GetCount33, "Unknown33 (u32 count)"},
+            {201, &INx2GpuSession::GetUserPartition, "GetUserPartition (newer SDKs)"},
+            {202, &INx2GpuSession::GetGsvPartition, "GetGsvPartition (newer SDKs)"},
             {203, &INx2GpuSession::GetVaRange, "GetVaRange (guessed)"},
             // Sub-session commands (gpu 22 hands out a second session to this same object).
             {101, &INx2GpuSession::SubRegisterMemory, "CreateGpuAccessibleMemory"},
@@ -279,6 +290,22 @@ private:
         TipcReplyWords(ctx, {static_cast<u32>(kind), static_cast<u32>(kind >> 32),
                              static_cast<u32>(start), static_cast<u32>(start >> 32),
                              static_cast<u32>(size), static_cast<u32>(size >> 32)});
+    }
+
+    // Newer SDKs (title 1) query the address space's user and gsv partitions with 201/202(id):
+    // two u64s each, stored as the partition's min/max. The user value works whether it is read
+    // as (start, size) or (min, max). Title 4 never needed the gsv partition, so it stays empty.
+    void GetUserPartition(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 201 [2]={:#x}", ctx.CommandBuffer()[2]);
+        constexpr u64 first = 0x8000000ULL;
+        constexpr u64 second = 0xC000000000ULL - first;
+        TipcReplyWords(ctx, {static_cast<u32>(first), static_cast<u32>(first >> 32),
+                             static_cast<u32>(second), static_cast<u32>(second >> 32)});
+    }
+
+    void GetGsvPartition(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 202 [2]={:#x}, empty", ctx.CommandBuffer()[2]);
+        TipcReplyWords(ctx, {0, 0, 0, 0});
     }
 
     void OpenSubSession(HLERequestContext& ctx) {

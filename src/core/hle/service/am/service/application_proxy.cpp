@@ -11,6 +11,7 @@
 #include "core/hle/service/am/service/common_state_getter.h"
 #include "core/hle/service/am/service/debug_functions.h"
 #include "core/hle/service/am/service/display_controller.h"
+#include "core/hle/service/am/service/graphics_scale_controller.h"
 #include "core/hle/service/am/service/library_applet_creator.h"
 #include "core/hle/service/am/service/process_winding_controller.h"
 #include "core/hle/service/am/service/self_controller.h"
@@ -37,7 +38,7 @@ IApplicationProxy::IApplicationProxy(Core::System& system_, std::shared_ptr<Appl
         // Switch 2-only getters; see nx2_stub_interface.h.
         {40, &IApplicationProxy::GetNx2Interface, "Nx2Getter40"},
         {50, &IApplicationProxy::GetNx2Interface, "Nx2Getter50"},
-        {60, &IApplicationProxy::GetNx2Interface, "Nx2Getter60"},
+        {60, D<&IApplicationProxy::GetGraphicsScaleController>, "GetGraphicsScaleController (Switch 2)"},
         {70, &IApplicationProxy::GetNx2Interface, "Nx2Getter70"},
         {80, &IApplicationProxy::GetNx2Interface, "Nx2Getter80"},
         {90, &IApplicationProxy::GetNx2Interface, "Nx2Getter90"},
@@ -49,6 +50,13 @@ IApplicationProxy::IApplicationProxy(Core::System& system_, std::shared_ptr<Appl
 }
 
 IApplicationProxy::~IApplicationProxy() = default;
+
+Result IApplicationProxy::GetGraphicsScaleController(
+    Out<SharedPointer<IGraphicsScaleController>> out_controller) {
+    LOG_DEBUG(Service_AM, "called");
+    *out_controller = std::make_shared<IGraphicsScaleController>(system);
+    R_SUCCEED();
+}
 
 void IApplicationProxy::GetNx2Interface(HLERequestContext& ctx) {
     ReturnNx2StubInterface(system, ctx, "IApplicationProxy");

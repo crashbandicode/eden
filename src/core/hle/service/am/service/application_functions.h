@@ -83,6 +83,7 @@ private:
     Result CreateApplicationAndRequestToStart(u64 application_id);
     Result GetUnknownEvent210(OutCopyHandle<Kernel::KReadableEvent> out_event);
     Result Unknown320();
+    Result Unknown321();
     Result Unknown330(Out<u8> out);
     Result PrepareForJit();
 

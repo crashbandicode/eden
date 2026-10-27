@@ -110,6 +110,8 @@ public:
             {12, &INx2GpuSession::GetIdEvent, "GetIdEvent (guessed)"},
             {21, &INx2GpuSession::Start, "Start (guessed)"},
             {22, &INx2GpuSession::OpenSubSession, "OpenSubSession (guessed)"},
+            {33, &INx2GpuSession::GetCount33, "Unknown33 (u32 count)"},
+            {203, &INx2GpuSession::GetVaRange, "GetVaRange (guessed)"},
         });
     }
 
@@ -151,6 +153,23 @@ private:
         EventFor(id)->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
+    }
+
+    void GetCount33(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 33 [2]={:#x}, returning 1", ctx.CommandBuffer()[2]);
+        TipcReplyWords(ctx, {1});
+    }
+
+    // Used by nn::gpu::sdk::CreateGpuAddressSpace: three u64s after the result, a kind (< 5, 0 =
+    // none) and what looks like a GPU VA range. Report kind 1, [0x10000000, +64 GiB).
+    void GetVaRange(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 203 [2]={:#x}", ctx.CommandBuffer()[2]);
+        constexpr u64 kind = 1;
+        constexpr u64 start = 0x10000000ULL;
+        constexpr u64 size = 64ULL << 30;
+        TipcReplyWords(ctx, {static_cast<u32>(kind), static_cast<u32>(kind >> 32),
+                             static_cast<u32>(start), static_cast<u32>(start >> 32),
+                             static_cast<u32>(size), static_cast<u32>(size >> 32)});
     }
 
     void OpenSubSession(HLERequestContext& ctx) {

@@ -218,6 +218,7 @@ private:
         std::optional<Allocator> small_page_allocator; //! Shared as this is also used by nvhost::GpuChannel
 
         bool initialised{};
+        bool absolute_big_page_limit{}; //!< Switch 2 layout: big-page limit is va_range_end
     } vm;
     std::unique_ptr<Tegra::MemoryManager> gmmu;
 };

@@ -94,7 +94,7 @@ void nvhost_as_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {}
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}
 
 NvResult nvhost_as_gpu::AllocAsEx(IoctlAllocAsEx& params) {
-    LOG_DEBUG(Service_NVDRV, "called, big_page_size={:#x}", params.big_page_size);
+    LOG_DEBUG(Service_NVDRV, "called, flags={:#x} big_page_size={:#x} va_range_start={:#x} va_range_end={:#x} va_range_split={:#x}", params.flags, params.big_page_size, params.va_range_start, params.va_range_end, params.va_range_split);
 
     std::scoped_lock lock(mutex);
 
@@ -125,6 +125,15 @@ NvResult nvhost_as_gpu::AllocAsEx(IoctlAllocAsEx& params) {
         vm.va_range_start = params.va_range_start;
         vm.va_range_split = params.va_range_split;
         vm.va_range_end = params.va_range_end;
+        if (vm.va_range_split == 0) {
+            // Switch 2 NvRm (flags 5, no big page size) asks for small pages over the whole range
+            // and then reserves 4 KiB VA up to 512 GiB. Keep a small big-page region past the end
+            // so both allocators stay valid.
+            vm.va_range_split = vm.va_range_end;
+            vm.va_range_end += 4ULL << 30;
+            vm.absolute_big_page_limit = true;
+            LOG_WARNING(Service_NVDRV, "No VA split given; small pages up to {:#x}", vm.va_range_split);
+        }
     }
 
     const u64 max_big_page_bits = Common::Log2Ceil(vm.va_range_end);
@@ -134,8 +143,11 @@ NvResult nvhost_as_gpu::AllocAsEx(IoctlAllocAsEx& params) {
     vm.small_page_allocator.emplace(start_pages, end_pages);
 
     const auto start_big_pages{static_cast<u32>(vm.va_range_split >> vm.big_page_size_bits)};
-    const auto end_big_pages{
-        static_cast<u32>((vm.va_range_end - vm.va_range_split) >> vm.big_page_size_bits)};
+    // The Switch 1 layout passes the big-page region length as the limit (so the limit stays above
+    // the start there); a split past the region length needs the absolute end instead.
+    const auto end_big_pages{static_cast<u32>(
+        (vm.absolute_big_page_limit ? vm.va_range_end : vm.va_range_end - vm.va_range_split) >>
+        vm.big_page_size_bits)};
     vm.big_page_allocator.emplace(start_big_pages, end_big_pages);
 
     gmmu = std::make_unique<Tegra::MemoryManager>(system, max_big_page_bits, vm.va_range_split, vm.big_page_size_bits, VM::PAGE_SIZE_BITS);

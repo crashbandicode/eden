@@ -34,6 +34,7 @@ void NVDRV::Open(HLERequestContext& ctx) {
 
     const auto& buffer = ctx.ReadBuffer();
     const std::string device_name(Common::StringFromBuffer(buffer));
+    LOG_DEBUG(Service_NVDRV, "device_name={}", device_name);
 
     if (device_name == "/dev/nvhost-prof-gpu") {
         rb.Push<DeviceFD>(0);
@@ -178,6 +179,14 @@ void NVDRV::Initialize(HLERequestContext& ctx) {
     auto process = ctx.GetObjectFromHandle<Kernel::KProcess>(process_handle);
     session_id = container.OpenSession(process.GetPointerUnsafe());
 
+    is_initialized = true;
+}
+
+void NVDRV::InitializeForProcess(Kernel::KProcess* process) {
+    if (is_initialized) {
+        return;
+    }
+    session_id = nvdrv->GetContainer().OpenSession(process);
     is_initialized = true;
 }
 

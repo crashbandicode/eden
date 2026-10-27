@@ -208,6 +208,8 @@ private:
     EventInterface& events_interface;
 
     // Events
+    // Set once a caller asked for the Switch 2 characteristics layout.
+    bool nx2_caller{};
     Kernel::KEvent* error_notifier_event;
     Kernel::KEvent* unknown_event;
 

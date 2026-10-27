@@ -20,7 +20,10 @@
 #include "core/hle/service/hle_ipc.h"
 #include "core/hle/service/ipc_helpers.h"
 #include "core/hle/service/kernel_helpers.h"
+#include "core/hle/service/nvdrv/nvdrv.h"
+#include "core/hle/service/nvdrv/nvdrv_interface.h"
 #include "core/hle/service/nx2_stub_interface.h"
+#include "core/hle/service/sm/sm.h"
 #include "core/hle/service/server_manager.h"
 #include "core/hle/service/service.h"
 
@@ -317,8 +320,14 @@ private:
 
     void OpenNvsrvSession(HLERequestContext& ctx) {
         // The SDK reads the handle at word 3 and the result at word 4.
-        LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC 1402, returning a nx2:nvsrv session");
-        ReturnRawSession(system, ctx, std::make_shared<INx2NvsrvSession>(system));
+        // nvsrv speaks the nvdrv INvDrvServices protocol (Open/Ioctl/Close/...,
+        // 13 = SetGraphicsFirmwareMemoryMarginEnabled), so serve it with Eden's nvdrv on the shared
+        // module. The nx2: name keeps unknown commands auto-stubbed and logged.
+        LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC 1402, returning an nvdrv-backed nx2:nvsrv session");
+        auto module = system.ServiceManager().GetService<Nvidia::NVDRV>("nvdrv", true)->GetModule();
+        auto nvsrv = std::make_shared<Nvidia::NVDRV>(system, module, "nx2:nvsrv");
+        nvsrv->InitializeForProcess(ctx.GetThread().GetOwnerProcess());
+        ReturnRawSession(system, ctx, std::move(nvsrv));
     }
 
     KernelHelpers::ServiceContext m_context;

@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstring>
 #include "common/assert.h"
 #include "common/logging.h"
@@ -112,6 +113,15 @@ NvResult nvhost_ctrl_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8>
     default:
         break;
     }
+    if (nx2_caller) {
+        // Switch 2 NvRm uses ioctls Switch 1 never had; answer them with a zeroed success so
+        // device setup can continue, and log each one.
+        LOG_WARNING(Service_NVDRV, "(STUBBED) Switch 2 ioctl={:08X} group={:01X} command={:01X}",
+                    command.raw, command.group, command.cmd);
+        std::fill(output.begin(), output.end(), u8{0});
+        std::fill(inline_output.begin(), inline_output.end(), u8{0});
+        return NvResult::Success;
+    }
     UNIMPLEMENTED_MSG("Unimplemented ioctl={:08X}, group={:01X}, command={:01X}", command.raw,
                       command.group, command.cmd);
     return NvResult::NotImplemented;
@@ -119,6 +129,38 @@ NvResult nvhost_ctrl_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8>
 
 void nvhost_ctrl_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {}
 void nvhost_ctrl_gpu::OnClose(DeviceFD fd) {}
+
+namespace {
+
+// Switch 2 SDKs ask for a 0xD0-byte characteristics block (Switch 1: 0xA0). Their NvRm only
+// accepts chip ids 0x17E, 0x12B and 0x12E and its NVN path rejects the Maxwell ones, so report the
+// Switch 2 Ampere chip. Fields past the Switch 1 layout are left zero. Values are best guesses.
+constexpr u64 Nx2CharacteristicsSize = 0xD0;
+
+template <typename GC>
+void ApplyNx2Characteristics(GC& gc) {
+    gc.arch = 0x170;               // Ampere
+    gc.impl = 0xE;                 // chip id 0x17E as listed in the Switch 2 NvRm chip table
+    gc.num_tpc_per_gpc = 0x6;
+    gc.sm_arch_sm_version = 0x807; // sm_87 (guess)
+    gc.sm_arch_spa_version = 0x807;
+    gc.threed_class = 0xC797;      // AMPERE_B
+    gc.compute_class = 0xC7C0;     // AMPERE_COMPUTE_B
+    gc.gpfifo_class = 0xC56F;      // AMPERE_CHANNEL_GPFIFO_A
+    gc.dma_copy_class = 0xC7B5;    // AMPERE_DMA_COPY_B
+    gc.chipname = 0x6631306167;    // "ga10f"
+
+    // The Switch 2 layout keeps nine s16 interface versions at 0x70..0x80 (like nvgpu's
+    // *_ioctl_nr_last); its NvRm requires e.g. [0x78] >= 6 and enables features above 0xa, 0x1f
+    // and 0x26. In the Switch 1 layout these bytes are max_fbps_count..max_tex_per_tpc.
+    auto* const raw = reinterpret_cast<u8*>(&gc);
+    for (size_t off = 0x70; off <= 0x80; off += 2) {
+        const s16 version = 0x40;
+        std::memcpy(raw + off, &version, sizeof(version));
+    }
+}
+
+} // namespace
 
 NvResult nvhost_ctrl_gpu::GetCharacteristics1(IoctlCharacteristics& params) {
     LOG_DEBUG(Service_NVDRV, "called");
@@ -164,7 +206,8 @@ NvResult nvhost_ctrl_gpu::GetCharacteristics1(IoctlCharacteristics& params) {
 
 NvResult nvhost_ctrl_gpu::GetCharacteristics3(
     IoctlCharacteristics& params, std::span<IoctlGpuCharacteristics> gpu_characteristics) {
-    LOG_DEBUG(Service_NVDRV, "called");
+    LOG_DEBUG(Service_NVDRV, "called, buf_size={:#x}", params.gpu_characteristics_buf_size);
+    const bool nx2 = params.gpu_characteristics_buf_size >= Nx2CharacteristicsSize;
 
     params.gc.arch = 0x120;
     params.gc.impl = 0xb;
@@ -203,6 +246,12 @@ NvResult nvhost_ctrl_gpu::GetCharacteristics3(
     params.gc.gr_compbit_store_base_hw = 0x0;
     params.gpu_characteristics_buf_size = 0xA0;
     params.gpu_characteristics_buf_addr = 0xdeadbeef; // Cannot be 0 (UNUSED)
+    if (nx2) {
+        nx2_caller = true;
+        ApplyNx2Characteristics(params.gc);
+        params.gpu_characteristics_buf_size = Nx2CharacteristicsSize;
+        LOG_WARNING(Service_NVDRV, "Switch 2 caller, reporting Ampere chip 0x17E");
+    }
     if (!gpu_characteristics.empty()) {
         gpu_characteristics.front() = params.gc;
     }

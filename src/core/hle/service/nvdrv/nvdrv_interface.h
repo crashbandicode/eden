@@ -23,6 +23,9 @@ public:
         return nvdrv;
     }
 
+    // For Switch 2 nvsrv sessions, which are set up through gsv instead of Initialize.
+    void InitializeForProcess(Kernel::KProcess* process);
+
 private:
     void Open(HLERequestContext& ctx);
     void Ioctl1(HLERequestContext& ctx);

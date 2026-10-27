@@ -118,7 +118,11 @@ def main():
         by_mask.setdefault(m, set()).add(e)
     total_unknown = Counter()
     for path in sys.argv[2:]:
-        text = nso_text(path)
+        try:
+            text = nso_text(path)
+        except (IndexError, AssertionError) as e:
+            print(f"== {path}: .text does not decompress as a plain LZ4 block ({type(e).__name__})")
+            continue
         w = np.frombuffer(text[: len(text) // 4 * 4], dtype="<u4")
         known = np.zeros(w.shape, dtype=bool)
         for m, es in by_mask.items():

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <initializer_list>
 #include <vector>
 
 #include "core/core.h"
@@ -45,6 +46,17 @@ inline Kernel::KClientSession* CreateRawSession(Core::System& system, HLERequest
     return &session->GetClientSession();
 }
 
+// Replies to a TIPC request with success and raw u32 data words. ResponseBuilder::Push(Result)
+// writes the CMIF two-word result, which shifts TIPC data one word past where the client reads
+// it (and past the copied size); TIPC has a one-word result followed directly by the data.
+inline void TipcReplyWords(HLERequestContext& ctx, std::initializer_list<u32> words) {
+    IPC::ResponseBuilder rb{ctx, static_cast<u32>(2 + words.size())};
+    rb.PushRaw<u32>(ResultSuccess.raw);
+    for (const u32 w : words) {
+        rb.Push<u32>(w);
+    }
+}
+
 // Replies with success and a copied handle to a new session served by `iface`.
 template <class T>
 inline void ReturnRawSession(Core::System& system, HLERequestContext& ctx, std::shared_ptr<T> iface) {
@@ -75,9 +87,7 @@ public:
 private:
     void GetCount(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:syncpt TIPC 1, returning 32");
-        IPC::ResponseBuilder rb{ctx, 3};
-        rb.Push(ResultSuccess);
-        rb.Push<u32>(32);
+        TipcReplyWords(ctx, {32});
     }
 };
 
@@ -121,10 +131,7 @@ private:
 
     void GetIdRange(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:gpu TIPC 11, returning [0, {}]", NumIds - 1);
-        IPC::ResponseBuilder rb{ctx, 4};
-        rb.Push(ResultSuccess);
-        rb.Push<u32>(0);
-        rb.Push<u32>(NumIds - 1);
+        TipcReplyWords(ctx, {0, NumIds - 1});
     }
 
     void GetIdEvent(HLERequestContext& ctx) {
@@ -165,6 +172,7 @@ public:
         RegisterHandlersTipc({
             {1, &INx2Vi2Session::ReturnOne, "Unknown1"},
             {3, &INx2Vi2Session::ReturnOne, "GetDisplayCount (guessed)"},
+            {5, &INx2Vi2Session::GetTimestampRecorderCount, "GetTimestampRecorderCount (guessed)"},
             {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
             {31, &INx2Vi2Session::ReturnEvent, "Unknown31"},
             {32, &INx2Vi2Session::ReturnEvent, "Unknown32"},
@@ -180,9 +188,13 @@ public:
 private:
     void ReturnOne(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {}, returning 1", ctx.GetCommand());
-        IPC::ResponseBuilder rb{ctx, 3};
-        rb.Push(ResultSuccess);
-        rb.Push<u32>(1);
+        TipcReplyWords(ctx, {1});
+    }
+
+    // Must be < 8; nn::vi::detail::LayerHistory creates 7 timestamp recorders per layer.
+    void GetTimestampRecorderCount(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC 5, returning 7");
+        TipcReplyWords(ctx, {7});
     }
 
     void ReturnEvent(HLERequestContext& ctx) {

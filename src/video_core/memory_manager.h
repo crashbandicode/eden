@@ -43,6 +43,10 @@ public:
                            u64 big_page_bits_ = 16, u64 page_bits_ = 12);
     ~MemoryManager();
 
+    // Switch 2: GPU address of the read-only syncpoint shim (u32 per syncpoint); 0 = none.
+    void SetNativeSyncpointShim(GPUVAddr address);
+    static constexpr u32 NumShimSyncpoints = 192; // Tegra::Host1x::SyncpointManager
+
     static constexpr bool HAS_FLUSH_INVALIDATION = true;
 
     inline size_t GetID() const noexcept {
@@ -178,6 +182,7 @@ private:
         GPUVAddr gpu_addr, std::size_t size,
         boost::container::small_vector<std::pair<std::conditional_t<is_gpu_address, GPUVAddr, DAddr>, std::size_t>, 32>& result) const;
 
+    std::atomic<GPUVAddr> native_syncpoint_shim{};
     Core::System& system;
     MaxwellDeviceMemoryManager& memory;
 

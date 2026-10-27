@@ -19,6 +19,10 @@
 
 namespace Service::Nvidia::Devices {
 
+namespace {
+void ApplyNx2CharacteristicsTail(std::span<u8> block);
+} // namespace
+
 nvhost_ctrl_gpu::nvhost_ctrl_gpu(Core::System& system_, EventInterface& events_interface_)
     : nvdevice{system_}, events_interface{events_interface_} {
     error_notifier_event = events_interface.CreateEvent("CtrlGpuErrorNotifier");
@@ -97,9 +101,14 @@ NvResult nvhost_ctrl_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8>
     switch (command.group) {
     case 'G':
         switch (command.cmd) {
-        case 0x5:
-            return WrapFixedInlOut(this, &nvhost_ctrl_gpu::GetCharacteristics3, input, output,
-                                   inline_output);
+        case 0x5: {
+            const auto result = WrapFixedInlOut(this, &nvhost_ctrl_gpu::GetCharacteristics3,
+                                                input, output, inline_output);
+            if (nx2_caller) {
+                ApplyNx2CharacteristicsTail(inline_output);
+            }
+            return result;
+        }
         case 0x6:
             return WrapFixedInlOut(this, &nvhost_ctrl_gpu::GetTPCMasks3, input, output,
                                    inline_output);
@@ -191,6 +200,8 @@ void ApplyNx2Characteristics(GC& gc) {
     gc.dma_copy_class = 0xC7B5;    // AMPERE_DMA_COPY_B
     gc.chipname = 0x6631306167;    // "ga10f"
     gc.flags |= 0x100;             // NVGPU_GPU_FLAGS_SUPPORT_TSG: NvRm binds channels to a TSG
+    gc.flags |= 1ULL << 22;        // NVGPU_GPU_FLAGS_SUPPORT_TSG_SUBCONTEXTS (see below)
+    gc.flags |= 1ULL << 26;        // NVGPU_GPU_FLAGS_SUPPORT_SYNCPOINT_ADDRESS: syncpoint shim
 
     // The Switch 2 layout keeps nine s16 interface versions at 0x70..0x80 (like nvgpu's
     // *_ioctl_nr_last); its NvRm requires e.g. [0x78] >= 6 and enables features above 0xa, 0x1f
@@ -199,6 +210,18 @@ void ApplyNx2Characteristics(GC& gc) {
     for (size_t off = 0x70; off <= 0x80; off += 2) {
         const s16 version = 0x40;
         std::memcpy(raw + off, &version, sizeof(version));
+    }
+}
+
+// Fields of the Switch 2 block past the Switch 1 layout. NvRm sizes each TSG's subcontext (VEID)
+// allocator from the u32 at 0xb4, but only when the TSG interface version (0x72) is above 0xa and
+// flags bits 8 and 22 are set; otherwise every TSG gets one subcontext and a second queue's
+// NvRmGpuTSGSubcontextCreate fails (0x11), leaving that NVN queue without command memory.
+void ApplyNx2CharacteristicsTail(std::span<u8> block) {
+    constexpr size_t MaxSubcontextsOffset = 0xb4;
+    constexpr u32 MaxSubcontexts = 64; // Ampere VEIDs per TSG
+    if (block.size() >= MaxSubcontextsOffset + sizeof(MaxSubcontexts)) {
+        std::memcpy(block.data() + MaxSubcontextsOffset, &MaxSubcontexts, sizeof(MaxSubcontexts));
     }
 }
 

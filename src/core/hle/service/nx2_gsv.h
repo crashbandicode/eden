@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <initializer_list>
 #include <atomic>
@@ -437,6 +438,60 @@ private:
     std::vector<Kernel::KEvent*> m_events;
 };
 
+// Native memory and images handed out by the Switch 2 graphics server (gsv 111/114/423/429/315),
+// shared with the vi2 session so presents can find an image's memory. Command meanings follow
+// the shared changes.patch (IGraphicsSupervisor), re-checked against title 4's SDK.
+struct Nx2NativeObjects {
+    struct Memory {
+        u64 size{};
+        u64 address{}; // CPU (== GPU) address once bound by 114/423
+    };
+    struct Image {
+        u32 memory{};
+        std::array<u32, 16> preference{};
+        u64 size{};
+        bool window_pool{};
+    };
+    std::mutex mutex;
+    std::map<u32, Memory> memories;
+    std::map<u32, Image> images;
+    u32 next_memory{1};
+    u32 next_image{1};
+};
+
+// Block-linear layout of an InterModuleUserImagePreference (16 words): word 2 holds
+// (width - 1) | (height - 1) << 16, word 4 the block height (log2 of GOB rows), word 5 the row
+// pitch in 64-byte GOBs. Formula from changes.patch (native_image_layout.h); preferences outside
+// it fall back to 4 bytes per pixel and 128-row blocks.
+struct Nx2ImageLayout {
+    u32 width;
+    u32 height;
+    u64 pitch;
+    u32 block_height_log2;
+    u64 size;
+    u64 alignment;
+};
+
+inline Nx2ImageLayout Nx2CalculateImageLayout(const u32* preference) {
+    Nx2ImageLayout layout{};
+    layout.width = (preference[2] & 0xFFFF) + 1;
+    layout.height = (preference[2] >> 16) + 1;
+    const u64 pitch_gobs = preference[5];
+    const u32 block_height_log2 = preference[4];
+    if (block_height_log2 <= 8 && pitch_gobs >= (u64{layout.width} * 4 + 63) / 64 &&
+        pitch_gobs <= 4096) {
+        layout.pitch = pitch_gobs * 64;
+        layout.block_height_log2 = block_height_log2;
+    } else {
+        layout.pitch = Common::AlignUp(u64{layout.width} * 4, 64);
+        layout.block_height_log2 = 7;
+    }
+    const u64 block_rows = u64{1} << layout.block_height_log2;
+    layout.size = layout.pitch * Common::AlignUp(u64{layout.height}, block_rows);
+    layout.alignment = std::max<u64>(64 * block_rows, 0x1000);
+    return layout;
+}
+
 // Placeholder for the Switch 2 graphics-system server that nn::gsv::BootWithRemoteMemory talks
 // to over TIPC. Nothing behind it is emulated: commands succeed and are logged, so boot can show
 // what comes next. Commands 202 and 1402 hand out the syncpt and nvsrv sessions the SDK uses.
@@ -452,6 +507,15 @@ public:
             {204, &INx2GraphicsSystemSession::AttachSyncptMemory, "AttachSyncptMemory (guessed)"},
             {305, &INx2GraphicsSystemSession::OpenViSession, "OpenViSession (guessed)"},
             {497, &INx2GraphicsSystemSession::OpenGpuSession, "OpenGpuSession (guessed)"},
+            {111, &INx2GraphicsSystemSession::CreateNativeMemory, "CreateNativeMemory"},
+            {112, &INx2GraphicsSystemSession::DestroyNativeMemory, "DestroyNativeMemory"},
+            {114, &INx2GraphicsSystemSession::BindNativeMemory, "BindNativeMemory"},
+            {314, &INx2GraphicsSystemSession::ConfigureWindowImagePool, "DestroyNativeWindowAliasImagePool"},
+            {315, &INx2GraphicsSystemSession::ConfigureWindowImagePool, "CreateNativeWindowAliasImagePool"},
+            {423, &INx2GraphicsSystemSession::BindNativeGpuMemory, "BindNativeGpuMemory"},
+            {429, &INx2GraphicsSystemSession::CreateNativeImage, "CreateNativeImage"},
+            {430, &INx2GraphicsSystemSession::DestroyNativeImage, "DestroyNativeImage"},
+            {435, &INx2GraphicsSystemSession::CalculateNativeImageSize, "CalculateNativeImageSize"},
             {1402, &INx2GraphicsSystemSession::OpenNvsrvSession, "OpenNvsrvSession (guessed)"},
             {1510, &INx2GraphicsSystemSession::CalculateRequirements, "CalculateRequirements"},
         });
@@ -607,21 +671,106 @@ private:
     // size, u64 alignment; the client raises the alignment to at least 4 KiB and rounds the size.
     void CalculateRequirements(HLERequestContext& ctx) {
         const auto* w = ctx.CommandBuffer();
-        const u32 width = (w[4] & 0xFFFF) + 1;
-        const u32 height = (w[4] >> 16) + 1;
-        const u32 pixel_format = w[8] & 0xFF;
-        // Pixel format numbering is unknown; 4 bytes per pixel. Oversizing (8 for format 4) left
-        // the game's 1.5 GiB heap short of its 300 MiB sound heap.
-        const u64 bytes_per_pixel = 4;
-        const u64 pitch = Common::AlignUp(width * bytes_per_pixel, 64);
-        const u64 size = pitch * Common::AlignUp(height, 128);
-        constexpr u64 alignment = 0x10000;
-        LOG_WARNING(Service,
-                    "(STUBBED) nx2:gsv TIPC 1510 kind={} {}x{} [6]={:#x} [7]={:#x} format={} "
-                    "[9]={:#x} [18]={:#x} -> size={:#x}",
-                    w[3], width, height, w[6], w[7], pixel_format, w[9], w[18], size);
-        TipcReplyWords(ctx, {static_cast<u32>(size), static_cast<u32>(size >> 32),
-                             static_cast<u32>(alignment), 0});
+        const auto layout = Nx2CalculateImageLayout(w + 2);
+        LOG_DEBUG(Service, "nx2:gsv 1510 kind={} {}x{} block={} pitch={:#x} format={} -> size={:#x} align={:#x}",
+                  w[3], layout.width, layout.height, layout.block_height_log2, layout.pitch, w[8],
+                  layout.size, layout.alignment);
+        TipcReplyWords(ctx, {static_cast<u32>(layout.size), static_cast<u32>(layout.size >> 32),
+                             static_cast<u32>(layout.alignment),
+                             static_cast<u32>(layout.alignment >> 32)});
+    }
+
+    // 435(preference[16], u32 count): result, u64 size of a GPU native image.
+    void CalculateNativeImageSize(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u64 size = Nx2CalculateImageLayout(w + 2).size * std::max<u32>(w[18], 1);
+        LOG_DEBUG(Service, "nx2:gsv 435 count={} -> size={:#x}", w[18], size);
+        TipcReplyWords(ctx, {static_cast<u32>(size), static_cast<u32>(size >> 32)});
+    }
+
+    static u64 Pair(const u32* w, size_t i) {
+        return u64{w[i]} | (u64{w[i + 1]} << 32);
+    }
+
+    // 111(u8 mode at word 2, u64 size): result, u32 native memory id.
+    void CreateNativeMemory(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u64 size = Pair(w, 3);
+        std::scoped_lock lk{m_objects->mutex};
+        const u32 id = m_objects->next_memory++;
+        m_objects->memories[id] = {size, 0};
+        LOG_INFO(Service, "nx2:gsv 111 CreateNativeMemory mode={} size={:#x} -> id {}", w[2] & 0xFF,
+                 size, id);
+        TipcReplyWords(ctx, {id});
+    }
+
+    void DestroyNativeMemory(HLERequestContext& ctx) {
+        const u32 id = ctx.CommandBuffer()[2];
+        std::scoped_lock lk{m_objects->mutex};
+        m_objects->memories.erase(id);
+        LOG_DEBUG(Service, "nx2:gsv 112 DestroyNativeMemory id {}", id);
+        TipcReplyWords(ctx, {});
+    }
+
+    // 114(u32 id, u64 address, u64 size, u64 flags, u64 offset): back native memory with process
+    // memory.
+    void BindNativeMemory(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        BindMemory(w[2], Pair(w, 3), Pair(w, 5), "114");
+        TipcReplyWords(ctx, {});
+    }
+
+    // 423(u32 id, u64 address, u64 size, u32 parent GpuMemoryHandle, u64 offset, ...): back
+    // native memory with part of GPU-accessible memory.
+    void BindNativeGpuMemory(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        LOG_DEBUG(Service, "nx2:gsv 423 parent={} offset={:#x}", w[7], Pair(w, 8));
+        BindMemory(w[2], Pair(w, 3), Pair(w, 5), "423");
+        TipcReplyWords(ctx, {});
+    }
+
+    void BindMemory(u32 id, u64 address, u64 size, const char* command) {
+        std::scoped_lock lk{m_objects->mutex};
+        auto& memory = m_objects->memories[id];
+        memory.address = address;
+        if (memory.size == 0) {
+            memory.size = size;
+        }
+        LOG_INFO(Service, "nx2:gsv {} bind native memory {} at {:#x}+{:#x}", command, id, address,
+                 size);
+    }
+
+    // 429(preference[16], u32 count, u32 memory id): result, u32 native image id.
+    void CreateNativeImage(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        std::scoped_lock lk{m_objects->mutex};
+        const u32 id = m_objects->next_image++;
+        auto& image = m_objects->images[id];
+        image.memory = w[19];
+        std::copy_n(w + 2, image.preference.size(), image.preference.begin());
+        image.size = Nx2CalculateImageLayout(w + 2).size;
+        LOG_INFO(Service, "nx2:gsv 429 CreateNativeImage memory={} count={} size={:#x} -> id {}",
+                 w[19], w[18], image.size, id);
+        TipcReplyWords(ctx, {id});
+    }
+
+    void DestroyNativeImage(HLERequestContext& ctx) {
+        const u32 id = ctx.CommandBuffer()[2];
+        std::scoped_lock lk{m_objects->mutex};
+        m_objects->images.erase(id);
+        TipcReplyWords(ctx, {});
+    }
+
+    // 315(u32 image, u32 count) / 314(u32 image): add/remove a window alias image pool.
+    void ConfigureWindowImagePool(HLERequestContext& ctx) {
+        const u32 id = ctx.CommandBuffer()[2];
+        const bool create = ctx.GetCommand() == 315;
+        std::scoped_lock lk{m_objects->mutex};
+        if (auto it = m_objects->images.find(id); it != m_objects->images.end()) {
+            it->second.window_pool = create;
+        }
+        LOG_INFO(Service, "nx2:gsv {} window image pool image {}", ctx.GetCommand(), id);
+        TipcReplyWords(ctx, {});
     }
 
     void OpenViSession(HLERequestContext& ctx) {
@@ -658,6 +807,7 @@ private:
 
     static constexpr std::chrono::nanoseconds SyncptPollInterval{std::chrono::microseconds{500}};
 
+    std::shared_ptr<Nx2NativeObjects> m_objects{std::make_shared<Nx2NativeObjects>()};
     KernelHelpers::ServiceContext m_context;
     std::array<Kernel::KEvent*, 2> m_syncpt_events{};
     Core::Memory::Memory* m_syncpt_memory{};

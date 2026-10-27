@@ -153,7 +153,8 @@ def main():
             regs = rsp.regs()
             print(" ".join(f"{k}={v:#x}" for k, v in regs.items()))
         elif op == "mem":
-            a = regs[parts[1]] if parts[1] in regs else int(parts[1], 16)
+            base, _, off = parts[1].partition("+")
+            a = (regs[base] if base in regs else int(base, 16)) + (int(off, 16) if off else 0)
             data = rsp.mem(a, int(parts[2], 0))
             for i in range(0, len(data), 16):
                 words = [struct.unpack_from("<Q", data, i + j)[0] for j in range(0, min(16, len(data) - i) - 7, 8)]
@@ -258,9 +259,24 @@ def main():
                 regs = r
                 d = rsp.mem(addr, 8)
                 val = struct.unpack("<Q", d)[0] if len(d) == 8 else None
-                print(f"  w{i} {reply[:40]} pc={r.get('pc', 0):#x} lr={r.get('x30', 0) & 0xFFFFFFFFFFFF:#x} value={val if val is None else hex(val)}")
+                chain = []
+                fp = r.get("x29", 0)
+                for _ in range(6):
+                    fd = rsp.mem(fp, 16)
+                    if len(fd) < 16:
+                        break
+                    nfp, ret = struct.unpack("<QQ", fd)
+                    chain.append(ret & 0xFFFFFFFFFFFF)
+                    if nfp <= fp:
+                        break
+                    fp = nfp
+                print(f"  w{i} {reply[:40]} pc={r.get('pc', 0):#x} lr={r.get('x30', 0) & 0xFFFFFFFFFFFF:#x} value={val if val is None else hex(val)} chain=" + ",".join(f"{c:#x}" for c in chain))
                 if stopval is not None and val == stopval:
                     break
+                # Step off the access with the watchpoint removed, then re-arm it.
+                rsp.cmd(f"z2,{addr:x},8")
+                rsp.cmd("s")
+                rsp.cmd(f"Z2,{addr:x},8")
         elif op == "sleep":
             import time
             time.sleep(float(parts[1]))

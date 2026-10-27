@@ -64,6 +64,11 @@ NvResult nvhost_as_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> i
             }
             return result;
         }
+        case 0xb:
+            if (g_nx2_driver) {
+                return WrapFixed(this, &nvhost_as_gpu::Nx2GetSyncpointShimInfo, input, output);
+            }
+            break;
         case 0x14:
             return WrapVariable(this, &nvhost_as_gpu::Remap, input, output);
         default:
@@ -138,6 +143,27 @@ void nvhost_as_gpu::Nx2Map(u64 gpu_address, u64 cpu_address, u64 size) {
               cpu_address);
 }
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}
+
+// Switch 2 NvRm (with characteristics flag 26) asks for the read-only syncpoint shim: a GPU page
+// whose u32 at id * stride reads as that syncpoint's value; NVN waits on syncpoints through it and
+// asserts without one. Same scheme as changes.patch, placed on the last page of the VA range.
+NvResult nvhost_as_gpu::Nx2GetSyncpointShimInfo(IoctlNx2SyncpointShimInfo& params) {
+    std::scoped_lock lock(mutex);
+    if (!vm.initialised || !gmmu) {
+        return NvResult::NotSupported;
+    }
+    const u64 address = vm.va_range_end - VM::YUZU_PAGESIZE;
+    if (!nx2_syncpoint_shim) {
+        nx2_syncpoint_shim = true;
+        gmmu->SetNativeSyncpointShim(address);
+    }
+    params.address = address;
+    params.stride = sizeof(u32);
+    params.count = Tegra::MemoryManager::NumShimSyncpoints;
+    LOG_INFO(Service_NVDRV, "Switch 2 syncpoint shim at {:#x} ({} syncpoints)", address,
+             params.count);
+    return NvResult::Success;
+}
 
 NvResult nvhost_as_gpu::AllocAsEx(IoctlAllocAsEx& params) {
     LOG_DEBUG(Service_NVDRV, "called, flags={:#x} big_page_size={:#x} va_range_start={:#x} va_range_end={:#x} va_range_split={:#x}", params.flags, params.big_page_size, params.va_range_start, params.va_range_end, params.va_range_split);

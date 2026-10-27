@@ -56,6 +56,10 @@ MemoryManager::MemoryManager(Core::System& system_, u64 address_space_bits_, GPU
     : MemoryManager(system_, system_.Host1x().MemoryManager(), address_space_bits_, split_address_, big_page_bits_, page_bits_)
 {}
 
+void MemoryManager::SetNativeSyncpointShim(GPUVAddr address) {
+    native_syncpoint_shim.store(address, std::memory_order_release);
+}
+
 MemoryManager::~MemoryManager() = default;
 
 MemoryManager::EntryType MemoryManager::GetEntry(size_t position, bool is_big_page) const {
@@ -231,6 +235,15 @@ std::optional<DAddr> MemoryManager::GpuToCpuAddress(GPUVAddr addr, std::size_t s
 
 template <typename T>
 T MemoryManager::Read(GPUVAddr addr) const {
+    if constexpr (sizeof(T) == sizeof(u32)) {
+        const auto shim = native_syncpoint_shim.load(std::memory_order_acquire);
+        if (shim && addr >= shim && addr - shim < NumShimSyncpoints * sizeof(u32) &&
+            Common::IsAligned(addr - shim, sizeof(u32))) {
+            return static_cast<T>(system.Host1x().GetSyncpointManager().GetGuestSyncpointValue(
+                static_cast<u32>((addr - shim) / sizeof(u32))));
+        }
+    }
+
     if (auto page_pointer{GetPointer(addr)}; page_pointer) {
         // NOTE: Avoid adding any extra logic to this fast-path block
         T value;

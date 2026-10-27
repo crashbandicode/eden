@@ -98,6 +98,8 @@ private:
     friend class EventInterface;
 
     /// Manages syncpoints on the host
+    /// Builds a logged stub for nvgpu device nodes only Switch 2 drivers use.
+    std::function<std::shared_ptr<Devices::nvdevice>(DeviceFD, const std::string&)> nx2_stub_builder;
     NvCore::Container container;
 
     /// Id to use for the next open file descriptor.

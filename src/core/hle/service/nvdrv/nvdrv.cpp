@@ -23,6 +23,7 @@
 #include "core/hle/service/nvdrv/devices/nvhost_nvjpg.h"
 #include "core/hle/service/nvdrv/devices/nvhost_vic.h"
 #include "core/hle/service/nvdrv/devices/nvmap.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/nvdrv/nvdrv.h"
 #include "core/hle/service/nvdrv/nvdrv_interface.h"
 #include "core/hle/service/nvdrv/nvmemp.h"
@@ -125,6 +126,11 @@ void LoopProcess(Core::System& system) {
 
 Module::Module(Core::System& system)
     : container{system.Host1x()}, service_context{system, "nvdrv"}, events_interface{*this} {
+    nx2_stub_builder = [this, &system](DeviceFD fd, const std::string& name) {
+        auto device = std::make_shared<Devices::nx2_stub_device>(system, name);
+        open_files.emplace(fd, device);
+        return std::static_pointer_cast<Devices::nvdevice>(device);
+    };
     builders["/dev/nvhost-as-gpu"] = [this, &system](DeviceFD fd) {
         auto device = std::make_shared<Devices::nvhost_as_gpu>(system, *this, container);
         return open_files.emplace(fd, std::move(device)).first;
@@ -181,6 +187,15 @@ NvResult Module::VerifyFD(DeviceFD fd) const {
 
 DeviceFD Module::Open(const std::string& device_name, NvCore::SessionId session_id) {
     auto it = builders.find(device_name);
+    if (it == builders.end() && device_name.starts_with("/dev/nvhost-")) {
+        // Newer nvgpu nodes used by Switch 2 drivers (e.g. /dev/nvhost-tsg-gpu): serve them with
+        // a logged stub instead of failing the open.
+        LOG_WARNING(Service_NVDRV, "Opening unknown device {} as a Switch 2 stub", device_name);
+        const DeviceFD fd = next_fd++;
+        auto device = nx2_stub_builder(fd, device_name);
+        device->OnOpen(session_id, fd);
+        return fd;
+    }
     if (it == builders.end()) {
         LOG_ERROR(Service_NVDRV, "Trying to open unknown device {}", device_name);
         return INVALID_NVDRV_FD;

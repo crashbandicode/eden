@@ -158,11 +158,11 @@ enum class InfoType : u32 {
     IoRegionHint = 27,
     AliasRegionExtraSize = 28,
     // Switch 2 kernels: address/size of a region the SDK queries between the alias and
-    // ASLR regions during nnosInitialize. Meaning not known yet.
+    // ASLR regions during nnosInitialize; likely the VAMM address-space region.
     Nx2RegionAddress = 29,
     Nx2RegionSize = 30,
-    // Switch 2 kernels: queried by nn::os::detail::VammManager::Initialize and used as the size
-    // of its first MapPhysicalMemory. Meaning not known yet.
+    // Switch 2 kernels: a page granule. The SDK aligns module ranges and VAMM's first
+    // MapPhysicalMemory to it.
     Nx2VammSize = 33,
 
     TransferMemoryHint = 34,

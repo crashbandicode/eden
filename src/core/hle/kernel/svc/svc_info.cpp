@@ -70,19 +70,23 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
             *result = process->GetPageTable().GetHeapRegionSize();
             R_SUCCEED();
         case InfoType::Nx2RegionAddress:
-            // Unknown Switch 2 region; report an empty one just past the alias region.
-            *result = GetInteger(process->GetPageTable().GetAliasRegionStart()) +
-                      process->GetPageTable().GetAliasRegionSize();
-            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 29, returning {:#x}", *result);
+        case InfoType::Nx2RegionSize: {
+            // Looks like the region Switch 2 VAMM reserves address space in (a title asks for a
+            // ~7.5 GiB reservation). VAMM backs it with MapPhysicalMemory, which only works in
+            // the alias region here, so hand out the upper half of the alias region.
+            auto& page_table = process->GetPageTable();
+            const u64 half = page_table.GetAliasRegionSize() / 2;
+            *result = info_id_type == InfoType::Nx2RegionAddress
+                          ? GetInteger(page_table.GetAliasRegionStart()) + half
+                          : half;
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType {}, returning {:#x}",
+                        static_cast<u32>(info_id_type), *result);
             R_SUCCEED();
-        case InfoType::Nx2RegionSize:
-            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 30, returning 0");
-            *result = 0;
-            R_SUCCEED();
+        }
         case InfoType::Nx2VammSize:
-            // Used as the size of VAMM's initial MapPhysicalMemory, so it must be non-zero.
-            // The real value is unknown; 2 MiB is the smallest size that keeps it block-aligned.
-            *result = 0x200000;
+            // A page granule: the SDK checks module addresses/sizes against (value - 1) and
+            // VAMM maps one granule up front. 4 KiB matches what Switch 1 kernels use.
+            *result = Core::Memory::YUZU_PAGESIZE;
             LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 33, returning {:#x}", *result);
             R_SUCCEED();
         case InfoType::AslrRegionAddress:

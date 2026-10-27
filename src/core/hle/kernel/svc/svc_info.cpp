@@ -43,6 +43,8 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
     case InfoType::Nx2RegionAddress:
     case InfoType::Nx2RegionSize:
     case InfoType::Nx2VammSize:
+    case InfoType::Nx2RemoteMemorySize:
+    case InfoType::Nx2RemoteMemoryUsed:
     case InfoType::AliasRegionExtraSize: {
         R_UNLESS(info_sub_id == 0, ResultInvalidEnumValue);
 
@@ -83,6 +85,15 @@ Result GetInfo(Core::System& system, u64* result, InfoType info_id_type, Handle 
                         static_cast<u32>(info_id_type), *result);
             R_SUCCEED();
         }
+        case InfoType::Nx2RemoteMemorySize:
+            // Unknown real value; nothing backs it yet.
+            *result = 0;
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 31 (remote memory size), returning 0");
+            R_SUCCEED();
+        case InfoType::Nx2RemoteMemoryUsed:
+            *result = 0;
+            LOG_WARNING(Kernel_SVC, "(STUBBED) Switch 2 InfoType 32 (remote memory used), returning 0");
+            R_SUCCEED();
         case InfoType::Nx2VammSize:
             // A page granule: the SDK checks module addresses/sizes against (value - 1) and
             // VAMM maps one granule up front. 4 KiB matches what Switch 1 kernels use.

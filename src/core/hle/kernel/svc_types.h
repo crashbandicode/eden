@@ -161,6 +161,10 @@ enum class InfoType : u32 {
     // ASLR regions during nnosInitialize; likely the VAMM address-space region.
     Nx2RegionAddress = 29,
     Nx2RegionSize = 30,
+    // Switch 2 kernels: nn::os::GetRemoteMemoryUsage returns {id 31, id 32}; used by
+    // nn::gsv/nn::nvsrv BootWithRemoteMemory (memory set aside for the graphics stack).
+    Nx2RemoteMemorySize = 31,
+    Nx2RemoteMemoryUsed = 32,
     // Switch 2 kernels: a page granule. The SDK aligns module ranges and VAMM's first
     // MapPhysicalMemory to it.
     Nx2VammSize = 33,

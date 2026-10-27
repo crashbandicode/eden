@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cstddef>
+#include <cstring>
 #include <vector>
 
 #include "common/logging.h"
@@ -33,13 +34,29 @@ Loader::ResultStatus ProgramMetadata::Load(VirtualFile file) {
         return Loader::ResultStatus::ErrorBadACIDHeader;
     }
 
+    // Switch 2 ACID blocks have a 0x300-byte signature/key area instead of 0x200, so the
+    // header starts 0x100 bytes later. Offsets inside the header are unchanged.
+    if (std::memcmp(acid_header.magic.data(), "ACID", 4) != 0) {
+        constexpr std::size_t acid_sig_size_v1 = 0x200;
+        constexpr std::size_t acid_sig_size_v2 = 0x300;
+        constexpr std::size_t acid_body_size = sizeof(AcidHeader) - acid_sig_size_v1;
+        auto* const body = reinterpret_cast<u8*>(&acid_header) + acid_sig_size_v1;
+        if (file->ReadBytes(body, acid_body_size, npdm_header.acid_offset + acid_sig_size_v2) !=
+                acid_body_size ||
+            std::memcmp(acid_header.magic.data(), "ACID", 4) != 0) {
+            return Loader::ResultStatus::ErrorBadACIDHeader;
+        }
+        LOG_INFO(Loader, "NPDM uses the Switch 2 ACID layout");
+    }
+
     if (sizeof(AciHeader) != file->ReadObject(&aci_header, npdm_header.aci_offset)) {
         return Loader::ResultStatus::ErrorBadACIHeader;
     }
 
     // Load acid_file_access per-component instead of the entire struct, since this struct does not
     // reflect the layout of the real data.
-    std::size_t current_offset = acid_header.fac_offset;
+    // FAC/FAH offsets are relative to the start of the ACID/ACI block, like the KAC offsets.
+    std::size_t current_offset = npdm_header.acid_offset + acid_header.fac_offset;
     if (sizeof(FileAccessControl::version) != file->ReadBytes(&acid_file_access.version,
                                                               sizeof(FileAccessControl::version),
                                                               current_offset)) {
@@ -57,7 +74,7 @@ Loader::ResultStatus ProgramMetadata::Load(VirtualFile file) {
     }
 
     // Load aci_file_access per-component instead of the entire struct, same as acid_file_access
-    current_offset = aci_header.fah_offset;
+    current_offset = npdm_header.aci_offset + aci_header.fah_offset;
     if (sizeof(FileAccessHeader::version) != file->ReadBytes(&aci_file_access.version,
                                                              sizeof(FileAccessHeader::version),
                                                              current_offset)) {

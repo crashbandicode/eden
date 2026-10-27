@@ -9,6 +9,7 @@
 #include <map>
 #include <vector>
 
+#include "common/alignment.h"
 #include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_client_session.h"
@@ -21,6 +22,7 @@
 #include "core/hle/kernel/k_transfer_memory.h"
 #include "core/memory.h"
 #include "video_core/host1x/host1x.h"
+#include "video_core/nx2.h"
 #include "core/hle/service/hle_ipc.h"
 #include "core/hle/service/ipc_helpers.h"
 #include "core/hle/service/kernel_helpers.h"
@@ -291,6 +293,14 @@ private:
                     last, b[6], b[7]);
         if (last > start) {
             Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Register(start, last - start + 1);
+            // The first two-page region holds the queue semaphores: GPU releases go to the second
+            // page, waits read the first (see video_core/nx2.h).
+            if (last - start + 1 == 0x2000 && Tegra::g_nx2_semaphore_source_page == 0) {
+                Tegra::g_nx2_semaphore_mirror_page = start;
+                Tegra::g_nx2_semaphore_source_page = start + 0x1000;
+                LOG_WARNING(Service, "nx2:gpu semaphore page {:#x} mirrored to {:#x}",
+                            start + 0x1000, start);
+            }
         }
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
@@ -376,6 +386,7 @@ public:
             {305, &INx2GraphicsSystemSession::OpenViSession, "OpenViSession (guessed)"},
             {497, &INx2GraphicsSystemSession::OpenGpuSession, "OpenGpuSession (guessed)"},
             {1402, &INx2GraphicsSystemSession::OpenNvsrvSession, "OpenNvsrvSession (guessed)"},
+            {1510, &INx2GraphicsSystemSession::CalculateRequirements, "CalculateRequirements"},
         });
     }
 
@@ -520,6 +531,30 @@ private:
         if (acked) {
             m_syncpt_events[1]->Signal(system.Kernel());
         }
+    }
+
+    // nn::gsv::shim::CalculateRequirements(u64* size, u64* alignment, preference, u32): the 0x40-byte
+    // InterModuleUserImagePreference (words 2..17) and a u32 (word 18). A block-linear preference
+    // (MakeInterModuleBlockUserImagePreference) holds kind 2 at word 3, (width - 1) | (height - 1)
+    // << 16 at word 4, two u32s at words 6-7 and the pixel format at word 8. Reply: result, u64
+    // size, u64 alignment; the client raises the alignment to at least 4 KiB and rounds the size.
+    void CalculateRequirements(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u32 width = (w[4] & 0xFFFF) + 1;
+        const u32 height = (w[4] >> 16) + 1;
+        const u32 pixel_format = w[8] & 0xFF;
+        // Pixel format numbering is unknown; 4 bytes per pixel. Oversizing (8 for format 4) left
+        // the game's 1.5 GiB heap short of its 300 MiB sound heap.
+        const u64 bytes_per_pixel = 4;
+        const u64 pitch = Common::AlignUp(width * bytes_per_pixel, 64);
+        const u64 size = pitch * Common::AlignUp(height, 128);
+        constexpr u64 alignment = 0x10000;
+        LOG_WARNING(Service,
+                    "(STUBBED) nx2:gsv TIPC 1510 kind={} {}x{} [6]={:#x} [7]={:#x} format={} "
+                    "[9]={:#x} [18]={:#x} -> size={:#x}",
+                    w[3], width, height, w[6], w[7], pixel_format, w[9], w[18], size);
+        TipcReplyWords(ctx, {static_cast<u32>(size), static_cast<u32>(size >> 32),
+                             static_cast<u32>(alignment), 0});
     }
 
     void OpenViSession(HLERequestContext& ctx) {

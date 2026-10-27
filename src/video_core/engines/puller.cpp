@@ -110,6 +110,12 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         const GPUVAddr sequence_address{regs.semaphore_address.SemaphoreAddress()};
         const u32 payload = regs.semaphore_sequence;
         dma_pusher.rasterizer->Query(sequence_address, VideoCommon::QueryType::Payload, VideoCommon::QueryPropertiesFlags::HasTimeout, payload, 0);
+        const u64 source_page = g_nx2_semaphore_source_page;
+        if (source_page != 0 && (sequence_address & ~GPUVAddr{0xFFF}) == source_page) {
+            const GPUVAddr mirror = g_nx2_semaphore_mirror_page + (sequence_address & 0xFFF);
+            LOG_DEBUG(HW_GPU, "Switch 2 semaphore {:#x}={:#x} mirrored to {:#x}", sequence_address, payload, mirror);
+            dma_pusher.rasterizer->Query(mirror, VideoCommon::QueryType::Payload, VideoCommon::QueryPropertiesFlags::HasTimeout, payload, 0);
+        }
     } else {
         do {
             const u32 word = dma_pusher.memory_manager.Read<u32>(regs.semaphore_address.SemaphoreAddress());
@@ -234,8 +240,18 @@ void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
 }
 
 /// Calls a GPU engine method.
+static bool Nx2MethodTrace() {
+    static const bool trace = std::getenv("EDEN_NX2_METHOD_TRACE") != nullptr;
+    return trace;
+}
+
 void Puller::CallEngineMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
     const EngineID engine = bound_engines[method_call.subchannel];
+    if (Nx2MethodTrace()) {
+        LOG_INFO(HW_GPU, "nx2 method sub={} engine={:04X} method={:#x} arg={:#x}",
+                 method_call.subchannel, static_cast<u32>(engine), method_call.method,
+                 method_call.argument);
+    }
     switch (engine) {
     case EngineID::FERMI_TWOD_A:
         dma_pusher.channel_state.payload->fermi_2d.CallMethod(dma_pusher.system, method_call.method, method_call.argument, method_call.IsLastCall());
@@ -264,6 +280,10 @@ void Puller::CallEngineMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
 /// Calls a GPU engine multivalue method.
 void Puller::CallEngineMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel, const u32* base_start, u32 amount, u32 methods_pending) {
     const EngineID engine = bound_engines[subchannel];
+    if (Nx2MethodTrace()) {
+        LOG_INFO(HW_GPU, "nx2 multimethod sub={} engine={:04X} method={:#x} amount={} first={:#x}",
+                 subchannel, static_cast<u32>(engine), method, amount, base_start[0]);
+    }
     switch (engine) {
     case EngineID::FERMI_TWOD_A:
         dma_pusher.channel_state.payload->fermi_2d.CallMultiMethod(dma_pusher.system, method, base_start, amount, methods_pending);

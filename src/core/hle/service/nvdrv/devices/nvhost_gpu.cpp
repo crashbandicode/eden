@@ -49,6 +49,9 @@ nvhost_gpu::~nvhost_gpu() {
     events_interface.FreeEvent(sm_exception_breakpoint_int_report_event);
     events_interface.FreeEvent(sm_exception_breakpoint_pause_report_event);
     events_interface.FreeEvent(error_notifier_event);
+    for (auto& [id, event] : nx2_events) {
+        events_interface.FreeEvent(event);
+    }
     syncpoint_manager.FreeSyncpoint(channel_syncpoint);
 }
 
@@ -543,6 +546,16 @@ Kernel::KEvent* nvhost_gpu::QueryEvent(u32 event_id) {
     case 3:
         return error_notifier_event;
     default:
+        if (g_nx2_driver) {
+            // Switch 2 NVN also asks for event 7 and multi-waits on it with its syncpoint events.
+            // Nothing signals it yet.
+            auto*& event = nx2_events[event_id];
+            if (event == nullptr) {
+                event = events_interface.CreateEvent(fmt::format("GpuChannelNx2Event{}", event_id));
+            }
+            LOG_WARNING(Service_NVDRV, "(STUBBED) Switch 2 channel event {}", event_id);
+            return event;
+        }
         LOG_CRITICAL(Service_NVDRV, "Unknown Ctrl GPU Event {}", event_id);
         return nullptr;
     }

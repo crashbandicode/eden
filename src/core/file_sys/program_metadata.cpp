@@ -47,6 +47,7 @@ Loader::ResultStatus ProgramMetadata::Load(VirtualFile file) {
             return Loader::ResultStatus::ErrorBadACIDHeader;
         }
         LOG_INFO(Loader, "NPDM uses the Switch 2 ACID layout");
+        is_switch2 = true;
     }
 
     if (sizeof(AciHeader) != file->ReadObject(&aci_header, npdm_header.aci_offset)) {

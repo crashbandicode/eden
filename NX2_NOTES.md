@@ -97,6 +97,7 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 39 | every audio `RequestUpdate` fails | updates tagged `REv?` (lowercase v), renderer opened with `REV?` | compare revision numbers (2e6c39c) |
 | 40 | main thread parked in `ExecuteVirtualMachineMapBufferEx` | gpu sub 211's job slot is request word 17, not word 2 | signal word 17's event (2e6c39c) |
 | 41 | "too many files open" reading RomFS | eden-cli never raised the CRT stdio limit | `_setmaxstdio(8192)` (2e6c39c) |
+| 42 | GPU memory model | gpu sub 101 = `CreateGpuAccessibleMemory` (reply word 3 = GpuMemoryHandle); 211 = `NormalMapGpuMemory4K` (words 3-4 first VA, 5-6 last, 7 handle, 8-9 offset, 17 slot), also into sparse regions at 0x81_xxxx_xxxx; 102/213 (`NormalUnmapGpuMemory4K`)/214 (`CreateSparseRegion`) complete through slot events (words 3/8/11) | real handles, `Nx2GpuMemoryRegistry::MapAt` with SMMU range reuse, slot signals |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
@@ -114,9 +115,13 @@ fonts (its own `.bfotf` plus system fonts via pl:u 2010) -> heaps (incl. 300 MB 
 audio renderer -> Gyml sequence files -> main loop.
 - GPU submissions are executed by Eden's puller/engines (Ampere classes on Maxwell engines),
   syncpoints and queue semaphores advance, but Turing+ macros are skipped and nothing is presented.
-- At ~12.4 s one NVN render path writes commands to address 0 (command memory with no CPU
-  mapping) and calls a null out-of-memory callback (`sdk+0x638814`, from game `main+0x3201560`).
-  The loop thread keeps running.
+- Only six GPU submissions happen (all during init). At ~11.5-12.4 s the main thread hands NVN
+  a command buffer (from a per-context table at game `main+0x320149c`, used at `main+0x32014e8`)
+  that was initialised but never given command memory or a memory callback: the whole state at
+  cmdbuf+0x2be8.. is zero, so NVN writes its first methods to address 0 and then calls a null
+  function. Some earlier game-side setup of that command buffer (its command-memory pool or the
+  frame-begin that adds memory) silently failed or never ran; that is the next thing to find.
+  Another thread keeps polling input afterwards.
 
 **Title 3**: last checked before the graphics work; should now track title 4.
 
@@ -140,8 +145,10 @@ get the larger memory budget (it sets a fixed 0x1BD600000 budget at `main+0xCF25
 
 ## Prioritized next steps
 
-0. **Render path null command memory** at ~12.4 s (title 4): find which NVN memory pool's CPU
-   pointer is null (nvnMemoryPoolMap through nn::gpu mapping jobs) and give it the mapping.
+0. **Empty command buffer** at ~12 s (title 4): find where the game normally adds command memory
+   to the per-context command buffers (`main+0x320149c` table) and which earlier call failed.
+   Break on NVN's command-buffer init and on the game's frame-begin, compare with the stores to
+   cmdbuf+0x2be8 (53 sites in sdk).
 1. **Present**: decode gsv 315/423/429/435/111 and vi2 present/acquire, and blit the presented
    image through Eden's renderer. First visible milestone: the game's clear colour.
 2. **MME64 interpreter** behind `g_nx2_ampere` (replace the skip in `Maxwell3D::CallMacroMethod`).

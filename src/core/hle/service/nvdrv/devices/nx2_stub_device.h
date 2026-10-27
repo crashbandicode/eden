@@ -30,13 +30,13 @@ inline NvResult Nx2UnknownIoctl(const char* device, Ioctl command, std::span<con
     return NvResult::Success;
 }
 
-// GPU-accessible memory a Switch 2 process registered through nx2:gpu (sub-session 101). The GPU
-// shares the process address space there: GPFIFO entries and pushbuffers use the CPU address as
-// the GPU address. Every nvhost-as-gpu address space maps each range at that address, including
-// ranges registered before the address space existed.
+// GPU mappings a Switch 2 process made through nx2:gpu: CreateGpuAccessibleMemory (sub 101) maps
+// the memory at GPU address == CPU address, and NormalMapGpuMemory4K (211) maps a memory handle at
+// a chosen GPU address (also in sparse regions). Every nvhost-as-gpu address space applies each
+// mapping, including ones made before the address space existed.
 class Nx2GpuMemoryRegistry {
 public:
-    using Listener = std::function<void(u64 address, u64 size)>;
+    using Listener = std::function<void(u64 gpu_address, u64 cpu_address, u64 size)>;
 
     static Nx2GpuMemoryRegistry& Get() {
         static Nx2GpuMemoryRegistry registry;
@@ -44,17 +44,21 @@ public:
     }
 
     void Register(u64 address, u64 size) {
+        MapAt(address, address, size);
+    }
+
+    void MapAt(u64 gpu_address, u64 cpu_address, u64 size) {
         std::scoped_lock lk{mutex};
-        ranges.emplace_back(address, size);
+        mappings.push_back({gpu_address, cpu_address, size});
         for (auto& [owner, listener] : listeners) {
-            listener(address, size);
+            listener(gpu_address, cpu_address, size);
         }
     }
 
     void AddListener(const void* owner, Listener listener) {
         std::scoped_lock lk{mutex};
-        for (const auto& [address, size] : ranges) {
-            listener(address, size);
+        for (const auto& m : mappings) {
+            listener(m.gpu_address, m.cpu_address, m.size);
         }
         listeners.insert_or_assign(owner, std::move(listener));
     }
@@ -65,8 +69,14 @@ public:
     }
 
 private:
+    struct Mapping {
+        u64 gpu_address;
+        u64 cpu_address;
+        u64 size;
+    };
+
     std::mutex mutex;
-    std::vector<std::pair<u64, u64>> ranges;
+    std::vector<Mapping> mappings;
     std::map<const void*, Listener> listeners;
 };
 

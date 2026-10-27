@@ -214,8 +214,11 @@ public:
             {33, &INx2GpuSession::GetCount33, "Unknown33 (u32 count)"},
             {203, &INx2GpuSession::GetVaRange, "GetVaRange (guessed)"},
             // Sub-session commands (gpu 22 hands out a second session to this same object).
-            {101, &INx2GpuSession::SubRegisterMemory, "Sub101 RegisterMemory (guessed)"},
-            {211, &INx2GpuSession::SubSubmitJob, "Sub211 SubmitJob (guessed)"},
+            {101, &INx2GpuSession::SubRegisterMemory, "CreateGpuAccessibleMemory"},
+            {102, &INx2GpuSession::SubSlotJob<3>, "Sub102 (job, slot in word 3)"},
+            {211, &INx2GpuSession::SubSubmitJob, "NormalMapGpuMemory4K"},
+            {213, &INx2GpuSession::SubSlotJob<8>, "NormalUnmapGpuMemory4K"},
+            {214, &INx2GpuSession::SubSlotJob<11>, "CreateSparseRegion"},
         });
     }
 
@@ -302,6 +305,20 @@ private:
                             start + 0x1000, start);
             }
         }
+        // nn::gpu::sdk::CreateGpuAccessibleMemory stores word 3 of the reply as the
+        // GpuMemoryHandle that later map jobs (211) name.
+        const u32 handle = m_next_memory_handle++;
+        m_memory[handle] = {start, last - start + 1};
+        TipcReplyWords(ctx, {handle});
+    }
+
+    // Jobs that complete through a job-slot event (word Slot of the request), like 211.
+    template <size_t Slot>
+    void SubSlotJob(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        LOG_DEBUG(Service, "(STUBBED) nx2:gpu {} [2]={:#x} [3]={:#x} [4]={:#x} [5]={:#x} [6]={:#x} slot={}",
+                  ctx.GetCommand(), w[2], w[3], w[4], w[5], w[6], w[Slot]);
+        EventFor(w[Slot])->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
@@ -312,15 +329,35 @@ private:
     void SubSubmitJob(HLERequestContext& ctx) {
         const auto* cmd_buf = ctx.CommandBuffer();
         const u32 slot = cmd_buf[17];
-        LOG_DEBUG(Service, "(STUBBED) nx2:gpu sub 211 [2]={} slot={}, signalling completion",
-                  cmd_buf[2], slot);
+        const u64 a = u64{cmd_buf[3]} | (u64{cmd_buf[4]} << 32);
+        const u64 b = u64{cmd_buf[5]} | (u64{cmd_buf[6]} << 32);
+        const u64 c = u64{cmd_buf[8]} | (u64{cmd_buf[9]} << 32);
+        // Words 3-4: first GPU address, 5-6: last, 7: memory handle, 8-9: offset into it.
+        const u32 handle = cmd_buf[7];
+        LOG_DEBUG(Service, "nx2:gpu 211 map [{:#x}, {:#x}] handle={} offset={:#x} slot={}", a, b,
+                  handle, c, slot);
+        if (const auto it = m_memory.find(handle); it != m_memory.end() && b > a) {
+            const u64 cpu = it->second.address + c;
+            if (cpu != a) {
+                Nvidia::Devices::Nx2GpuMemoryRegistry::Get().MapAt(a, cpu, b - a + 1);
+            }
+        } else {
+            LOG_WARNING(Service, "nx2:gpu 211 map of unknown handle {}", handle);
+        }
         EventFor(slot)->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
 
+    struct GpuMemory {
+        u64 address;
+        u64 size;
+    };
+
     KernelHelpers::ServiceContext m_context;
     std::array<Kernel::KEvent*, NumIds> m_events{};
+    std::map<u32, GpuMemory> m_memory;
+    u32 m_next_memory_handle{1};
 };
 
 // Placeholder for the Switch 2 display session (nn::vi2::sdk), handed out by gsv 305. Reply

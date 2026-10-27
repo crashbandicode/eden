@@ -222,9 +222,10 @@ private:
     } vm;
     std::unique_ptr<Tegra::MemoryManager> gmmu;
 
-    // Switch 2: maps GPU-accessible process memory at GPU address == CPU address.
-    void Nx2MapIdentity(u64 address, u64 size);
+    // Switch 2: maps GPU-accessible process memory (CPU range) at a GPU address.
+    void Nx2Map(u64 gpu_address, u64 cpu_address, u64 size);
     NvCore::SessionId nx2_session{};
+    std::map<std::pair<u64, u64>, DAddr> nx2_device_ranges;
 };
 
 } // namespace Service::Nvidia::Devices

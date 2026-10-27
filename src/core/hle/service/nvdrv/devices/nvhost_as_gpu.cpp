@@ -58,7 +58,9 @@ NvResult nvhost_as_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> i
             const auto result = WrapFixed(this, &nvhost_as_gpu::AllocAsEx, input, output);
             if (result == NvResult::Success && g_nx2_driver) {
                 Nx2GpuMemoryRegistry::Get().AddListener(
-                    this, [this](u64 address, u64 size) { Nx2MapIdentity(address, size); });
+                    this, [this](u64 gpu_address, u64 cpu_address, u64 size) {
+                        Nx2Map(gpu_address, cpu_address, size);
+                    });
             }
             return result;
         }
@@ -105,30 +107,35 @@ void nvhost_as_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {
     nx2_session = session_id;
 }
 
-void nvhost_as_gpu::Nx2MapIdentity(u64 address, u64 size) {
+void nvhost_as_gpu::Nx2Map(u64 gpu_address, u64 cpu_address, u64 size) {
     std::scoped_lock lock(mutex);
     auto* session = container.GetSession(nx2_session);
     if (!gmmu || session == nullptr) {
-        LOG_ERROR(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x}: no address space or session",
-                  address, size);
+        LOG_ERROR(Service_NVDRV, "Switch 2 GPU mapping {:#x}+{:#x}: no address space or session",
+                  gpu_address, size);
         return;
     }
+    // The same CPU range is often mapped twice (at its own address and in a sparse region), so
+    // reuse its SMMU mapping.
     DAddr device_address{};
-    if (session->has_preallocated_area && session->mapper->IsInBounds(address, size)) {
-        device_address = session->mapper->Map(address, size);
+    if (const auto it = nx2_device_ranges.find({cpu_address, size}); it != nx2_device_ranges.end()) {
+        device_address = it->second;
+    } else if (session->has_preallocated_area && session->mapper->IsInBounds(cpu_address, size)) {
+        device_address = session->mapper->Map(cpu_address, size);
     } else {
         auto& smmu = system.Host1x().MemoryManager();
         device_address = smmu.Allocate(Common::AlignUp(size, 0x20000));
         if (device_address == 0) {
             LOG_CRITICAL(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x}: out of SMMU space",
-                         address, size);
+                         cpu_address, size);
             return;
         }
-        smmu.Map(device_address, address, size, session->asid, true);
+        smmu.Map(device_address, cpu_address, size, session->asid, true);
     }
-    gmmu->Map(address, device_address, size, Tegra::PTEKind::PITCH, false);
-    LOG_DEBUG(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x} mapped at the same GPU address", address,
-             size);
+    nx2_device_ranges[{cpu_address, size}] = device_address;
+    gmmu->Map(gpu_address, device_address, size, Tegra::PTEKind::PITCH, false);
+    LOG_DEBUG(Service_NVDRV, "Switch 2 GPU mapping {:#x}+{:#x} -> CPU {:#x}", gpu_address, size,
+              cpu_address);
 }
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}
 

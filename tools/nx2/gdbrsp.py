@@ -66,8 +66,18 @@ class Rsp:
 
 
 def main():
+    import re
+    import time
     rsp = Rsp(int(sys.argv[1]))
-    print("halt reason:", rsp.cmd("?"))
+    # Until the guest process exists the stub answers with a bogus thread id; commands sent then
+    # are lost, so wait for a real one.
+    for _ in range(120):
+        reason = rsp.cmd("?")
+        m = re.search(r"thread:([0-9a-f]+);", reason)
+        if m and int(m.group(1), 16) < 0x10000:
+            break
+        time.sleep(0.5)
+    print("halt reason:", reason)
     regs = {}
     for line in open(sys.argv[2]):
         parts = line.split()
@@ -236,6 +246,21 @@ def main():
                     break
                 rsp.cmd(f"z0,{addr:x},4")
                 rsp.cmd("s")
+        elif op == "watch":
+            # watch <addr> <n> [stopval]: write watchpoint on a u64; print pc, lr and the new value
+            # for up to n hits, stopping early once it equals stopval.
+            addr, n = int(parts[1], 16), int(parts[2])
+            stopval = int(parts[3], 16) if len(parts) > 3 else None
+            print("watch ->", rsp.cmd(f"Z2,{addr:x},8"))
+            for i in range(n):
+                reply = rsp.cmd("c")
+                r = rsp.regs()
+                regs = r
+                d = rsp.mem(addr, 8)
+                val = struct.unpack("<Q", d)[0] if len(d) == 8 else None
+                print(f"  w{i} {reply[:40]} pc={r.get('pc', 0):#x} lr={r.get('x30', 0) & 0xFFFFFFFFFFFF:#x} value={val if val is None else hex(val)}")
+                if stopval is not None and val == stopval:
+                    break
         elif op == "sleep":
             import time
             time.sleep(float(parts[1]))

@@ -30,6 +30,7 @@ public:
     ~ISelfController() override;
 
 private:
+    void GetNx2GraphicsSystemSession(HLERequestContext& ctx);
     Result Exit();
     Result LockExit();
     Result UnlockExit();

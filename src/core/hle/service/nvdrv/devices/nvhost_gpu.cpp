@@ -367,6 +367,27 @@ static boost::container::small_vector<Tegra::CommandHeader, 512> BuildIncrementC
     return result;
 }
 
+// Switch 2 pushbuffers signal completion with semaphore releases, never host1x syncpoint methods,
+// but the driver still has the kernel raise the syncpoint max by the submission's increment value
+// and then waits for that value. Append the increments after its commands.
+static boost::container::small_vector<Tegra::CommandHeader, 512> BuildIncrementCountCommandList(
+    NvFence fence, u32 count) {
+    boost::container::small_vector<Tegra::CommandHeader, 512> result{
+        Tegra::BuildCommandHeader(Tegra::BufferMethods::WaitForIdle, 1,
+                                  Tegra::SubmissionMode::Increasing),
+        {},
+        Tegra::BuildCommandHeader(Tegra::BufferMethods::SyncpointPayload, 1,
+                                  Tegra::SubmissionMode::Increasing),
+        {}};
+    for (u32 i = 0; i < count; ++i) {
+        result.push_back(Tegra::BuildCommandHeader(Tegra::BufferMethods::SyncpointOperation, 1,
+                                                   Tegra::SubmissionMode::Increasing));
+        result.push_back(
+            BuildFenceAction(Tegra::Engines::Puller::FenceOperation::Increment, fence.id));
+    }
+    return result;
+}
+
 static boost::container::small_vector<Tegra::CommandHeader, 512> BuildIncrementWithWfiCommandList(
     NvFence fence) {
     boost::container::small_vector<Tegra::CommandHeader, 512> result{
@@ -393,6 +414,13 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
 
     const auto bind_id = channel_state->bind_id;
 
+    if (g_nx2_driver) {
+        for (const auto& entry : entries.command_lists) {
+            LOG_DEBUG(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
+                     entry.addr.Value(), entry.size.Value());
+        }
+    }
+
     auto& flags = params.flags;
 
     if (flags.fence_wait.Value()) {
@@ -412,6 +440,11 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
     params.fence.value = syncpoint_manager.IncrementSyncpointMaxExt(channel_syncpoint, increment);
     gpu.PushGPUEntries(bind_id, std::move(entries));
 
+    if (g_nx2_driver && !flags.fence_increment.Value() && increment > 0) {
+        gpu.PushGPUEntries(bind_id,
+                           Tegra::CommandList{BuildIncrementCountCommandList(params.fence, increment)});
+    }
+
     if (flags.fence_increment.Value()) {
         if (flags.suppress_wfi.Value()) {
             gpu.PushGPUEntries(bind_id,
@@ -422,6 +455,12 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
         }
     }
 
+    if (g_nx2_driver) {
+        LOG_DEBUG(Service_NVDRV,
+                 "nx2 SubmitGPFIFO entries={} flags={:#x} fence_out=({}, {}) guest_value={}",
+                 params.num_entries, flags.raw, params.fence.id, params.fence.value,
+                 system.Host1x().GetSyncpointManager().GetGuestSyncpointValue(params.fence.id));
+    }
     flags.raw = 0;
 
     return NvResult::Success;

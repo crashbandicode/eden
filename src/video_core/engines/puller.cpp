@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: 2022 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <cstdlib>
+
 #include "common/assert.h"
 #include "common/logging.h"
 #include "common/settings.h"
@@ -18,6 +20,7 @@
 #include "video_core/engines/puller.h"
 #include "video_core/gpu.h"
 #include "video_core/memory_manager.h"
+#include "video_core/nx2.h"
 #include "video_core/rasterizer_interface.h"
 
 namespace Tegra::Engines {
@@ -34,6 +37,27 @@ void Puller::ProcessBindMethod(DmaPusher& dma_pusher, const MethodCall& method_c
     u32 engine = method_call.argument;
     if ((engine & ~Gf100BindClassMask) != 0 && (engine & ~Gf100BindValidMask) == 0) {
         engine &= Gf100BindClassMask;
+    }
+    // Switch 2 binds Ampere classes; run them on the Maxwell engines (same method layout for
+    // most state). Class 0 unbinds the subchannel.
+    switch (engine & 0xFFFF) {
+    case 0xC797: // AMPERE_B
+        engine = static_cast<u32>(EngineID::MAXWELL_B);
+        break;
+    case 0xC7C0: // AMPERE_COMPUTE_B
+        engine = static_cast<u32>(EngineID::KEPLER_COMPUTE_B);
+        break;
+    case 0xC7B5: // AMPERE_DMA_COPY_B
+        engine = static_cast<u32>(EngineID::MAXWELL_DMA_COPY_A);
+        break;
+    case 0x0:
+        if (g_nx2_ampere) {
+            LOG_DEBUG(HW_GPU, "Switch 2 unbinds subchannel {}", method_call.subchannel);
+            return;
+        }
+        break;
+    default:
+        break;
     }
 
     const auto engine_id = static_cast<EngineID>(engine);
@@ -139,6 +163,11 @@ void Puller::ProcessSemaphoreAcquire(DmaPusher& dma_pusher) {
 
 /// Calls a GPU puller method.
 void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
+    static const bool nx2_trace = std::getenv("EDEN_NX2_PULLER_TRACE") != nullptr;
+    if (nx2_trace) {
+        LOG_INFO(HW_GPU, "nx2 puller sub={} method={:#x} arg={:#x}", method_call.subchannel,
+                 method_call.method, method_call.argument);
+    }
     regs.reg_array[method_call.method] = method_call.argument;
     const auto method = static_cast<BufferMethods>(method_call.method);
 

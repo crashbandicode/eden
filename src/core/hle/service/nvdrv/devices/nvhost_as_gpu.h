@@ -221,6 +221,10 @@ private:
         bool absolute_big_page_limit{}; //!< Switch 2 layout: big-page limit is va_range_end
     } vm;
     std::unique_ptr<Tegra::MemoryManager> gmmu;
+
+    // Switch 2: maps GPU-accessible process memory at GPU address == CPU address.
+    void Nx2MapIdentity(u64 address, u64 size);
+    NvCore::SessionId nx2_session{};
 };
 
 } // namespace Service::Nvidia::Devices

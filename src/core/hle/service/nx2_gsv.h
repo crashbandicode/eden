@@ -5,9 +5,12 @@
 
 #include <array>
 #include <initializer_list>
+#include <atomic>
+#include <map>
 #include <vector>
 
 #include "core/core.h"
+#include "core/core_timing.h"
 #include "core/hle/kernel/k_client_session.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_resource_limit.h"
@@ -17,9 +20,11 @@
 #include "core/hle/kernel/k_session.h"
 #include "core/hle/kernel/k_transfer_memory.h"
 #include "core/memory.h"
+#include "video_core/host1x/host1x.h"
 #include "core/hle/service/hle_ipc.h"
 #include "core/hle/service/ipc_helpers.h"
 #include "core/hle/service/kernel_helpers.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/nvdrv/nvdrv.h"
 #include "core/hle/service/nvdrv/nvdrv_interface.h"
 #include "core/hle/service/nx2_stub_interface.h"
@@ -79,12 +84,31 @@ public:
 // Placeholder for the Switch 2 syncpoint server (nn::syncpt), handed out by gsv 202. TIPC 1
 // returns a u32 the SDK requires to be < 0x400 and then passes min(value, 63) to TIPC 21.
 // Everything else is auto-stubbed through the nx2: prefix.
+// - TIPC 22(u32 slot): an event handle for that slot (copy handle at word 3, result at word 4).
+//   NVN's NvOsEventPool asks for slots and multi-waits on them.
+// - TIPC 201(slot, counter, u64 value, mode): signal the slot's event once the counter reaches
+//   value. The counter is a SyncCounterId, the bitwise NOT of the host1x syncpoint id; mode 0
+//   compares 32-bit wrapping, mode 1 64-bit. Eden's guest syncpoints back it.
+// - TIPC 202(slot): cancel the slot's request.
 class INx2SyncptSession final : public ServiceFramework<INx2SyncptSession> {
 public:
-    explicit INx2SyncptSession(Core::System& system_) : ServiceFramework{system_, "nx2:syncpt"} {
+    explicit INx2SyncptSession(Core::System& system_)
+        : ServiceFramework{system_, "nx2:syncpt"}, m_context{system_, "nx2:syncpt"} {
         RegisterHandlersTipc({
             {1, &INx2SyncptSession::GetCount, "GetCount (guessed)"},
+            {22, &INx2SyncptSession::GetSlotEvent, "GetSlotEvent (guessed)"},
+            {201, &INx2SyncptSession::RequestSlotEvent, "RequestSlotEvent (guessed)"},
+            {202, &INx2SyncptSession::CancelSlotEvent, "CancelSlotEvent (guessed)"},
         });
+    }
+
+    ~INx2SyncptSession() override {
+        for (auto& [slot, request] : m_requests) {
+            Cancel(request);
+        }
+        for (auto& [slot, event] : m_events) {
+            m_context.CloseEvent(event);
+        }
     }
 
 private:
@@ -92,6 +116,81 @@ private:
         LOG_WARNING(Service, "(STUBBED) nx2:syncpt TIPC 1, returning 32");
         TipcReplyWords(ctx, {32});
     }
+
+    void GetSlotEvent(HLERequestContext& ctx) {
+        const u32 slot = ctx.CommandBuffer()[2];
+        LOG_WARNING(Service, "(STUBBED) nx2:syncpt TIPC 22 slot={:#x}, returning an event", slot);
+        auto*& event = m_events[slot];
+        if (event == nullptr) {
+            event = m_context.CreateEvent(fmt::format("nx2:syncpt:Slot{:x}", slot));
+        }
+        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, event->GetReadableEvent());
+    }
+
+    // Map nodes are stable, so a registered action can hold a reference to its request.
+    struct SlotRequest {
+        u32 syncpoint{};
+        std::atomic<bool> pending{};
+        Tegra::Host1x::SyncpointManager::ActionHandle handle{};
+    };
+
+    void RequestSlotEvent(HLERequestContext& ctx) {
+        const auto* cmd_buf = ctx.CommandBuffer();
+        const u32 slot = cmd_buf[2];
+        const u32 syncpoint = ~cmd_buf[3];
+        const u64 value = u64{cmd_buf[4]} | (u64{cmd_buf[5]} << 32);
+        const u32 mode = cmd_buf[6];
+        LOG_INFO(Service, "nx2:syncpt TIPC 201 slot={:#x} syncpoint={} value={:#x} mode={}", slot,
+                  syncpoint, value, mode);
+        auto*& event = m_events[slot];
+        if (event == nullptr) {
+            event = m_context.CreateEvent(fmt::format("nx2:syncpt:Slot{:x}", slot));
+        }
+        if (syncpoint >= HostSyncpoints) {
+            LOG_WARNING(Service, "nx2:syncpt TIPC 201 syncpoint {} out of range, signalling",
+                        syncpoint);
+            event->Signal(system.Kernel());
+            TipcReplyWords(ctx, {});
+            return;
+        }
+        auto& request = m_requests[slot];
+        Cancel(request);
+        request.syncpoint = syncpoint;
+        request.pending = true;
+        auto& manager = system.Host1x().GetSyncpointManager();
+        // The action runs on the GPU thread under the manager's lock, or inline if the value is
+        // already reached.
+        request.handle = manager.RegisterGuestAction(
+            syncpoint, static_cast<u32>(value), [this, &request, event] {
+                request.pending = false;
+                event->Signal(system.Kernel());
+            });
+        TipcReplyWords(ctx, {});
+    }
+
+    void CancelSlotEvent(HLERequestContext& ctx) {
+        const u32 slot = ctx.CommandBuffer()[2];
+        LOG_INFO(Service, "nx2:syncpt TIPC 202 slot={:#x}", slot);
+        if (auto it = m_requests.find(slot); it != m_requests.end()) {
+            Cancel(it->second);
+        }
+        TipcReplyWords(ctx, {});
+    }
+
+    void Cancel(SlotRequest& request) {
+        if (request.pending.exchange(false)) {
+            system.Host1x().GetSyncpointManager().DeregisterGuestAction(request.syncpoint,
+                                                                        request.handle);
+        }
+    }
+
+    static constexpr u32 HostSyncpoints = 192; // Tegra::Host1x::SyncpointManager
+
+    KernelHelpers::ServiceContext m_context;
+    std::map<u32, Kernel::KEvent*> m_events;
+    std::map<u32, SlotRequest> m_requests;
 };
 
 // Placeholder for the Switch 2 GPU session (nn::gpu::sdk), handed out by gsv 497.
@@ -186,8 +285,13 @@ private:
     // Sub 101: (start u64, last u64, flags...) after CreateGpuAccessibleMemory's svc 0x80.
     void SubRegisterMemory(HLERequestContext& ctx) {
         const auto* b = ctx.CommandBuffer();
-        LOG_WARNING(Service, "(STUBBED) nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}",
-                    u64{b[2]} | (u64{b[3]} << 32), u64{b[4]} | (u64{b[5]} << 32), b[6], b[7]);
+        const u64 start = u64{b[2]} | (u64{b[3]} << 32);
+        const u64 last = u64{b[4]} | (u64{b[5]} << 32);
+        LOG_WARNING(Service, "nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}", start,
+                    last, b[6], b[7]);
+        if (last > start) {
+            Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Register(start, last - start + 1);
+        }
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
@@ -275,6 +379,17 @@ public:
         });
     }
 
+    ~INx2GraphicsSystemSession() override {
+        if (m_syncpt_poll) {
+            system.CoreTiming().UnscheduleEvent(m_syncpt_poll);
+        }
+        for (auto* event : m_syncpt_events) {
+            if (event != nullptr) {
+                m_context.CloseEvent(event);
+            }
+        }
+    }
+
 private:
     // Index of the first raw data word of a TIPC request: header (2 words), then an optional
     // special header with pid and copy/move handle words.
@@ -302,42 +417,109 @@ private:
 
     // nn::syncpt::sdk::InitializeEx sends two transfer memories (0x1000 bytes RW, then 0x2000
     // bytes the client maps read-only) and expects the server to have written a header into the
-    // second one: u32 version (must be 1) at +0, then u32s at +4 and +8 (a count; the client
-    // requires ((count + 0x40) >> 6) - 1 < 0x40) and five offsets at +0xc..+0x1c (into the RO,
-    // RW, RO, RW and RO regions). Reply: two handles (words 3 and 4), then the result.
+    // second one: u32 version (must be 1) at +0, u32 base id at +4, u32 count at +8 (the client
+    // requires ((count + 0x40) >> 6) - 1 < 0x40), then offsets of: the u64 syncpoint values (RO,
+    // +0xc), the RW "armed" summary word (+0x10), the RO summary word (+0x14), the RW armed bits
+    // (+0x18) and the RO acknowledge bits (+0x1c).
+    // To wait, the client makes its RW bit differ from the RO bit, signals the first returned
+    // event (it attaches that handle as writable), and waits on the second until the server makes
+    // the bits equal again; it then rereads the value and rearms if the threshold isn't reached.
+    // Reply: the two handles (words 3 and 4), then the result.
+    static constexpr u32 SyncptValuesOffset = 0x40;   // RO, u64 per syncpoint
+    static constexpr u32 SyncptRoSummaryOffset = 0x1040;
+    static constexpr u32 SyncptRoBitsOffset = 0x1100; // RO, up to 0x40 u64 words
+    static constexpr u32 SyncptRwSummaryOffset = 0x0;
+    static constexpr u32 SyncptRwBitsOffset = 0x100;  // RW, up to 0x40 u64 words
+    static constexpr u32 HostSyncpoints = 192;        // Tegra::Host1x::SyncpointManager
+
     void AttachSyncptMemory(HLERequestContext& ctx) {
         // RequestParser doesn't skip TIPC handle words, so read the raw data words.
         const auto* cmd_buf = ctx.CommandBuffer();
         const size_t data = TipcDataOffset(cmd_buf);
         const u32 version_requested = cmd_buf[data];
-        const u32 max_syncpoints = cmd_buf[data + 1];
+        const u32 max_syncpoints = std::min<u32>(cmd_buf[data + 1], (0x1000 - 0x40) / 8);
         LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC 204, version={} max_syncpoints={:#x}",
                     version_requested, max_syncpoints);
 
+        auto rw = ctx.GetObjectFromHandle<Kernel::KTransferMemory>(ctx.GetCopyHandle(0));
         auto ro = ctx.GetObjectFromHandle<Kernel::KTransferMemory>(ctx.GetCopyHandle(1));
-        if (ro.IsNotNull() && ro->GetSize() >= 0x2000) {
-            auto& memory = ro->GetOwner()->GetMemory();
-            const u64 base = GetInteger(ro->GetSourceAddress());
-            memory.Write32(base + 0x00, 1);              // version
-            memory.Write32(base + 0x04, 0);              // base id (guess)
-            memory.Write32(base + 0x08, max_syncpoints); // count
-            memory.Write32(base + 0x0c, 0x40);           // -> RO region
-            memory.Write32(base + 0x10, 0x000);          // -> RW region
-            memory.Write32(base + 0x14, 0x800);          // -> RO region
-            memory.Write32(base + 0x18, 0x800);          // -> RW region
-            memory.Write32(base + 0x1c, 0x1000);         // -> RO region
+        if (rw.IsNotNull() && ro.IsNotNull() && ro->GetSize() >= 0x2000) {
+            m_syncpt_memory = &ro->GetOwner()->GetMemory();
+            m_syncpt_rw = GetInteger(rw->GetSourceAddress());
+            m_syncpt_ro = GetInteger(ro->GetSourceAddress());
+            m_syncpt_count = max_syncpoints;
+            auto& memory = *m_syncpt_memory;
+            memory.Write32(m_syncpt_ro + 0x00, 1); // version
+            memory.Write32(m_syncpt_ro + 0x04, 0); // base id (guess)
+            memory.Write32(m_syncpt_ro + 0x08, max_syncpoints);
+            memory.Write32(m_syncpt_ro + 0x0c, SyncptValuesOffset);
+            memory.Write32(m_syncpt_ro + 0x10, SyncptRwSummaryOffset);
+            memory.Write32(m_syncpt_ro + 0x14, SyncptRoSummaryOffset);
+            memory.Write32(m_syncpt_ro + 0x18, SyncptRwBitsOffset);
+            memory.Write32(m_syncpt_ro + 0x1c, SyncptRoBitsOffset);
+            UpdateSyncptValues();
+            if (!m_syncpt_poll) {
+                m_syncpt_poll = Core::Timing::CreateEvent(
+                    "nx2:gsv:SyncptPoll",
+                    [this](s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
+                        PollSyncpts();
+                        return std::nullopt;
+                    });
+                system.CoreTiming().ScheduleLoopingEvent(SyncptPollInterval, SyncptPollInterval,
+                                                         m_syncpt_poll);
+            }
         } else {
-            LOG_ERROR(Service, "nx2:gsv TIPC 204: no read-only transfer memory");
+            LOG_ERROR(Service, "nx2:gsv TIPC 204: missing syncpt transfer memory");
         }
 
         if (m_syncpt_events[0] == nullptr) {
-            m_syncpt_events[0] = m_context.CreateEvent("nx2:gsv:SyncptEvent0");
-            m_syncpt_events[1] = m_context.CreateEvent("nx2:gsv:SyncptEvent1");
+            m_syncpt_events[0] = m_context.CreateEvent("nx2:gsv:SyncptRequest");
+            m_syncpt_events[1] = m_context.CreateEvent("nx2:gsv:SyncptNotify");
         }
         IPC::ResponseBuilder rb{ctx, 2, 2, 0};
         rb.Push(ResultSuccess);
-        rb.PushCopyObjects(ctx, m_syncpt_events[0]->GetReadableEvent(),
-                           m_syncpt_events[1]->GetReadableEvent());
+        rb.PushCopyObjects(ctx, *m_syncpt_events[0]); // signalled by the client
+        rb.PushCopyObjects(ctx, m_syncpt_events[1]->GetReadableEvent());
+    }
+
+    // Mirrors Eden's guest syncpoint values into the shared RO page. Returns true if any changed.
+    bool UpdateSyncptValues() {
+        auto& manager = system.Host1x().GetSyncpointManager();
+        bool changed = false;
+        for (u32 id = 0; id < std::min(m_syncpt_count, HostSyncpoints); ++id) {
+            const u64 value = manager.GetGuestSyncpointValue(id);
+            const u64 address = m_syncpt_ro + SyncptValuesOffset + id * 8;
+            if (m_syncpt_memory->Read64(address) != value) {
+                m_syncpt_memory->Write64(address, value);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    // Answers every armed wait: the value page is current, so the client rechecks its threshold
+    // and rearms if it still has to wait. Acknowledging without a value change costs the client a
+    // wakeup per poll, which keeps waits whose syncpoint we never see from hanging.
+    void PollSyncpts() {
+        if (m_syncpt_memory == nullptr) {
+            return;
+        }
+        UpdateSyncptValues();
+        bool acked = false;
+        const u32 words = (m_syncpt_count + 63) / 64;
+        for (u32 w = 0; w < words; ++w) {
+            const u64 rw_bits = m_syncpt_memory->Read64(m_syncpt_rw + SyncptRwBitsOffset + w * 8);
+            const u64 ro_address = m_syncpt_ro + SyncptRoBitsOffset + w * 8;
+            if (m_syncpt_memory->Read64(ro_address) != rw_bits) {
+                m_syncpt_memory->Write64(ro_address, rw_bits);
+                acked = true;
+            }
+        }
+        m_syncpt_memory->Write64(m_syncpt_ro + SyncptRoSummaryOffset,
+                                 m_syncpt_memory->Read64(m_syncpt_rw + SyncptRwSummaryOffset));
+        if (acked) {
+            m_syncpt_events[1]->Signal(system.Kernel());
+        }
     }
 
     void OpenViSession(HLERequestContext& ctx) {
@@ -372,8 +554,15 @@ private:
         ReturnRawSession(system, ctx, std::move(nvsrv));
     }
 
+    static constexpr std::chrono::nanoseconds SyncptPollInterval{std::chrono::microseconds{500}};
+
     KernelHelpers::ServiceContext m_context;
     std::array<Kernel::KEvent*, 2> m_syncpt_events{};
+    Core::Memory::Memory* m_syncpt_memory{};
+    u64 m_syncpt_rw{};
+    u64 m_syncpt_ro{};
+    u32 m_syncpt_count{};
+    std::shared_ptr<Core::Timing::EventType> m_syncpt_poll;
 };
 
 } // namespace Service

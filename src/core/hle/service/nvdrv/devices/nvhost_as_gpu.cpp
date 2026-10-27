@@ -14,13 +14,16 @@
 #include "common/logging.h"
 #include "core/core.h"
 #include "core/hle/service/nvdrv/core/container.h"
+#include "core/hle/service/nvdrv/core/heap_mapper.h"
 #include "core/hle/service/nvdrv/core/nvmap.h"
 #include "core/hle/service/nvdrv/devices/ioctl_serialization.h"
 #include "core/hle/service/nvdrv/devices/nvhost_as_gpu.h"
 #include "core/hle/service/nvdrv/devices/nvhost_gpu.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/nvdrv/nvdrv.h"
 #include "video_core/control/channel_state.h"
 #include "video_core/gpu.h"
+#include "video_core/host1x/host1x.h"
 #include "video_core/memory_manager.h"
 #include "video_core/rasterizer_interface.h"
 
@@ -30,7 +33,9 @@ nvhost_as_gpu::nvhost_as_gpu(Core::System& system_, Module& module_, NvCore::Con
     : nvdevice{system_}, module{module_}, container{core}, nvmap{core.GetNvMapFile()}, vm{},
       gmmu{} {}
 
-nvhost_as_gpu::~nvhost_as_gpu() = default;
+nvhost_as_gpu::~nvhost_as_gpu() {
+    Nx2GpuMemoryRegistry::Get().RemoveListener(this);
+}
 
 NvResult nvhost_as_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> input,
                                std::span<u8> output) {
@@ -49,8 +54,14 @@ NvResult nvhost_as_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> i
             return WrapFixed(this, &nvhost_as_gpu::MapBufferEx, input, output);
         case 0x8:
             return WrapFixed(this, &nvhost_as_gpu::GetVARegions1, input, output);
-        case 0x9:
-            return WrapFixed(this, &nvhost_as_gpu::AllocAsEx, input, output);
+        case 0x9: {
+            const auto result = WrapFixed(this, &nvhost_as_gpu::AllocAsEx, input, output);
+            if (result == NvResult::Success && g_nx2_driver) {
+                Nx2GpuMemoryRegistry::Get().AddListener(
+                    this, [this](u64 address, u64 size) { Nx2MapIdentity(address, size); });
+            }
+            return result;
+        }
         case 0x14:
             return WrapVariable(this, &nvhost_as_gpu::Remap, input, output);
         default:
@@ -90,7 +101,35 @@ NvResult nvhost_as_gpu::Ioctl3(DeviceFD fd, Ioctl command, std::span<const u8> i
     return NvResult::NotImplemented;
 }
 
-void nvhost_as_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {}
+void nvhost_as_gpu::OnOpen(NvCore::SessionId session_id, DeviceFD fd) {
+    nx2_session = session_id;
+}
+
+void nvhost_as_gpu::Nx2MapIdentity(u64 address, u64 size) {
+    std::scoped_lock lock(mutex);
+    auto* session = container.GetSession(nx2_session);
+    if (!gmmu || session == nullptr) {
+        LOG_ERROR(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x}: no address space or session",
+                  address, size);
+        return;
+    }
+    DAddr device_address{};
+    if (session->has_preallocated_area && session->mapper->IsInBounds(address, size)) {
+        device_address = session->mapper->Map(address, size);
+    } else {
+        auto& smmu = system.Host1x().MemoryManager();
+        device_address = smmu.Allocate(Common::AlignUp(size, 0x20000));
+        if (device_address == 0) {
+            LOG_CRITICAL(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x}: out of SMMU space",
+                         address, size);
+            return;
+        }
+        smmu.Map(device_address, address, size, session->asid, true);
+    }
+    gmmu->Map(address, device_address, size, Tegra::PTEKind::PITCH, false);
+    LOG_INFO(Service_NVDRV, "Switch 2 GPU memory {:#x}+{:#x} mapped at the same GPU address", address,
+             size);
+}
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}
 
 NvResult nvhost_as_gpu::AllocAsEx(IoctlAllocAsEx& params) {

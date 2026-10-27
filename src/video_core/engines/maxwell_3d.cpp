@@ -12,6 +12,7 @@
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/core_timing.h"
+#include "video_core/nx2.h"
 #include "video_core/dirty_flags.h"
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/engines/maxwell_3d.h"
@@ -379,6 +380,12 @@ void Maxwell3D::CallMacroMethod(Core::System& system, u32 method, const std::vec
     // Lookup the macro offset
     const u32 entry =
         ((method - MacroRegistersStart) >> 1) % static_cast<u32>(macro_positions.size());
+
+    // Switch 2 uploads Turing+ (MME64) macros, which Eden's Fermi-style macro engine can't run.
+    if (g_nx2_ampere) {
+        LOG_DEBUG(HW_GPU, "Switch 2 macro {} with {} parameters skipped", entry, parameters.size());
+        return;
+    }
 
     // Execute the current macro.
     macro_engine.Execute(system, *this, macro_positions[entry], parameters);

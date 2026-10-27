@@ -5,7 +5,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <functional>
+#include <map>
+#include <mutex>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "common/logging.h"
 #include "core/hle/service/nvdrv/devices/nvdevice.h"
@@ -24,6 +29,46 @@ inline NvResult Nx2UnknownIoctl(const char* device, Ioctl command, std::span<con
     std::copy_n(input.begin(), std::min(input.size(), output.size()), output.begin());
     return NvResult::Success;
 }
+
+// GPU-accessible memory a Switch 2 process registered through nx2:gpu (sub-session 101). The GPU
+// shares the process address space there: GPFIFO entries and pushbuffers use the CPU address as
+// the GPU address. Every nvhost-as-gpu address space maps each range at that address, including
+// ranges registered before the address space existed.
+class Nx2GpuMemoryRegistry {
+public:
+    using Listener = std::function<void(u64 address, u64 size)>;
+
+    static Nx2GpuMemoryRegistry& Get() {
+        static Nx2GpuMemoryRegistry registry;
+        return registry;
+    }
+
+    void Register(u64 address, u64 size) {
+        std::scoped_lock lk{mutex};
+        ranges.emplace_back(address, size);
+        for (auto& [owner, listener] : listeners) {
+            listener(address, size);
+        }
+    }
+
+    void AddListener(const void* owner, Listener listener) {
+        std::scoped_lock lk{mutex};
+        for (const auto& [address, size] : ranges) {
+            listener(address, size);
+        }
+        listeners.insert_or_assign(owner, std::move(listener));
+    }
+
+    void RemoveListener(const void* owner) {
+        std::scoped_lock lk{mutex};
+        listeners.erase(owner);
+    }
+
+private:
+    std::mutex mutex;
+    std::vector<std::pair<u64, u64>> ranges;
+    std::map<const void*, Listener> listeners;
+};
 
 // Device node that Switch 2 nvgpu drivers open but Switch 1 never had (e.g. /dev/nvhost-tsg-gpu).
 // Every ioctl succeeds with a zeroed reply and is logged, so the driver's use of it shows up.

@@ -16,6 +16,7 @@
 #include "core/hle/service/am/service/self_controller.h"
 #include "core/hle/service/am/service/window_controller.h"
 #include "core/hle/service/cmif_serialization.h"
+#include "core/hle/service/nx2_stub_interface.h"
 
 namespace Service::AM {
 
@@ -33,6 +34,13 @@ IApplicationProxy::IApplicationProxy(Core::System& system_, std::shared_ptr<Appl
         {10, D<&IApplicationProxy::GetProcessWindingController>, "GetProcessWindingController"},
         {11, D<&IApplicationProxy::GetLibraryAppletCreator>, "GetLibraryAppletCreator"},
         {20, D<&IApplicationProxy::GetApplicationFunctions>, "GetApplicationFunctions"},
+        // Switch 2-only getters; see nx2_stub_interface.h.
+        {40, &IApplicationProxy::GetNx2Interface, "Nx2Getter40"},
+        {50, &IApplicationProxy::GetNx2Interface, "Nx2Getter50"},
+        {60, &IApplicationProxy::GetNx2Interface, "Nx2Getter60"},
+        {70, &IApplicationProxy::GetNx2Interface, "Nx2Getter70"},
+        {80, &IApplicationProxy::GetNx2Interface, "Nx2Getter80"},
+        {90, &IApplicationProxy::GetNx2Interface, "Nx2Getter90"},
         {1000, D<&IApplicationProxy::GetDebugFunctions>, "GetDebugFunctions"},
     };
     // clang-format on
@@ -41,6 +49,10 @@ IApplicationProxy::IApplicationProxy(Core::System& system_, std::shared_ptr<Appl
 }
 
 IApplicationProxy::~IApplicationProxy() = default;
+
+void IApplicationProxy::GetNx2Interface(HLERequestContext& ctx) {
+    ReturnNx2StubInterface(system, ctx, "IApplicationProxy");
+}
 
 Result IApplicationProxy::GetAudioController(
     Out<SharedPointer<IAudioController>> out_audio_controller) {

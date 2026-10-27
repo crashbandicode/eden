@@ -19,6 +19,8 @@ IApplicationProxyService::IApplicationProxyService(Core::System& system_,
     : ServiceFramework{system_, "appletOE"}, m_window_system{window_system} {
     static const FunctionInfo functions[] = {
         {0, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy"},
+        // Switch 2 SDKs open the proxy with command 10, same arguments.
+        {10, D<&IApplicationProxyService::OpenApplicationProxy>, "OpenApplicationProxy (Switch 2)"},
     };
     RegisterHandlers(functions);
 }

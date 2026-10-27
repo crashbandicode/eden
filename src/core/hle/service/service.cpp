@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
 #include <fmt/ranges.h>
 #include "common/assert.h"
 #include "common/logging.h"
@@ -70,7 +71,10 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(HLERequestContext& ctx,
 
     system.GetReporter().SaveUnimplementedFunctionReport(ctx, ctx.GetCommand(), function_name, service_name);
     UNIMPLEMENTED_MSG("Unknown / unimplemented {}", fmt::to_string(buf));
-    if (Settings::values.use_auto_stub || std::string_view{service_name}.starts_with(Nx2StubPrefix)) {
+    // EDEN_NX2_AUTO_STUB=1 auto-stubs every unknown command without touching the config.
+    static const bool env_auto_stub = std::getenv("EDEN_NX2_AUTO_STUB") != nullptr;
+    if (Settings::values.use_auto_stub || env_auto_stub ||
+        std::string_view{service_name}.starts_with(Nx2StubPrefix)) {
         LOG_WARNING(Service, "Using auto stub fallback!");
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
@@ -84,7 +88,25 @@ void ServiceFrameworkBase::InvokeRequest(HLERequestContext& ctx) {
         return ReportUnimplementedFunction(ctx, info);
 
     LOG_TRACE(Service, "{}", MakeFunctionString(info->name, GetServiceName(), ctx.CommandBuffer()));
+    // EDEN_NX2_IPC_TRACE=1 logs every dispatched command and the result word it returned.
+    static const bool ipc_trace = std::getenv("EDEN_NX2_IPC_TRACE") != nullptr;
+    if (ipc_trace) {
+        LOG_INFO(Service, "ipc {}::{} ({})", service_name, ctx.GetCommand(), info->name);
+    }
     handler_invoker(this, info->handler_callback, ctx);
+    if (ipc_trace) {
+        // Response layout: [0..1] header, then 'SFCO', version, result.
+        const auto* cmd_buf = ctx.CommandBuffer();
+        for (int i = 0; i < 12; ++i) {
+            if (cmd_buf[i] == 0x4F434653) {  // "SFCO"
+                if (cmd_buf[i + 2] != 0) {
+                    LOG_INFO(Service, "ipc {}::{} -> result {:#x}", service_name, ctx.GetCommand(),
+                             cmd_buf[i + 2]);
+                }
+                break;
+            }
+        }
+    }
 }
 
 void ServiceFrameworkBase::InvokeRequestTipc(HLERequestContext& ctx) {

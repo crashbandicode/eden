@@ -483,11 +483,13 @@ private:
         }
         auto pg = std::make_unique<Kernel::KPageGroup>(
             kernel_core, std::addressof(kernel_core.GetSystemSystemResource().GetBlockInfoManager()));
-        // Not cleared: the GPU writes these before reading them, and touching 300 MB would commit
-        // it on the host.
+        // The graphics server's own memory, not the application's: taken from the application
+        // pool, title 4's six regions left it 1.8 GB less than the kernel reports to it. Not
+        // cleared: the GPU writes these before reading them, and touching 300 MB would commit it
+        // on the host.
         if (R_FAILED(kernel_core.MemoryManager().AllocateAndOpen(
                 pg.get(), size / YUZU_PAGESIZE,
-                Kernel::KMemoryManager::EncodeOption(Kernel::KMemoryManager::Pool::Application,
+                Kernel::KMemoryManager::EncodeOption(Kernel::KMemoryManager::Pool::SystemNonSecure,
                                                      Kernel::KMemoryManager::Direction::FromBack)))) {
             LOG_ERROR(Service, "nx2:gpu 214 could not allocate {:#x} bytes", size);
             return std::nullopt;

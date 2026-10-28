@@ -139,7 +139,7 @@ private:
     static constexpr size_t device_virtual_bits = Traits::device_virtual_bits;
     static constexpr size_t device_as_size = 1ULL << device_virtual_bits;
     static constexpr size_t physical_min_bits = 32;
-    static constexpr size_t physical_max_bits = 34; // covers the 10 and 12 GiB layouts
+    static constexpr size_t physical_max_bits = 35; // covers the 12 GiB layout plus nx2 graphics server memory
     static constexpr size_t page_bits = 12;
     static constexpr size_t page_size = 1ULL << page_bits;
     static constexpr size_t page_mask = page_size - 1ULL;

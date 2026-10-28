@@ -94,7 +94,7 @@ size_t KSystemControl::Init::GetIntendedMemorySize() {
     case Smc::MemorySize_10GB:
         return 10_GiB;
     case Smc::MemorySize_12GB:
-        return 12_GiB;
+        return 12_GiB + KSystemControl::Nx2GraphicsServerMemorySize;
     }
 }
 

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <cstdio>
 #include <cstdlib>
 #include <tuple>
 #include <set>
@@ -320,7 +321,19 @@ void TraceWindowTarget(const Tegra::Engines::Maxwell3D& maxwell3d, Tegra::Memory
     static const bool trace = std::getenv("EDEN_NX2_WINDOW_TRACE") != nullptr;
     static u32 traced{};
     const auto& regs = maxwell3d.regs;
-    if (!trace || regs.rt[0].width != 3840 || traced >= 400) {
+    static const u64 skip = [] {
+        const char* value = std::getenv("EDEN_NX2_WINDOW_TRACE_SKIP");
+        return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
+    }();
+    static u64 seen_events{};
+    static const u64 only_ps = [] {
+        const char* value = std::getenv("EDEN_NX2_TRACE_PS");
+        return value != nullptr ? std::strtoull(value, nullptr, 16) : 0ULL;
+    }();
+    const u64 pixel_shader =
+        (u64{regs.pipelines[5].reserved[0] & 0xff} << 32) | regs.pipelines[5].reserved[1];
+    if (!trace || regs.rt[0].width != 3840 || traced >= 400 || seen_events++ < skip ||
+        (only_ps != 0 && pixel_shader != only_ps)) {
         return;
     }
     ++traced;
@@ -349,7 +362,7 @@ void TraceWindowTarget(const Tegra::Engines::Maxwell3D& maxwell3d, Tegra::Memory
                  fmt::join(values, " "));
     }
     static u32 texture_traces{};
-    if (texture_traces++ > 40) {
+    if (texture_traces++ > 200) {
         return;
     }
     // Texture used by the pixel shader's first bound TEX (handle in c[2][0x20]) and its TIC.
@@ -370,6 +383,15 @@ void TraceWindowTarget(const Tegra::Engines::Maxwell3D& maxwell3d, Tegra::Memory
     memory.ReadBlockUnsafe(texture, texels.data(), sizeof(texels));
     LOG_INFO(HW_GPU, "nx2 window texture {:#x} {}x{}: {:08x}", texture, (tic[4] & 0xffff) + 1,
              (tic[5] & 0xffff) + 1, fmt::join(texels, " "));
+    // EDEN_NX2_TEXTURE_DUMP=<file>: save the first 4 MiB of the last traced texture's memory.
+    if (const char* path = std::getenv("EDEN_NX2_TEXTURE_DUMP"); path != nullptr) {
+        std::vector<u8> bytes(2048u * 10240u);
+        memory.ReadBlockUnsafe(texture, bytes.data(), bytes.size());
+        if (std::FILE* file = std::fopen(path, "wb")) {
+            std::fwrite(bytes.data(), 1, bytes.size(), file);
+            std::fclose(file);
+        }
+    }
 }
 } // Anonymous namespace
 
@@ -379,14 +401,16 @@ void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
                                  : maxwell3d->draw_manager.draw_state.vertex_buffer.count);
     // EDEN_NX2_RT_TRACE: log the first draw to every distinct colour target (debug aid).
     if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
-        static std::set<std::tuple<GPUVAddr, u32, u32, u32>> seen;
-        const auto& rt = maxwell3d->regs.rt[0];
-        const auto key = std::make_tuple(rt.Address(), rt.width, rt.height,
-                                         static_cast<u32>(rt.format));
-        if (rt.width >= 640 && seen.size() < 400 && seen.insert(key).second) {
-            LOG_INFO(HW_GPU, "nx2 draw target {:#x} {}x{} format={:#x} tile={:#x} (targets so far {})",
-                     rt.Address(), rt.width, rt.height, static_cast<u32>(rt.format),
-                     static_cast<u32>(maxwell3d->regs.rt[0].tile_mode.block_height.Value()), seen.size());
+        static std::set<std::tuple<GPUVAddr, u32, u32, u64, u64>> seen;
+        const auto& regs = maxwell3d->regs;
+        const auto& rt = regs.rt[0];
+        const u64 vs = (u64{regs.pipelines[1].reserved[0] & 0xff} << 32) | regs.pipelines[1].reserved[1];
+        const u64 ps = (u64{regs.pipelines[5].reserved[0] & 0xff} << 32) | regs.pipelines[5].reserved[1];
+        const auto key = std::make_tuple(rt.Address(), rt.width, static_cast<u32>(rt.format), vs, ps);
+        if (rt.width >= 640 && seen.size() < 600 && seen.insert(key).second) {
+            LOG_INFO(HW_GPU, "nx2 draw target {:#x} {}x{} format={:#x} vs={:#x} ps={:#x} blend={} (pairs so far {})",
+                     rt.Address(), rt.width, rt.height, static_cast<u32>(rt.format), vs, ps,
+                     regs.blend.enable[0], seen.size());
         }
     }
     PrepareDraw(is_indexed, [this, is_indexed, instance_count] {

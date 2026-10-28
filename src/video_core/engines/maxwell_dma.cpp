@@ -64,6 +64,24 @@ void MaxwellDMA::CallMultiMethod(Core::System& system, u32 method, const u32* ba
 
 void MaxwellDMA::Launch() {
     LOG_TRACE(Render_OpenGL, "DMA copy {:#x} -> {:#x}", static_cast<GPUVAddr>(regs.offset_in), GPUVAddr(regs.offset_out));
+    // EDEN_NX2_TRACE_DST=<hex>: also log copies writing within 32 MiB above that GPU address.
+    static const u64 trace_destination = [] {
+        const char* value = std::getenv("EDEN_NX2_TRACE_DST");
+        return value != nullptr ? std::strtoull(value, nullptr, 16) : 0ULL;
+    }();
+    if (trace_destination != 0 && GPUVAddr(regs.offset_out) >= trace_destination &&
+        GPUVAddr(regs.offset_out) < trace_destination + (32ULL << 20)) {
+        static u32 traced_destination{};
+        if (traced_destination++ < 40) {
+            LOG_INFO(HW_GPU,
+                     "nx2 DMA to traced dst: {:#x} -> {:#x} lines={} length={} pitch in={:#x} "
+                     "out={:#x} launch={:#x} src_layout={} dst_layout={}",
+                     static_cast<GPUVAddr>(regs.offset_in), GPUVAddr(regs.offset_out),
+                     regs.line_count, regs.line_length_in, regs.pitch_in, regs.pitch_out,
+                     regs.reg_array[0xc0], regs.launch_dma.src_memory_layout.Value() == LaunchDMA::MemoryLayout::PITCH ? "pitch" : "block",
+                     regs.launch_dma.dst_memory_layout.Value() == LaunchDMA::MemoryLayout::PITCH ? "pitch" : "block");
+        }
+    }
     if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
         static u32 traced{};
         if (traced++ < 64) {

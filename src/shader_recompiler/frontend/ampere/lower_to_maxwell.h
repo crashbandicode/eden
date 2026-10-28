@@ -882,6 +882,16 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             emit(0x38f0000000070000ULL | (u64{253} << 8) | (u64{mask} << 20));
             break;
         }
+        case 0x381: { // LDG.E of 32/64/128 bits through a 64-bit register address.
+            const u32 size = insn.Bits(73, 3);
+            if ((insn.words[2] & ~0xe00U) != 0x001e8100 || size < 4 || size > 6 ||
+                insn.Bits(32, 8) || (insn.Bits(24, 8) & 1) || insn.Bits(24, 8) >= 246 ||
+                (size == 5 && (dest & 1)) || (size == 6 && (dest & 3)))
+                return fail(index, "native global load mode");
+            emit(base(0xeed0000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) |
+                 (u64{insn.Bits(40, 24)} << 20) | (u64{1} << 45) | (u64{size} << 48));
+            break;
+        }
         case 0x386: case 0x986: { // Global store of 32/64/128 bits, 64-bit address.
             const u32 data = insn.Bits(32, 8);
             const u32 size = insn.Bits(73, 3);
@@ -1083,6 +1093,22 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                      (u64{insn.Bits(90, 1)} << 49) | (u64{depth_compare} << 50) | (u64{7} << 51) |
                      (u64{lod} << 55));
                 const u32 components = static_cast<u32>(std::popcount(mask));
+                if (insn.Bits(79, 1)) {
+                    // FP16 results: (c0, c1) packed into the first destination, (c2, c3) into
+                    // the second (F2F writes the half in the low 16 bits; ISCADD merges).
+                    const auto pack = [&](u32 target, u32 low, u32 high) {
+                        if (target == 255) return;
+                        emit(0x5ca8000000000000ULL | predicate | 246 | (u64{1} << 8) | (u64{2} << 10) | (u64{low} << 20));
+                        emit(0x5ca8000000000000ULL | predicate | 247 | (u64{1} << 8) | (u64{2} << 10) | (u64{high} << 20));
+                        emit(0x5c18000000000000ULL | predicate | target | (u64{246} << 8) | (u64{247} << 20) | (u64{16} << 39));
+                    };
+                    pack(static_cast<u32>(dest), 250, components > 1 ? 251U : 255U);
+                    if (components > 2) {
+                        pack(split ? second_dest : (dest == 255 ? 255U : static_cast<u32>(dest) + 1),
+                             252, components > 3 ? 253U : 255U);
+                    }
+                    return true;
+                }
                 for (u32 i = 0; i < components; ++i) {
                     u32 target = 255;
                     if (!split) target = dest == 255 ? 255U : static_cast<u32>(dest) + i;
@@ -1114,7 +1140,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 break;
             }
             result.required_texture_buffer = 2;
-            emit(0xd800000000000000ULL | predicate | dest | (u64{insn.Bits(24, 8)} << 8) |
+            emit((0xd800000000000000ULL & ~(u64{insn.Bits(79, 1)} << 59)) | predicate | dest | (u64{insn.Bits(24, 8)} << 8) |
                  (u64{insn.Bits(32, 8)} << 20) | (u64{insn.Bits(64, 8)} << 28) |
                  (u64{insn.Bits(40, 14)} << 36) | (u64{insn.Bits(90, 1)} << 49) |
                  (u64{swizzle} << 50) | (u64{dimension == 5 ? (lod ? 8U : 7U) : depth_compare ? (lod ? 6U : 4U) : (lod == 3 ? 3U : lod ? 2U : 1U)} << 53));
@@ -1384,6 +1410,12 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (!insn.Bits(80, 1) && !insn.Bits(76, 1) && insn.Bits(64, 8) == 255 &&
                 insn.Bits(73, 2) == 3 && !insn.Bits(75, 1) && insn.words[1] <= 32) {
                 emit(base(0x3848000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) | (u64{insn.words[1]} << 20));
+                break;
+            }
+            if (!insn.Bits(80, 1) && insn.Bits(76, 1) && insn.Bits(64, 8) == 255 &&
+                (insn.Bits(73, 2) == 3 || is_signed) && !insn.Bits(75, 1) && insn.words[1] <= 32) {
+                // SHF.R low word with a zero high word: a logical right shift.
+                emit(base(0x3828000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) | (u64{insn.words[1]} << 20));
                 break;
             }
             if ((insn.Bits(73, 2) != 3 && !is_signed) || insn.Bits(75, 1) || !insn.Bits(80, 1) || insn.words[1] > 32) return fail(index, "native funnel-shift mode");

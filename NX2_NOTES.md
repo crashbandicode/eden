@@ -100,66 +100,58 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 42 | GPU memory model | gpu sub 101 = `CreateGpuAccessibleMemory` (reply word 3 = GpuMemoryHandle); 211 = `NormalMapGpuMemory4K` (words 3-4 first VA, 5-6 last, 7 handle, 8-9 offset, 17 slot), also into sparse regions at 0x81_xxxx_xxxx; 102/213 (`NormalUnmapGpuMemory4K`)/214 (`CreateSparseRegion`) complete through slot events (words 3/8/11) | real handles, `Nx2GpuMemoryRegistry::MapAt` with SMMU range reuse, slot signals |
 | 43 | (title 1) `nn::syncpt::sdk::Initialize` abort | newer SDK opens syncpt with TIPC 0(u64 token) and aborts unless it is echoed | handshake echo |
 | 44 | (title 1) NVN closes the GPU device after GetVARegions | newer SDK asks gpu 201/202(id) for the user/gsv partitions (two u64s each, stored as min/max) instead of using 203 | 201 = [0x8000000, 0xC000000000), 202 empty |
+| 45 | NVN command buffer with no command memory (~12 s, titles 1 and 4) | `NvRmGpuTSGSubcontextCreate` failed (0x11): characteristics reported one VEID | flags bit 8/22 (TSG, TSG_SUBCONTEXTS) and 64 subcontexts at characteristics +0xb4 (12125bc) |
+| 46 | NVN asserts in `GetSyncpointShimRoAddress` | Switch 2 reads syncpoints through a read-only GPU page (flag bit 26, nvhost-as ioctl 0xB) | shim at the top of the VA range; GPU reads of it return the syncpoint value (12125bc, from changes.patch) |
+| 47 | window/image creation | gsv 111/112/114/423/429/430/435/1510 native memory and images; svc 0x80 is SetGpuMemoryAttribute | native object registry + layout calc (from changes.patch), real svc 0x80 (12125bc) |
+| 48 | presents go nowhere | vi2 229 (word 5 image id, ~word 22/word 24 fence) | composite the block-linear image with native GOB tiling (f63ff90, from changes.patch) |
+| 49 | crash in `DmaPusher::CallMethod` (null engine) | NVN uses subchannel 2 (inline-to-memory) without binding a class | bind KeplerMemory there by default; drop methods on unbound subchannels (9f30683) |
+| 50 | GPU parses garbage, then stalls (~14-19 s) | NVN2 gates each command buffer with a SEMAPHORED acquire the CPU releases after writing it; Eden read past unmet acquires and ran stale commands (`EDEN_NX2_PB_CHECK` confirmed entries changed after submit) | suspend the channel on an unmet acquire and resume it from the same word (9f30683, approach from changes.patch) |
+| 51 | desync after a called command buffer | NVN2 ends a GPFIFO entry inside a method's data, calls another buffer, and continues at the next address | set the unfinished method aside and resume it when the stream continues (9f30683) |
+| 52 | semaphore words next to releases get clobbered | 4-byte releases (SEMAPHORED bit 24) were written as 16 bytes | 4-byte releases write 4 bytes (9f30683) |
+| 53 | no draws: 3D macros skipped | NVN2 drives 3D/compute state and draws through Turing MME64 macros; compute dispatches through QMD 3.0 | changes.patch's MME interpreter (one macro context shared by the process's channels, also on the compute class), native compute and QMD scheduler (d7826ce) |
+| 54 | draws hit Eden's Maxwell decoder ("Invalid insn") | shaders are SM86 SASS | changes.patch's Ampere-to-Maxwell lowering, widened until all 32 of title 4's programs lower; `EDEN_NX2_SHADER_DUMP` + `C:\dev\nx2work\lowertest` test it offline (d7826ce) |
+| 55 | GPU desyncs again after ~15-30 s | the game ran a full ring of command memory ahead of Eden's GPU thread: the vi2 229 reply reports all buffers free, so nothing paced it | vi2 229 waits (bounded) for the frame's GPU fence (325cac7) |
+| 56 | macro arguments lost | NVN interleaves several command buffers, so more than one split method can be pending | several parked methods keyed by resume address, dropped at the end of the submission (325cac7) |
+| 57 | frames all black although draws run | gpu 214 creates GPU-only memory (six 300 MB regions at 0x81_0000_0000) that the graphics server backs itself; the render targets live there and were unmapped | back each region with application-pool pages mapped into the alias code region (325cac7). Title 4 now shows its loading screen and a menu screen |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
-`EDEN_NX2_PULLER_TRACE`, `EDEN_NX2_METHOD_TRACE`, `EDEN_NX2_HIDE_WINDOW`.
+`EDEN_NX2_PULLER_TRACE`, `EDEN_NX2_METHOD_TRACE`, `EDEN_NX2_HIDE_WINDOW`,
+`EDEN_NX2_FRAME_CAPTURE=<dir>` (every 120th presented frame as TGA), `EDEN_NX2_PB_CHECK`
+(pushbuffer entries changed between submit and execution), `EDEN_NX2_QUERY_TRACE` (every GPU
+report/semaphore write). `C:\dev\crashrun.sh` runs eden-cli under cdb and prints the crash stack;
+`C:\dev\stackdump.sh <main> <seconds>` dumps host thread stacks of a running test.
 
 ## Where it stops now
 
 All runs: `EDEN_NX2_AUTO_STUB=1`, 12 GB memory layout, loose ExeFS with the sibling `romfs/`.
 
-**Title 4** (`fourth switch game\exefs`, 0400380020056000) **runs its main loop**: it stays up for
-the whole 90 s test, polls input (`hid` 214, auto-stubbed) every 16 ms and drives the audio
-renderer every frame. Boot order now: nn::init -> nn::oe -> fs/RomFS -> graphics system (gsv,
-nvsrv, syncpt, gpu, vi2) -> NVN device, two GPU channels, window with 4K swapchain images ->
-fonts (its own `.bfotf` plus system fonts via pl:u 2010) -> heaps (incl. 300 MB sound) -> aud:u
-audio renderer -> Gyml sequence files -> main loop.
-- GPU submissions are executed by Eden's puller/engines (Ampere classes on Maxwell engines),
-  syncpoints and queue semaphores advance, but Turing+ macros are skipped and nothing is presented.
-- Only six GPU submissions happen (all during init). At ~11.5-12.4 s the main thread hands NVN
-  a command buffer (from a per-context table at game `main+0x320149c`, used at `main+0x32014e8`)
-  that was initialised but never given command memory or a memory callback: the whole state at
-  cmdbuf+0x2be8.. is zero, so NVN writes its first methods to address 0 and then calls a null
-  function. Some earlier game-side setup of that command buffer (its command-memory pool or the
-  frame-begin that adds memory) silently failed or never ran; that is the next thing to find.
-  Another thread keeps polling input afterwards.
+**Title 4** (`fourth switch game\exefs`, 0400380020056000) **renders**: after boot it shows its
+animated cloud loading screen (with its ambient audio) for about 30 s, then a menu-style screen
+with three painted panels on dark green. Frames are paced on the GPU fence, ~12 presents/s.
+Still missing on the menu screen: text and the logo band at the top. Shaders that appear there
+need two more lowered forms (LDG.E register address, SHF.R.U32 low word; added, being tested),
+and one macro (start 0x142) fails with "parameter FIFO underflow" (needs a 4th parameter).
 
 **Title 3**: last checked before the graphics work; should now track title 4.
 
-**Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`) now gets as far as
-title 4: the larger memory budget (it sees ~9.5 GB) cleared the old null-allocator stop, then
-blockers 43-44. It boots graphics, NVN and several GPU channels, polls input every frame, and
-hits the same empty NVN command buffer at ~14 s (identical writes to address 0), so that stop is
-shared, not title-specific.
+**Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`): reached its main loop and
+the empty-command-buffer stop that blocker 45 fixed for both titles; not retested since the
+macro/shader/present work.
 
 **Title 2**: main/sdk/subsdk0 fail LZ4 and SHA-256 checks; can't be run from these files.
 
-## What a picture needs
-
-1. **Present path**: gsv 315/423/429/435/111 (window buffer create/register) and vi2 present must
-   hand the swapchain image to Eden's display, so whatever the GPU wrote appears.
-2. **Turing+ macro engine (MME64)**: NVN2 uses macros for much of its 3D state; Eden only has the
-   Fermi-era macro ISA. Mesa's `nouveau/mme` (tu104) documents the encoding.
-3. **Ampere shader frontend**: NVN2 ships Ampere SASS (128-bit Volta+ encoding); Eden's shader
-   recompiler only decodes Maxwell. This is the largest piece.
-4. **Ampere 3D-class method differences** versus Maxwell B197, texture/RT formats from gsv image
-   preferences.
-
 ## Prioritized next steps
 
-0. **Empty command buffer** at ~12 s (title 4): find where the game normally adds command memory
-   to the per-context command buffers (`main+0x320149c` table) and which earlier call failed.
-   Break on NVN's command-buffer init and on the game's frame-begin, compare with the stores to
-   cmdbuf+0x2be8 (53 sites in sdk).
-1. **Present**: decode gsv 315/423/429/435/111 and vi2 present/acquire, and blit the presented
-   image through Eden's renderer. First visible milestone: the game's clear colour.
-2. **MME64 interpreter** behind `g_nx2_ampere` (replace the skip in `Maxwell3D::CallMacroMethod`).
-3. **Ampere SASS decoder** for the shader recompiler.
-4. **Title 1 / title 3** retests with the current tree.
-5. Confirm the guesses: syncpt page layout, semaphore mirror page, gsv 1510 pixel formats,
-   aud:u command numbers, pl:u built-in font type numbering, svcGetInfo 29-33.
-6. **Six cores** instead of folding 4/5 onto 0/1; rare SIMD encodings still undecoded.
-7. Upstream-worthy pieces independent of Switch 2: MSVC 14.51 build fixes, eden-cli SDL3
+1. **Title 4 menu text/logo**: test the LDG / SHF.R lowering on the menu shaders
+   (`EDEN_NX2_SHADER_DUMP`, lowertest), then the macro at 0x142 that wants a fourth parameter
+   (dump its code with `EDEN_NATIVE_DRAW_DIAGNOSTICS` and check the interpreter against Mesa's
+   mme_tu104 semantics).
+2. **Title 1 / title 3** retests with the current tree; dump their shaders and widen the lowering.
+3. Replace guesses with real protocol knowledge: syncpt page layout, the semaphore mirror page,
+   gsv 214 (GPU-only memory) and vi2 present buffer availability (real buffer release instead of
+   the fence wait), gsv 1510 formats, svcGetInfo 29-33.
+4. **Six cores** instead of folding 4/5 onto 0/1; rare SIMD encodings still undecoded.
+5. Upstream-worthy pieces independent of Switch 2: MSVC 14.51 build fixes, eden-cli SDL3
    lifetime fixes and `_setmaxstdio`, ExeFS loader fixes, FAC/FAH offset fix, GetPseudoDeviceId
    without NACP.

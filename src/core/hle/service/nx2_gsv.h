@@ -632,7 +632,10 @@ private:
             .height = layout.height,
             .stride = static_cast<u32>(layout.pitch / 4),
             .pixel_format = android::PixelFormat::Rgba8888,
-            .transform_flags = android::BufferTransformFlags::Unset,
+            // Title 4 renders with a lower-left origin (negative viewport scale), so its image is
+            // stored bottom-up and the console's compositor shows it flipped. Whether vi2 carries
+            // this per present is not known yet; flip unconditionally for now.
+            .transform_flags = android::BufferTransformFlags::FlipV,
             .crop_rect = {0, 0, static_cast<int>(layout.width), static_cast<int>(layout.height)},
             .blending = Tegra::BlendMode::Opaque,
             .native_tiling = true,

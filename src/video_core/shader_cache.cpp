@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <fmt/ranges.h>
 #include <array>
 #include <vector>
 #include <boost/container/small_vector.hpp>
@@ -91,6 +92,22 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
     native.native_execution_failed = true;
     last_shaders_valid = false;
     LOG_ERROR(HW_GPU, "Native graphics shader rejected: {}", error.what());
+    // Once: show what the vertex stage has bound, to find where an unbound bank's data lives.
+    static std::vector<std::string> dumped_errors;
+    if (const std::string what{error.what()};
+        what.find("constant buffer") != std::string::npos && dumped_errors.size() < 12 &&
+        std::count(dumped_errors.begin(), dumped_errors.end(), what) < 3) {
+        dumped_errors.push_back(what);
+        LOG_INFO(HW_GPU, "VS cbuf dump for: {}", what.substr(0, 40));
+        for (u32 slot = 3; slot < 8; ++slot) {
+            const auto& buffer = maxwell3d->state.shader_stages[0].const_buffers[slot];
+            if (!buffer.enabled) continue;
+            std::array<u32, 24> words{};
+            gpu_memory->ReadBlockUnsafe(buffer.address, words.data(), sizeof(words));
+            LOG_INFO(HW_GPU, "VS cbuf {} at {:#x} size {:#x}: {:08x}", slot, buffer.address, buffer.size,
+                     fmt::join(words, " "));
+        }
+    }
     return false;
 }
 

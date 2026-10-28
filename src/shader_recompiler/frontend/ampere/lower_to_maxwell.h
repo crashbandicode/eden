@@ -3,6 +3,7 @@
 // Encoding reference: Mesa NAK sm70_encode.rs (MIT), Copyright 2022 Collabora, Ltd.
 #pragma once
 
+#include <cstdlib>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -79,6 +80,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
         auto insn = code[index];
         result.source_instruction_offsets.push_back(static_cast<u32>(result.instructions.size()));
         u32 opcode = insn.Bits(0, 12);
+        if (insn.Bits(12, 4) == 15) continue; // @!PT: never executes (compiler padding)
         std::optional<u32> active_link;
         u32 active_entry = 0;
         if (main_exited) {
@@ -130,11 +132,17 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
         u64 predicate = u64{guarded_uniform ? ((native_predicate & 8) | 6) : native_predicate} << 16;
         const u64 dest = insn.Bits(16, 8);
         const auto base = [&](u64 opcode_bits) { return opcode_bits | predicate | dest; };
+        // NVN2 fullscreen vertex shaders read bank 24, which the game never binds (the console reads
+        // zeros from an unbound bank); Maxwell has 18, so read it from bank 17, also never bound.
+        const auto bank = [&]() -> u32 {
+            const u32 value = insn.Bits(54, 5);
+            return value == 24 ? 17U : value;
+        };
         const auto cbuf = [&]() -> u64 {
-            return (u64{insn.Bits(38, 16) / 4} << 20) | (u64{insn.Bits(54, 5)} << 34);
+            return (u64{insn.Bits(38, 16) / 4} << 20) | (u64{bank()} << 34);
         };
         const auto valid_cbuf = [&] {
-            return !insn.Bits(91, 1) && insn.Bits(54, 5) < 18 &&
+            return !insn.Bits(91, 1) && bank() < 18 &&
                    (insn.Bits(38, 16) % 4) == 0;
         };
         std::string_view operand_error;
@@ -575,7 +583,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             const u32 width = insn.Bits(73, 3);
             if (uniform_dest >= 16 || (width != 4 && width != 5) ||
                 (width == 5 && ((uniform_dest & 1) || uniform_dest >= 15)) ||
-                insn.Bits(54, 5) >= 18 || insn.Bits(38, 16) % 4 || insn.Bits(62, 2) ||
+                bank() >= 18 || insn.Bits(38, 16) % 4 || insn.Bits(62, 2) ||
                 (insn.words[2] & ~0xe00U) != (opcode == 0xab9 ? 0U : 0x08000000U) ||
                 (opcode == 0xabb && index_reg >= 16))
                 return fail(index, "native uniform constant load mode");
@@ -584,7 +592,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             } else {
                 emit(0xef90000000000000ULL | predicate | (uniform_dest + 216) |
                      (u64{opcode == 0xab9 ? 255U : index_reg + 216} << 8) | (u64{insn.Bits(38, 16)} << 20) |
-                     (u64{insn.Bits(54, 5)} << 36) | (u64{width} << 48));
+                     (u64{bank()} << 36) | (u64{width} << 48));
             }
             break;
         }
@@ -607,10 +615,10 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
         case 0xb82: { // LDC.64 indexed byte offset
             const u32 width = insn.Bits(73, 3);
             if ((width != 4 && width != 5) || insn.Bits(78, 2) || insn.Bits(91, 1) ||
-                insn.Bits(54, 5) >= 18 ||
+                bank() >= 18 ||
                 (width == 5 && ((dest & 1) || dest >= 254))) return fail(index, "native indexed constant load mode");
             emit(base(0xef90000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) |
-                 (u64{insn.Bits(38, 16)} << 20) | (u64{insn.Bits(54, 5)} << 36) | (u64{width} << 48));
+                 (u64{insn.Bits(38, 16)} << 20) | (u64{bank()} << 36) | (u64{width} << 48));
             break;
         }
         case 0xf89: { // SHFL with immediate lane and segmentation/clamp mask, any mode.
@@ -852,18 +860,125 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 (u64{width} << 48));
             break;
         }
+        case 0x23a: { // MOVM.16.MT88: transpose an 8x8 16-bit matrix held one row pair per lane.
+            // Lane t holds row t/4, columns 2(t%4)..+1; the result is the transposed matrix in the
+            // same layout, so each half comes from lane 8(t%4) + t/8 (+4) at half (t/4)%2.
+            const u32 source = insn.Bits(24, 8);
+            if (insn.words[1] || insn.words[2] || source >= 246 || dest >= 246)
+                return fail(index, "native matrix move mode");
+            emit(0xf0c8000000000000ULL | predicate | 246);                                        // laneid
+            emit(0x0400000000000000ULL | predicate | 249 | (u64{246} << 8) | (u64{3} << 20));
+            emit(0x3848000000000000ULL | predicate | 249 | (u64{249} << 8) | (u64{3} << 20));     // 8(t%4)
+            emit(0x3828000000000000ULL | predicate | 247 | (u64{246} << 8) | (u64{3} << 20));     // t/8
+            emit(0x5c10000000000000ULL | predicate | 249 | (u64{249} << 8) | (u64{247} << 20));
+            emit(0xef10000000000000ULL | predicate | 247 | (u64{source} << 8) | (u64{249} << 20) |
+                 (u64{1} << 29) | (u64{31} << 34) | (u64{7} << 48));
+            emit(0x1c00000000000000ULL | predicate | 249 | (u64{249} << 8) | (u64{4} << 20));
+            emit(0xef10000000000000ULL | predicate | 248 | (u64{source} << 8) | (u64{249} << 20) |
+                 (u64{1} << 29) | (u64{31} << 34) | (u64{7} << 48));
+            emit(0x3828000000000000ULL | predicate | 249 | (u64{246} << 8) | (u64{2} << 20));
+            emit(0x0400000000000000ULL | predicate | 249 | (u64{249} << 8) | (u64{1} << 20));
+            emit(0x3848000000000000ULL | predicate | 249 | (u64{249} << 8) | (u64{4} << 20));     // 0 or 16
+            emit(0x5c28000000000000ULL | predicate | 247 | (u64{247} << 8) | (u64{249} << 20));
+            emit(0x0400000000000000ULL | predicate | 247 | (u64{247} << 8) | (u64{0xffff} << 20));
+            emit(0x5c28000000000000ULL | predicate | 248 | (u64{248} << 8) | (u64{249} << 20));
+            emit(0x5c18000000000000ULL | predicate | dest | (u64{248} << 8) | (u64{247} << 20) | (u64{16} << 39));
+            break;
+        }
+        case 0x23c: { // HMMA.16816.F16: D(16x8) = A(16x16) * B(16x8) + C, f16 fragments.
+            // Lane t (group g = t/4, i = t%4): A regs hold rows g / g+8 at k 2i..2i+1 (a0, a1) and
+            // 8+2i.. (a2, a3); B regs hold k 2i.. (b0) / 8+2i.. (b1) of column g; D holds rows
+            // g / g+8 at columns 2i, 2i+1. Rebuilt from shuffles with HFMA2, accumulating in R252/R253.
+            // The expansion is correct but large: title 4's 372-HMMA network takes the host driver
+            // minutes to compile, so it stays opt-in (the QMD still completes when rejected).
+            static const bool enabled = std::getenv("EDEN_NX2_TENSOR") != nullptr;
+            if (!enabled) return fail(index, "native matrix multiply (set EDEN_NX2_TENSOR to emulate)");
+            const u32 a = insn.Bits(24, 8), b = insn.Bits(32, 8), c = insn.Bits(64, 8);
+            if ((insn.words[1] & ~0xffU) || (insn.words[2] & ~0xffU) != 0x800 || dest + 2 > 246 ||
+                a + 4 > 246 || b + 2 > 246 || (c != 255 && c + 2 > 246))
+                return fail(index, "native matrix multiply mode");
+            const auto shuffle = [&](u32 target, u32 source_reg) {
+                emit(0xef10000000000000ULL | predicate | target | (u64{source_reg} << 8) | (u64{246} << 20) |
+                     (u64{1} << 29) | (u64{31} << 34) | (u64{7} << 48));
+            };
+            const auto lane_a = [&](u32 i) { // 4g + i
+                emit(0xf0c8000000000000ULL | predicate | 246);
+                emit(0x0400000000000000ULL | predicate | 246 | (u64{246} << 8) | (u64{0x1c} << 20));
+                if (i) emit(0x1c00000000000000ULL | predicate | 246 | (u64{246} << 8) | (u64{i} << 20));
+            };
+            const auto lane_b = [&](u32 add) { // 8(t%4) + add: column 2(t%4) (+1 when add >= 4)
+                emit(0xf0c8000000000000ULL | predicate | 246);
+                emit(0x0400000000000000ULL | predicate | 246 | (u64{246} << 8) | (u64{3} << 20));
+                emit(0x3848000000000000ULL | predicate | 246 | (u64{246} << 8) | (u64{3} << 20));
+                if (add) emit(0x1c00000000000000ULL | predicate | 246 | (u64{246} << 8) | (u64{add} << 20));
+            };
+            const auto hfma2 = [&](u32 accumulator, u32 swizzle_a, u32 pair) {
+                emit(0x5d00000000000000ULL | predicate | accumulator | (u64{251} << 8) | (u64{pair} << 20) |
+                     (u64{accumulator} << 39) | (u64{swizzle_a} << 47));
+            };
+            for (u32 row = 0; row < 2; ++row) {
+                if (c == 255) mov_imm(252 + row, 0);
+                else emit(0x5c98000000000000ULL | predicate | (252 + row) | (u64{15} << 39) | (u64{c + row} << 20));
+            }
+            for (u32 i = 0; i < 4; ++i) {
+                for (u32 k_block = 0; k_block < 2; ++k_block) {
+                    lane_b(i);
+                    shuffle(247, b + k_block);
+                    lane_b(4 + i);
+                    shuffle(248, b + k_block);
+                    // P0 = (B[2i][2t], B[2i][2t+1]), P1 = (B[2i+1][2t], B[2i+1][2t+1])
+                    emit(0x0400000000000000ULL | predicate | 249 | (u64{247} << 8) | (u64{0xffff} << 20));
+                    emit(0x5c18000000000000ULL | predicate | 249 | (u64{248} << 8) | (u64{249} << 20) | (u64{16} << 39));
+                    emit(0x3828000000000000ULL | predicate | 250 | (u64{247} << 8) | (u64{16} << 20));
+                    emit(0x0400000000000000ULL | predicate | 248 | (u64{248} << 8) | (u64{0xffff0000} << 20));
+                    emit(0x5c10000000000000ULL | predicate | 250 | (u64{250} << 8) | (u64{248} << 20));
+                    for (u32 row = 0; row < 2; ++row) {
+                        lane_a(i);
+                        shuffle(251, a + k_block * 2 + row);
+                        hfma2(252 + row, 2, 249); // A.H0 broadcast * P0
+                        hfma2(252 + row, 3, 250); // A.H1 broadcast * P1
+                    }
+                }
+            }
+            for (u32 row = 0; row < 2; ++row)
+                emit(0x5c98000000000000ULL | predicate | (dest + row) | (u64{15} << 39) | (u64{252 + row} << 20));
+            break;
+        }
         case 0x83b: { // LDSM.16.M88.{1,2,4} (ldmatrix): 8x8 16-bit matrices from shared memory.
             // Lanes 8m..8m+7 give the row addresses of matrix m; lane t receives the 32 bits at
             // row t/4, byte (t%4)*4 of each matrix in Rd+m. Emulated with SHFL.IDX + LDS.32.
             const u32 count = 1U << insn.Bits(72, 2);
-            if (insn.Bits(72, 2) == 3 || (insn.words[2] & ~0x300U) || insn.Bits(32, 8) ||
+            const bool transpose = insn.Bits(78, 1) != 0;
+            if (insn.Bits(72, 2) == 3 || (insn.words[2] & ~0x4300U) || insn.Bits(32, 8) ||
                 dest + count > 246)
                 return fail(index, "native matrix load mode");
             u32 address = insn.Bits(24, 8);
             const u64 offset = insn.Bits(40, 24);
             if (address != 255 && address >= dest && address < dest + count) {
-                emit(0x5c10000000000000ULL | predicate | 249 | (u64{address} << 8) | (u64{255} << 20));
-                address = 249;
+                emit(0x5c10000000000000ULL | predicate | 253 | (u64{address} << 8) | (u64{255} << 20));
+                address = 253;
+            }
+            if (transpose) {
+                // .MT88: lane t receives stored rows 2(t%4) and 2(t%4)+1 at column t/4 (16 bits each).
+                emit(0xf0c8000000000000ULL | predicate | 246);                                    // laneid
+                emit(0x0400000000000000ULL | predicate | 247 | (u64{246} << 8) | (u64{3} << 20));
+                emit(0x3848000000000000ULL | predicate | 247 | (u64{247} << 8) | (u64{1} << 20)); // row 2(t%4)
+                emit(0x3828000000000000ULL | predicate | 248 | (u64{246} << 8) | (u64{2} << 20));
+                emit(0x3848000000000000ULL | predicate | 248 | (u64{248} << 8) | (u64{1} << 20)); // byte 2(t/4)
+                for (u32 matrix = 0; matrix < count; ++matrix) {
+                    for (u32 half = 0; half < 2; ++half) {
+                        emit(0x1c00000000000000ULL | predicate | 249 | (u64{247} << 8) |
+                             (u64{matrix * 8 + half} << 20));
+                        emit(0xef10000000000000ULL | predicate | 250 | (u64{address} << 8) | (u64{249} << 20) |
+                             (u64{1} << 29) | (u64{31} << 34) | (u64{7} << 48));
+                        emit(0x5c10000000000000ULL | predicate | 250 | (u64{250} << 8) | (u64{248} << 20));
+                        emit(0xef48000000000000ULL | predicate | (251 + half) | (u64{250} << 8) |
+                             (offset << 20) | (u64{2} << 48));                                  // LDS.U16
+                    }
+                    emit(0x5c18000000000000ULL | predicate | (dest + matrix) | (u64{252} << 8) |
+                         (u64{251} << 20) | (u64{16} << 39));
+                }
+                break;
             }
             emit(0xf0c8000000000000ULL | predicate | 250);                                    // S2R laneid
             emit(0x3828000000000000ULL | predicate | 251 | (u64{250} << 8) | (u64{2} << 20)); // row
@@ -1462,6 +1577,17 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             emit(base(0x5800000000000000ULL) | (u64{a} << 8) | (u64{b} << 20) |
                  (u64{7} << 39) | (u64{insn.Bits(76, 4)} << 48) | (u64{1} << 52) |
                  (u64{insn.Bits(80, 1)} << 55));
+            break;
+        }
+        case 0x434: { // HSETP2 with an immediate half pair: A swizzle 74-75 (neg 72, abs 73),
+                      // combine 69-70, H_AND 71, compare 76-79, FTZ 80, P/Q 81-86, input 87-90.
+            mov_imm(250, insn.words[1]);
+            emit(0x5d20000000000000ULL | predicate | insn.Bits(84, 3) | (u64{insn.Bits(81, 3)} << 3) |
+                 (u64{insn.Bits(80, 1)} << 6) | (u64{insn.Bits(24, 8)} << 8) | (u64{250} << 20) |
+                 (u64{insn.Bits(76, 4)} << 35) | (u64{insn.Bits(87, 3)} << 39) |
+                 (u64{insn.Bits(90, 1)} << 42) | (u64{insn.Bits(72, 1)} << 43) |
+                 (u64{insn.Bits(73, 1)} << 44) | (u64{insn.Bits(69, 2)} << 45) |
+                 (u64{insn.Bits(74, 2)} << 47) | (u64{insn.Bits(71, 1)} << 49));
             break;
         }
         case 0x20b: case 0x80b: case 0xa0b: // FSETP

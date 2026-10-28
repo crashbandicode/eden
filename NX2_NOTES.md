@@ -125,6 +125,9 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 67 | tonemap output black | the 3D colour-grading LUT is drawn once per scene by a pixel shader using CALL.REL.NOINC; capture treated it as a real call, never found the end and rejected the shader | NOINC calls count as forward branches in capture (4d58a74). **Intro cutscene renders correctly** |
 | 68 | crash ~5 s after the save that follows character customization (garbage pointers in two threads) | nx2:gpu 213 (unmap) and 102 (destroy GPU memory) were no-ops; the game reuses the freed memory as heap and stale GPU write-backs overwrote it | unmap from every address space, drop freed semaphore regions (bed817c); not yet confirmed past customization: frame-locked replays desync across loading screens |
 | 69 | hatched edges on UI portraits, buttons, squid cursor | UI textures are ASTC; the GPU ASTC decoder ignored the Switch 2 GOB swizzle | apply it in astc_decoder.comp (7fa2b46) |
+| 70 | freeze ~15 s after the post-customization save; channels 2/4 wait on 0x2115c98000 (equal 0x5293, now 0x5310) | a 3D queue ticks a counter two queues acquire value by value; Eden wrote several ticks between their re-checks | releases latch the waiters they meet (8e37f58) |
+| 71 | audio broken, game at 90-160 fps | vi2 presents were never paced | 60 Hz vblank pacing |
+| 72 | stuck loading the next scene ("too many files open" for route_wallClimb.pack.zs, save.dat) | VFS open-file cache cap equal to the CRT limit (8192) | cap 512 below _getmaxstdio() |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,

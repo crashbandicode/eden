@@ -29,6 +29,13 @@ KeplerCompute::KeplerCompute(MemoryManager& memory_manager_)
     : memory_manager{memory_manager_}
     , upload_state{memory_manager, regs.upload}
 {
+    // EDEN_NX2_QMD_TRACE: log the QMD scheduler's loads, dependency counts and launches.
+    if (std::getenv("EDEN_NX2_QMD_TRACE")) {
+        native_qmd.trace = [this](std::string_view event, u64 address, s32 value) {
+            LOG_INFO(HW_GPU, "QMD trace {} {:#x} {} (engine {} as {})", event, address, value,
+                     fmt::ptr(this), memory_manager.GetID());
+        };
+    }
     execution_mask.reset();
     execution_mask[KEPLER_COMPUTE_REG_INDEX(exec_upload)] = true;
     execution_mask[KEPLER_COMPUTE_REG_INDEX(data_upload)] = true;
@@ -109,6 +116,7 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         native_parameters.push_back(argument);
         if (!is_last_call) return true;
         const u32 entry = ((*native_executing_macro - 0xe00) / 2) % native_macro_positions.size();
+        native_executing_macro_logged = native_executing_macro;
         native_executing_macro.reset();
         static const u32 watch = [] {
             const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
@@ -120,6 +128,22 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             LOG_INFO(HW_GPU, "Semaphore watch: compute macro start={:#x} parameters={:08x}",
                      native_macro_positions[entry], fmt::join(native_parameters, ","));
         }
+        // EDEN_NX2_MME_DUMP: write the compute macro code once per engine, and log each macro
+        // call with its entry and parameters (diagnostics).
+        if (static const bool mme_dump = std::getenv("EDEN_NX2_MME_DUMP") != nullptr; mme_dump) {
+            if (!native_mme_dumped && native_macro_positions[entry] == 0xda) {
+                native_mme_dumped = true;
+                std::ofstream dump(fmt::format("native-compute-mme-{}.bin", fmt::ptr(this)),
+                                   std::ios::binary);
+                dump.write(reinterpret_cast<const char*>(native_macro->native_code.data()),
+                           sizeof(native_macro->native_code));
+            }
+            LOG_INFO(HW_GPU, "MME call engine {} method {:#x} start={:#x} parameters={:08x}",
+                     fmt::ptr(this), *native_executing_macro_logged, native_macro_positions[entry],
+                     fmt::join(native_parameters, ","));
+        }
+        if (native_data_ram) native_macro->native_interpreter.active_dram = native_data_ram;
+        const u32 dram0_before = (*native_macro->native_interpreter.active_dram)[0x27];
         const auto result = native_macro->native_interpreter.Execute(native_macro->native_code,
             native_macro_positions[entry], native_parameters,
             [&](u32 address) { return address < native_registers.size() ? native_registers[address] : 0U; },
@@ -132,6 +156,12 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
                 CallMethod(system, address, value, true);
                 return true;
             });
+        if (static const bool mme_dump = std::getenv("EDEN_NX2_MME_DUMP") != nullptr;
+            mme_dump && (*native_macro->native_interpreter.active_dram)[0x27] != dram0_before) {
+            LOG_INFO(HW_GPU, "MME data RAM[0x27] {:#x} -> {:#x} by engine {} macro start={:#x}",
+                     dram0_before, (*native_macro->native_interpreter.active_dram)[0x27], fmt::ptr(this),
+                     native_macro_positions[entry]);
+        }
         if (!result.success) {
             native_macro->native_execution_failed = true;
             if (static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;

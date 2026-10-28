@@ -57,6 +57,8 @@ public:
     /// Binds a rasterizer to this engine.
     void BindRasterizer(VideoCore::RasterizerInterface* rasterizer);
 
+    /// The channel's MME data RAM, shared with its 3D engine.
+    void SetNativeDataRam(std::array<u32, 0xc00>* data_ram) { native_data_ram = data_ram; }
     void SetNativeMacroMode(MacroEngine* shared_macro, std::span<u32> positions, NativeMacroContext* context = nullptr) {
         if (native_context != context) native_compute_uploaded = false;
         native_context = context;
@@ -242,6 +244,9 @@ private:
     bool UpscaleInsteadOfNativeProgram();
     bool ProcessNativeMethod(Core::System& system, u32 method, u32 argument, bool is_last_call);
     NativeQmdScheduler native_qmd;
+    std::array<u32, 0xc00>* native_data_ram{};
+    bool native_mme_dumped{};
+    std::optional<u32> native_executing_macro_logged;
     bool native_mode{};
     NativeMacroContext* native_context{};
     bool native_compute_uploaded{};

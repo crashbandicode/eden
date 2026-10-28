@@ -1354,6 +1354,7 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
         LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
         std::vector<u32> fifo(parameters.begin(), parameters.end());
+        native_interpreter.active_dram = &maxwell3d.GetNativeDataRam();
         const auto result = native_interpreter.Execute(native_code, method, fifo,
             [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },
             [&](u32 address, u32 value) {
@@ -1385,8 +1386,13 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                         const u32 word = memory.Read<u32>(source + u64{i} * 4);
                         if (address == DmaReadFifoed) {
                             fifo.push_back(word);
-                        } else if (ram + i < native_interpreter.dram.size()) {
-                            native_interpreter.dram[ram + i] = word;
+                        } else if (ram + i < native_interpreter.active_dram->size()) {
+                            if (static const bool mme_dump = std::getenv("EDEN_NX2_MME_DUMP") != nullptr;
+                                mme_dump && ram + i == 0x27 && (*native_interpreter.active_dram)[0x27] != word) {
+                                LOG_INFO(HW_GPU, "MME data RAM[0x27] {:#x} -> {:#x} by 3D engine {} (DMA from {:#x})",
+                                         (*native_interpreter.active_dram)[0x27], word, fmt::ptr(&maxwell3d), source);
+                            }
+                            (*native_interpreter.active_dram)[ram + i] = word;
                         }
                     }
                 }

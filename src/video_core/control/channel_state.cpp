@@ -82,6 +82,7 @@ void ChannelState::Init(Core::System& system, u64 program_id_) {
         payload->maxwell_3d.SetNativeTuringMacroMode(true);
         payload->kepler_compute.SetNativeMacroMode(&macros->engine, macros->positions,
                                                    macros.get());
+        payload->kepler_compute.SetNativeDataRam(&payload->maxwell_3d.GetNativeDataRam());
     }
     initialized = true;
 }

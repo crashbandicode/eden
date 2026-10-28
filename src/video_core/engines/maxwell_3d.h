@@ -3150,6 +3150,8 @@ public:
         native_macro_context = std::move(context);
     }
     MacroEngine& GetNativeMacroEngine() { return native_macro_context ? native_macro_context->engine : macro_engine; }
+    /// This channel's MME data RAM (shared with its compute engine).
+    std::array<u32, 0xc00>& GetNativeDataRam() { return native_data_ram; }
     std::span<u32> GetNativeMacroPositions() { return native_macro_context ? std::span<u32>{native_macro_context->positions} : std::span<u32>{macro_positions}; }
 
 
@@ -3302,6 +3304,7 @@ private:
 
     /// Interpreter for the macro codes uploaded to the GPU.
     std::shared_ptr<NativeMacroContext> native_macro_context;
+    std::array<u32, 0xc00> native_data_ram{};
     MacroEngine macro_engine;
 
     Upload::State upload_state;

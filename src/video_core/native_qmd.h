@@ -3,6 +3,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -16,6 +17,8 @@ public:
     using Address = std::uint64_t;
     using Descriptor = std::array<Word, 64>;
     struct RejectShaderDispatch { bool operator()(const Descriptor&) const { return false; } };
+    // Optional diagnostics: called with "load"/"count"/"defer"/"run" events.
+    std::function<void(std::string_view, Address, std::int32_t)> trace;
     template <typename Read, typename Release>
     std::string_view Signal(Address address, Word argument, Read read, Release release) {
         return Signal(address, argument, read, release, RejectShaderDispatch{});
@@ -41,6 +44,8 @@ public:
                             return "native shader dispatch required";
                     }
                     state.dependencies = std::int32_t((qmd[4] >> 14) & 0xffff) + state.deferred;
+                    if (trace) trace("base", request.address, std::int32_t((qmd[4] >> 14) & 0xffff));
+                    if (trace) trace("load", request.address, state.dependencies);
                     state.deferred = 0;
                     state.loaded = true;
                     state.completed = false;
@@ -48,8 +53,13 @@ public:
                 state.scheduled = true;
             } else if (request.action == 7 || request.action == 12) {
                 const auto delta = request.action == 7 ? -std::int32_t(request.count) : std::int32_t(request.count);
-                if (!state.loaded || state.completed) { state.deferred += delta; continue; }
+                if (!state.loaded || state.completed) {
+                    state.deferred += delta;
+                    if (trace) trace("defer", request.address, state.deferred);
+                    continue;
+                }
                 state.dependencies += delta;
+                if (trace) trace("count", request.address, state.dependencies);
             } else if (request.action == 0 || request.action == 1) {
                 continue;
             } else {
@@ -78,6 +88,7 @@ public:
             // are what other queues and the CPU wait on (the console never fails a launch).
             const bool dispatched = !(qmd[12] && (qmd[13] & 0xffff) && (qmd[14] & 0xffff)) || dispatch(qmd);
             if (!dispatched) error = "native shader dispatch required";
+            if (trace) trace("run", request.address, dispatched ? 1 : 0);
             state.completed = true;
             for (const Word base : ReleaseSlots) {
                 const Word flags = qmd[base + 1];
@@ -114,6 +125,9 @@ private:
         bool scheduled{};
         bool completed{};
     };
-    std::unordered_map<Address, State> states;
+    // One table for every channel: a QMD's dependency counter is state of the QMD itself, and
+    // title 1 schedules a QMD on one channel while another decrements it (a decrement that
+    // arrived first was kept by the other channel's scheduler and the QMD never launched).
+    static inline std::unordered_map<Address, State> states;
 };
 } // namespace Tegra

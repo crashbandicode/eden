@@ -167,11 +167,11 @@ public:
                     }
                     break;
                 case 30:
-                    if (x >= dram.size()) { fail("data RAM read out of bounds"); break; }
-                    value = dram[x]; break;
+                    if (x >= active_dram->size()) { fail("data RAM read out of bounds"); break; }
+                    value = (*active_dram)[x]; break;
                 case 31:
-                    if (x >= dram.size()) { fail("data RAM write out of bounds"); break; }
-                    dram[x] = y; break;
+                    if (x >= active_dram->size()) { fail("data RAM write out of bounds"); break; }
+                    (*active_dram)[x] = y; break;
                 }
                 alu[lane] = value;
                 if (dst[lane] < 24) { regs[dst[lane]] = value; initialized |= 1U << dst[lane]; }
@@ -209,7 +209,12 @@ public:
         return {false, pc, consumed, error};
     }
 
-    std::array<Word, 0xc00> dram{};
+    using DataRam = std::array<Word, 0xc00>;
+    DataRam dram{};
+    // The data RAM DREAD/DWRITE use: a channel's own copy when the caller sets one. Macro code is
+    // shared by the channels of a process, but each channel keeps its own data RAM (title 1's
+    // channels store their own QMD ring base in word 0x27).
+    DataRam* active_dram{&dram};
 };
 
 } // namespace Tegra

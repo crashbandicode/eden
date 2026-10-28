@@ -36,6 +36,9 @@ struct OverlapResult {
 
 [[nodiscard]] u32 CalculateConvertedSizeBytes(const ImageInfo& info) noexcept;
 
+/// True if no 16-byte ASTC block in `data` decodes to alpha below 1.
+[[nodiscard]] bool AstcDataLooksOpaque(std::span<const u8> data) noexcept;
+
 [[nodiscard]] u32 CalculateLayerStride(const ImageInfo& info) noexcept;
 
 [[nodiscard]] u32 CalculateLayerSize(const ImageInfo& info) noexcept;

@@ -70,6 +70,9 @@ public:
 
     void LogMemoryStatistics() const;
 
+    /// True when ASTC is re-compressed to BC3 and opaque images may use BC1 instead.
+    bool UseOpaqueAstcFormat() const;
+
     bool CanDownloadMsaa(const VideoCommon::ImageInfo& info) const;
 
     [[nodiscard]] VkImage AcquireMsaaScratchImage(const VkImageCreateInfo& image_ci);

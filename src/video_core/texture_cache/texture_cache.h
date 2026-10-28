@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <vector>
@@ -79,6 +80,15 @@ TextureCache<P>::TextureCache(Runtime& runtime_, Tegra::MaxwellDeviceMemoryManag
         critical_memory = DEFAULT_CRITICAL_MEMORY + 1_GiB;
         minimum_memory = 0;
     }
+    // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds.
+    for (const auto& [name, target] : {std::pair{"EDEN_NX2_TC_EXPECTED_MIB", &expected_memory},
+                                       std::pair{"EDEN_NX2_TC_CRITICAL_MIB", &critical_memory}}) {
+        if (const char* value = std::getenv(name)) {
+            *target = std::strtoull(value, nullptr, 10) << 20;
+        }
+    }
+    LOG_INFO(HW_GPU, "Texture cache thresholds: expected {} MiB, critical {} MiB, minimum {} MiB",
+             expected_memory >> 20, critical_memory >> 20, minimum_memory >> 20);
 
     const bool gpu_unswizzle_enabled = Settings::values.gpu_unswizzle_enabled.GetValue();
 
@@ -151,6 +161,7 @@ void TextureCache<P>::RunGarbageCollector() {
         if (True(image.flags & ImageFlagBits::Tracked)) {
             UntrackImage(image, image_id);
         }
+        ++(True(image.flags & ImageFlagBits::CostlyLoad) ? gc_costly_deletes : gc_deletes);
         UnregisterImage(image_id);
         DeleteImage(image_id, image.scale_tick > frame_tick + 5);
         if (aggressive_mode && total_used_memory < critical_memory) {
@@ -215,6 +226,23 @@ void TextureCache<P>::TickFrame() {
         if constexpr (requires { runtime.LogMemoryStatistics(); }) {
             runtime.LogMemoryStatistics();
         }
+        LOG_INFO(HW_GPU, "Texture cache last 600 frames: created {} images, deleted {} (collector {}, {} costly), {} async decodes, ASTC {} opaque / {} alpha",
+                 images_created, images_deleted, gc_deletes + gc_costly_deletes, gc_costly_deletes,
+                 async_decodes_queued, astc_opaque_images, astc_alpha_images);
+        astc_opaque_images = astc_alpha_images = 0;
+        std::vector<std::pair<u32, u64>> shapes;
+        for (const auto& [key, value] : created_shapes) shapes.emplace_back(value.first, key);
+        std::sort(shapes.rbegin(), shapes.rend());
+        for (size_t i = 0; i < std::min<size_t>(10, shapes.size()); ++i) {
+            const u64 key = shapes[i].second;
+            LOG_INFO(HW_GPU, "  created {}x: format {} type {} levels {} layers {} {}x{} (last at {:#x})",
+                     shapes[i].first, key >> 56, (key >> 52) & 0xF, (key >> 48) & 0xF,
+                     (key >> 36) & 0xFFF, (key >> 18) & 0x3FFFF, key & 0x3FFFF,
+                     created_shapes[key].second);
+        }
+        created_shapes.clear();
+        gc_deletes = gc_costly_deletes = async_decodes_queued = 0;
+        images_created = images_deleted = 0;
     }
     if (total_used_memory > minimum_memory) {
         RunGarbageCollector();
@@ -1323,12 +1351,9 @@ ImageId TextureCache<P>::FindOrInsertImage(const ImageInfo& info, GPUVAddr gpu_a
 template <class P>
 ImageId TextureCache<P>::FindImage(const ImageInfo& info, GPUVAddr gpu_addr,
                                    RelaxedOptions options) {
-    std::optional<DAddr> cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr);
+    const std::optional<DAddr> cpu_addr = ImageCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
     if (!cpu_addr) {
-        cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
-        if (!cpu_addr) {
-            return ImageId{};
-        }
+        return ImageId{};
     }
     const bool broken_views =
         runtime.HasBrokenTextureViewFormats() || True(options & RelaxedOptions::ForceBrokenViews);
@@ -1457,6 +1482,7 @@ void TextureCache<P>::QueueAsyncDecode(Image& image, ImageId image_id) {
     LOG_DEBUG(HW_GPU, "Queuing async texture decode {:#x}", image.gpu_addr);
 
     image.flags |= ImageFlagBits::IsDecoding;
+    ++async_decodes_queued;
     auto decode = std::make_unique<AsyncDecodeContext>();
     auto* decode_ptr = decode.get();
     decode->image_id = image_id;
@@ -1516,6 +1542,12 @@ void TextureCache<P>::TickAsyncDecode() {
             continue;
         }
         Image& image = slot_images[async_decode->image_id];
+        if (async_decode->decoded_data.size() > MapSizeBytes(image)) {
+            LOG_ERROR(HW_GPU, "Async decode of {} bytes for a {}-byte image at {:#x}, dropped",
+                      async_decode->decoded_data.size(), MapSizeBytes(image), image.gpu_addr);
+            i = async_decodes.erase(i);
+            continue;
+        }
         auto staging = runtime.UploadStagingBuffer(MapSizeBytes(image));
         std::memcpy(staging.mapped_span.data(), async_decode->decoded_data.data(),
                     async_decode->decoded_data.size());
@@ -1631,17 +1663,31 @@ bool TextureCache<P>::ScaleDown(Image& image) {
 }
 
 template <class P>
+std::optional<DAddr> TextureCache<P>::ImageCpuAddress(GPUVAddr gpu_addr, size_t size) const {
+    if (const std::optional<DAddr> cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr)) {
+        return cpu_addr;
+    }
+    if (const std::optional<DAddr> cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr, size)) {
+        return cpu_addr;
+    }
+    // No CPU backing (title 1 renders a bloom chain at GPU 0xf0000-0x15b600): a stand-in address
+    // fixed by the GPU address, at or above ~(1 << 40) so TrackImage skips it. A fresh address per
+    // lookup made every use create another image (thousands a minute, never found again).
+    constexpr GPUVAddr StandInRange = 1ULL << 40;
+    if (gpu_addr >= StandInRange || size > StandInRange - gpu_addr - 1) {
+        return std::nullopt;
+    }
+    return ~(1ULL << 40ULL) + gpu_addr;
+}
+
+template <class P>
 ImageId TextureCache<P>::InsertImage(const ImageInfo& info, GPUVAddr gpu_addr,
                                      RelaxedOptions options) {
-    std::optional<DAddr> cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr);
+    std::optional<DAddr> cpu_addr = ImageCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
     if (!cpu_addr) {
-        const auto size = CalculateGuestSizeInBytes(info);
-        cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr, size);
-        if (!cpu_addr) {
-            const DAddr fake_addr = ~(1ULL << 40ULL) + virtual_invalid_space;
-            virtual_invalid_space += Common::AlignUp(size, 32);
-            cpu_addr = std::optional<DAddr>(fake_addr);
-        }
+        const DAddr fake_addr = ~(1ULL << 40ULL) + virtual_invalid_space;
+        virtual_invalid_space += Common::AlignUp(CalculateGuestSizeInBytes(info), 32);
+        cpu_addr = std::optional<DAddr>(fake_addr);
     }
     ASSERT_MSG(cpu_addr, "Tried to insert an image to an invalid gpu_addr={:#x}", gpu_addr);
     ImageInfo storage_info = info;
@@ -1760,10 +1806,36 @@ ImageId TextureCache<P>::JoinImages(const ImageInfo& info, GPUVAddr gpu_addr, DA
         }
     }
 
+    if constexpr (requires { runtime.UseOpaqueAstcFormat(); }) {
+        // Opaque ASTC goes to BC1 rather than BC3 when it is re-compressed (the Vulkan runtime
+        // decides). The guest data is already there when an image is first used.
+        constexpr size_t MaxScanBytes = 64_MiB;
+        if (IsPixelFormatASTC(new_info.format) && runtime.UseOpaqueAstcFormat()) {
+            const size_t scan_bytes = CalculateGuestSizeInBytes(new_info);
+            if (scan_bytes <= MaxScanBytes) {
+                astc_scan_buffer.resize(scan_bytes);
+                gpu_memory->ReadBlockUnsafe(gpu_addr, astc_scan_buffer.data(), scan_bytes);
+                new_info.astc_opaque = AstcDataLooksOpaque(astc_scan_buffer);
+                ++(new_info.astc_opaque ? astc_opaque_images : astc_alpha_images);
+            }
+        }
+    }
     const ImageId new_image_id = slot_images.insert(runtime, new_info, gpu_addr, cpu_addr);
     Image& new_image = slot_images[new_image_id];
 
     new_image.allocation_tick = frame_tick;
+    {
+        // Which shapes are being created (periodic log): format, type, levels, layers, size.
+        const u64 key = (u64{static_cast<u32>(new_info.format)} << 56) |
+                        (u64{static_cast<u32>(new_info.type)} << 52) |
+                        (u64{static_cast<u32>(new_info.resources.levels) & 0xF} << 48) |
+                        (u64{static_cast<u32>(new_info.resources.layers) & 0xFFF} << 36) |
+                        (u64{new_info.size.width & 0x3FFFF} << 18) | (new_info.size.height & 0x3FFFF);
+        auto& shape = created_shapes[key];
+        ++shape.first;
+        shape.second = gpu_addr;
+        ++images_created;
+    }
 
     if (!gpu_memory->IsContinuousRange(new_image.gpu_addr, new_image.guest_size_bytes) &&
         new_info.is_sparse) {
@@ -1959,12 +2031,9 @@ std::optional<typename TextureCache<P>::BlitImages> TextureCache<P>::GetBlitImag
 
 template <class P>
 ImageId TextureCache<P>::FindDMAImage(const ImageInfo& info, GPUVAddr gpu_addr) {
-    std::optional<DAddr> cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr);
+    const std::optional<DAddr> cpu_addr = ImageCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
     if (!cpu_addr) {
-        cpu_addr = gpu_memory->GpuToCpuAddress(gpu_addr, CalculateGuestSizeInBytes(info));
-        if (!cpu_addr) {
-            return ImageId{};
-        }
+        return ImageId{};
     }
     ImageId image_id{};
     boost::container::small_vector<ImageId, 8> image_ids;
@@ -2463,12 +2532,14 @@ void TextureCache<P>::UntrackImage(ImageBase& image, ImageId image_id) {
 template <class P>
 void TextureCache<P>::DeleteImage(ImageId image_id, bool immediate_delete) {
     ImageBase& image = slot_images[image_id];
-    if (True(image.flags & ImageFlagBits::IsDecoding)) {
-        // A worker is still decoding it: keep its context alive but drop the result.
-        for (auto& async_decode : async_decodes) {
-            if (async_decode->image_id == image_id) {
-                async_decode->cancelled = true;
-            }
+    ++images_deleted;
+    // Drop every decode still queued for it, whatever IsDecoding says: an image re-decoded while
+    // a decode was in flight has two, and the first to finish clears the flag. A decode left
+    // behind was uploaded into the next image to take this slot (another texture's data: garbage
+    // textures, and a staging overrun when that image was smaller).
+    for (auto& async_decode : async_decodes) {
+        if (async_decode->image_id == image_id) {
+            async_decode->cancelled = true;
         }
     }
     if (image.HasScaled()) {
@@ -2696,6 +2767,11 @@ template <class P>
 void TextureCache<P>::CopyImage(ImageId dst_id, ImageId src_id, std::vector<ImageCopy> copies) {
     Image& dst = slot_images[dst_id];
     Image& src = slot_images[src_id];
+    if (dst.info.astc_opaque != src.info.astc_opaque) {
+        // BC1 and BC3 blocks differ in size, so the host can't copy between them; both hold the
+        // same guest data, which is uploaded from guest memory instead.
+        return;
+    }
     const bool is_rescaled = True(src.flags & ImageFlagBits::Rescaled);
     if (is_rescaled) {
         ASSERT(True(dst.flags & ImageFlagBits::Rescaled));

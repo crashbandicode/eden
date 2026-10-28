@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <numeric>
 #include <optional>
 #include <span>
@@ -603,6 +604,10 @@ u32 CalculateUnswizzledSizeBytes(const ImageInfo& info) noexcept {
     return NumBlocksPerLayer(info, tile_size) * info.resources.layers * BytesPerBlock(info.format);
 }
 
+bool AstcDataLooksOpaque(std::span<const u8> data) noexcept {
+    return Tegra::Texture::ASTC::IsOpaque(data);
+}
+
 u32 CalculateConvertedSizeBytes(const ImageInfo& info) noexcept {
     if (info.type == ImageType::Buffer) {
         return info.size.width * BytesPerBlock(info.format);
@@ -611,8 +616,10 @@ u32 CalculateConvertedSizeBytes(const ImageInfo& info) noexcept {
     if (IsPixelFormatASTC(info.format) && Settings::values.astc_recompression.GetValue() !=
                                               Settings::AstcRecompression::Uncompressed) {
         const u32 bpp_div =
-            Settings::values.astc_recompression.GetValue() == Settings::AstcRecompression::Bc1 ? 2
-                                                                                               : 1;
+            Settings::values.astc_recompression.GetValue() == Settings::AstcRecompression::Bc1 ||
+                    info.astc_opaque
+                ? 2
+                : 1;
         // NumBlocksPerLayer doesn't account for this correctly, so we have to do it manually.
         u32 output_size = 0;
         for (s32 i = 0; i < info.resources.levels; i++) {
@@ -955,10 +962,11 @@ void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8
         } else if (astc) {
             // BC1 uses 0.5 bytes per texel
             // BC3 uses 1 byte per texel
-            const auto compress = recompression_setting == Settings::AstcRecompression::Bc1
-                                      ? Tegra::Texture::BCN::CompressBC1
-                                      : Tegra::Texture::BCN::CompressBC3;
-            const auto bpp_div = recompression_setting == Settings::AstcRecompression::Bc1 ? 2 : 1;
+            const bool bc1 =
+                recompression_setting == Settings::AstcRecompression::Bc1 || info.astc_opaque;
+            const auto compress =
+                bc1 ? Tegra::Texture::BCN::CompressBC1 : Tegra::Texture::BCN::CompressBC3;
+            const auto bpp_div = bc1 ? 2 : 1;
 
             const u32 plane_dim = copy.image_extent.width * copy.image_extent.height;
             const u32 level_size = plane_dim * copy.image_extent.depth *

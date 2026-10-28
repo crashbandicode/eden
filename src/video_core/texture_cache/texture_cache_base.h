@@ -9,6 +9,7 @@
 #include <atomic>
 #include <deque>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <span>
 #include <type_traits>
@@ -119,6 +120,17 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
 #else
     static constexpr s64 TARGET_THRESHOLD = 4_GiB;
 #endif
+
+    // Periodic statistics (TickFrame).
+    u64 gc_deletes{};
+    u64 gc_costly_deletes{};
+    u64 async_decodes_queued{};
+    u64 images_created{};
+    u64 astc_opaque_images{};
+    u64 astc_alpha_images{};
+    std::vector<u8> astc_scan_buffer;
+    u64 images_deleted{};
+    std::map<u64, std::pair<u32, GPUVAddr>> created_shapes;
 
     static constexpr s64 DEFAULT_EXPECTED_MEMORY = 1_GiB + 125_MiB;
     static constexpr s64 DEFAULT_CRITICAL_MEMORY = 1_GiB + 625_MiB;
@@ -449,6 +461,9 @@ private:
     ::Common::unordered_map<ImageId, boost::container::small_vector<ImageViewId, 16>> sparse_views;
 
     DAddr virtual_invalid_space{};
+
+    /// The CPU address an image at gpu_addr is keyed by: its backing, or a fixed stand-in.
+    [[nodiscard]] std::optional<DAddr> ImageCpuAddress(GPUVAddr gpu_addr, size_t size) const;
 
     bool has_deleted_images = false;
     bool is_rescaling = false;

@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <array>
+#include <chrono>
+#include <cstdlib>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -14,6 +16,7 @@
 
 #include "common/assert.h"
 #include "common/common_types.h"
+#include "common/logging.h"
 #include "common/div_ceil.h"
 #include "common/vector_math.h"
 #include "video_core/host_shaders/astc_decoder_comp_spv.h"
@@ -627,7 +630,33 @@ void ASTCDecoderPass::Assemble(Image& image, const StagingBufferRef& map,
         cmdbuf.PipelineBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                        vk::PIPELINE_STAGE_GRAPHICS_COMPUTE, 0, image_barrier);
     });
-    scheduler.Finish();
+    // Each decode ends with the GPU thread waiting for the host GPU to go idle. Measured here
+    // (count and time per 5 s); EDEN_NX2_ASTC_FLUSH=1 submits without waiting instead.
+    static const bool flush_only = [] {
+        const char* value = std::getenv("EDEN_NX2_ASTC_FLUSH");
+        return value != nullptr && value[0] == '1';
+    }();
+    const auto start = std::chrono::steady_clock::now();
+    if (flush_only) {
+        scheduler.Flush();
+    } else {
+        scheduler.Finish();
+    }
+    const auto end = std::chrono::steady_clock::now();
+    static u32 decodes{};
+    static std::chrono::nanoseconds waited{};
+    static auto window_start = end;
+    ++decodes;
+    waited += end - start;
+    if (end - window_start >= std::chrono::seconds{5}) {
+        LOG_INFO(Render_Vulkan, "ASTC GPU decodes: {} in {} ms, {} ms waiting ({})", decodes,
+                 std::chrono::duration_cast<std::chrono::milliseconds>(end - window_start).count(),
+                 std::chrono::duration_cast<std::chrono::milliseconds>(waited).count(),
+                 flush_only ? "flush" : "finish");
+        decodes = 0;
+        waited = {};
+        window_start = end;
+    }
 }
 
 constexpr u32 BL3D_BINDING_INPUT_BUFFER  = 0;

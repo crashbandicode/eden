@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <limits>
 #include <array>
+#include <cstdlib>
 #include <optional>
 #include <span>
 #include <memory>
@@ -175,6 +176,22 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
 
 constexpr std::array<VkFormat, 2> HugeAstcViewFormats{VK_FORMAT_A8B8G8R8_UNORM_PACK32,
                                                        VK_FORMAT_A8B8G8R8_SRGB_PACK32};
+
+// Opaque ASTC (ImageInfo::astc_opaque) re-compressed to BC1 instead of BC3.
+[[nodiscard]] bool IsOpaqueBc1Astc(const Device& device, const ImageInfo& info) {
+    return info.astc_opaque && IsPixelFormatASTC(info.format) && !IsHugeAstcArray(device, info);
+}
+
+constexpr std::array<VkFormat, 2> OpaqueAstcViewFormats{VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
+                                                         VK_FORMAT_BC1_RGBA_SRGB_BLOCK};
+
+[[nodiscard]] std::optional<VkFormat> AstcHostFormat(const Device& device, const ImageInfo& info) {
+    if (IsOpaqueBc1Astc(device, info)) {
+        return VideoCore::Surface::IsPixelFormatSRGB(info.format) ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
+                                                                  : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+    }
+    return HugeAstcHostFormat(device, info);
+}
 
 [[nodiscard]] bool WillUseAcceleratedAstcDecode(const Device& device, const ImageInfo& info) {
     if (!IsPixelFormatASTC(info.format) || device.IsOptimalAstcSupported()) {
@@ -1899,6 +1916,16 @@ void TextureCacheRuntime::LogMemoryStatistics() const {
     Vulkan::LogMemoryStatistics(device);
 }
 
+bool TextureCacheRuntime::UseOpaqueAstcFormat() const {
+    // EDEN_NX2_ASTC_BC1=0 keeps every re-compressed ASTC image in BC3.
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_ASTC_BC1");
+        return value == nullptr || value[0] != '0';
+    }();
+    return enabled && !device.IsOptimalAstcSupported() &&
+           Settings::values.astc_recompression.GetValue() == Settings::AstcRecompression::Bc3;
+}
+
 void TextureCacheRuntime::FlushDeferredClear() {
     scheduler.FlushDeferredClear();
 }
@@ -1965,8 +1992,10 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
                                TrimmedHostInfo(runtime_.device, info, host_level_offset),
                                IsHugeAstcArray(runtime_.device, info)
                                    ? std::span<const VkFormat>{HugeAstcViewFormats}
+                               : IsOpaqueBc1Astc(runtime_.device, info)
+                                   ? std::span<const VkFormat>{OpaqueAstcViewFormats}
                                    : runtime->ViewFormats(info.format),
-                               HugeAstcHostFormat(runtime_.device, info))),
+                               AstcHostFormat(runtime_.device, info))),
       aspect_mask(ImageAspectMask(info.format)) {
     if (original_image.IsUnbacked()) {
         flags |= VideoCommon::ImageFlagBits::Unbacked;
@@ -2628,6 +2657,10 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageViewI
         format_info.format = VideoCore::Surface::IsPixelFormatSRGB(format)
                                  ? VK_FORMAT_A8B8G8R8_SRGB_PACK32
                                  : VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+    } else if (IsOpaqueBc1Astc(*device, image.info) && IsPixelFormatASTC(format)) {
+        format_info.format = VideoCore::Surface::IsPixelFormatSRGB(format)
+                                 ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK
+                                 : VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
     }
     if (device->ApiVersion() >= VK_API_VERSION_1_3) {
         const VkFormatProperties3 properties3 =

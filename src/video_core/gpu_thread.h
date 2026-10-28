@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <functional>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -76,9 +77,14 @@ struct FlushAndInvalidateRegionCommand final {
 /// Command to make the gpu look into pending requests
 struct GPUTickCommand final {};
 
+/// Command to run a function on the GPU thread after the commands queued before it
+struct RunCommand final {
+    std::function<void()> func;
+};
+
 using CommandData =
     std::variant<std::monostate, SubmitListCommand, FlushRegionCommand, InvalidateRegionCommand,
-                 FlushAndInvalidateRegionCommand, GPUTickCommand>;
+                 FlushAndInvalidateRegionCommand, GPUTickCommand, RunCommand>;
 
 struct CommandDataContainer {
     CommandDataContainer() = default;
@@ -124,6 +130,9 @@ public:
     void FlushAndInvalidateRegion(DAddr addr, u64 size, bool is_async);
 
     void TickGPU(bool is_async);
+
+    /// Runs func on the GPU thread once the commands queued before it have been processed.
+    void Run(std::function<void()>&& func, bool is_async);
 
     void NotifyShutdown();
 

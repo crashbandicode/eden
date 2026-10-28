@@ -413,9 +413,16 @@ private:
         if (last > first) {
             Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Unmap(first, last - first + 1);
         }
-        EventFor(w[8])->Signal(system.Kernel());
+        SignalAfterGpu(w[8]);
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
+    }
+
+    // Signals a job slot's event once the GPU thread has run everything queued so far, as the
+    // console's graphics server completes unmap jobs behind the submitted work.
+    void SignalAfterGpu(u32 slot) {
+        auto* const event = EventFor(slot);
+        system.GPU().RunInOrder([this, event] { event->Signal(system.Kernel()); });
     }
 
     // Sub 102: word 2 is the memory handle 101 returned, word 3 the job slot. The game frees the
@@ -438,7 +445,7 @@ private:
         } else {
             LOG_WARNING(Service, "nx2:gpu 102 destroy of unknown handle {}", handle);
         }
-        EventFor(w[3])->Signal(system.Kernel());
+        SignalAfterGpu(w[3]);
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
@@ -609,7 +616,17 @@ private:
             LOG_INFO(Service, "nx2:vi2 229 present #{} token={:#x} slot={} image={}", m_presents,
                      u64{w[2]} | (u64{w[3]} << 32), w[4], w[5]);
         }
-        WaitForFrame(~w[22], w[24]);
+        // EDEN_NX2_FRAMES_AHEAD=1: wait for the previous frame's fence instead of this one, so the
+        // game prepares frame N+1 while the GPU thread runs frame N (the console keeps several
+        // frames in flight). Experimental.
+        static const bool frames_ahead = std::getenv("EDEN_NX2_FRAMES_AHEAD") != nullptr;
+        if (frames_ahead) {
+            WaitForFrame(m_previous_fence_id, m_previous_fence_value);
+            m_previous_fence_id = ~w[22];
+            m_previous_fence_value = w[24];
+        } else {
+            WaitForFrame(~w[22], w[24]);
+        }
         Composite(w[5], ~w[22], w[24]);
         PaceToVblank();
         constexpr u64 AvailableSlots = 0x7fff;
@@ -623,6 +640,8 @@ private:
     // Eden's GPU thread has processed the frame. Otherwise the game laps the GPU thread and
     // rewrites command memory it hasn't read yet.
     u32 m_wait_timeouts{};
+    u32 m_previous_fence_id{~0U}; // none yet (WaitForFrame ignores ids >= 192)
+    u32 m_previous_fence_value{};
 
     // The console flips one frame per 60 Hz vblank and keeps the rest queued, so a game can't
     // present faster than that. Every slot is reported free here: hold each present until the

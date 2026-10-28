@@ -151,7 +151,8 @@ void nvhost_as_gpu::Nx2Unmap(u64 gpu_address, u64 size) {
     if (!gmmu) {
         return;
     }
-    gmmu->Unmap(gpu_address, size);
+    // The GPU thread may still be running command lists that use the range.
+    system.GPU().RunInOrder([gmmu = gmmu.get(), gpu_address, size] { gmmu->Unmap(gpu_address, size); });
     LOG_DEBUG(Service_NVDRV, "Switch 2 GPU unmapping {:#x}+{:#x}", gpu_address, size);
 }
 

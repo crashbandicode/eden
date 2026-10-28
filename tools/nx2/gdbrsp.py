@@ -319,6 +319,16 @@ def main():
                 rsp.cmd(f"z2,{addr:x},8")
                 rsp.cmd("s")
                 rsp.cmd(f"Z2,{addr:x},8")
+        elif op == "monitor":
+            # monitor <command...>: run a gdbstub monitor command (qRcmd) and print its text.
+            reply = rsp.cmd("qRcmd," + " ".join(parts[1:]).encode().hex())
+            try:
+                print(bytes.fromhex(reply).decode(errors="replace"))
+            except ValueError:
+                print("monitor:", reply)
+        elif op == "raw":
+            # raw <packet>: send one packet and print the reply (e.g. qXfer:threads:read::0,ffff).
+            print("raw:", rsp.cmd(parts[1]))
         elif op == "sleep":
             import time
             time.sleep(float(parts[1]))

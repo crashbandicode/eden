@@ -23,10 +23,23 @@ inline std::array<std::atomic<u64>, Nx2MaxSemaphoreRegions> g_nx2_semaphore_regi
 
 inline void Nx2AddSemaphoreRegion(u64 start) {
     for (auto& region : g_nx2_semaphore_regions) {
-        u64 expected = 0;
-        if (region.load() == start || region.compare_exchange_strong(expected, start)) {
+        if (region.load() == start) {
             return;
         }
+    }
+    for (auto& region : g_nx2_semaphore_regions) {
+        u64 expected = 0;
+        if (region.compare_exchange_strong(expected, start)) {
+            return;
+        }
+    }
+}
+
+/// The region's memory was destroyed: stop mirroring into it.
+inline void Nx2RemoveSemaphoreRegion(u64 start) {
+    for (auto& region : g_nx2_semaphore_regions) {
+        u64 expected = start;
+        region.compare_exchange_strong(expected, 0);
     }
 }
 
@@ -35,7 +48,7 @@ inline u64 Nx2SemaphoreMirror(u64 address) {
     for (const auto& region : g_nx2_semaphore_regions) {
         const u64 start = region.load(std::memory_order_relaxed);
         if (start == 0) {
-            break;
+            continue;
         }
         if (address >= start + 0x1000 && address < start + 0x2000) {
             return address - 0x1000;

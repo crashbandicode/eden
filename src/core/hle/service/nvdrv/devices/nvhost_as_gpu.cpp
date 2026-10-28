@@ -58,9 +58,11 @@ NvResult nvhost_as_gpu::Ioctl1(DeviceFD fd, Ioctl command, std::span<const u8> i
             const auto result = WrapFixed(this, &nvhost_as_gpu::AllocAsEx, input, output);
             if (result == NvResult::Success && g_nx2_driver) {
                 Nx2GpuMemoryRegistry::Get().AddListener(
-                    this, [this](u64 gpu_address, u64 cpu_address, u64 size) {
+                    this,
+                    [this](u64 gpu_address, u64 cpu_address, u64 size) {
                         Nx2Map(gpu_address, cpu_address, size);
-                    });
+                    },
+                    [this](u64 gpu_address, u64 size) { Nx2Unmap(gpu_address, size); });
             }
             return result;
         }
@@ -143,6 +145,16 @@ void nvhost_as_gpu::Nx2Map(u64 gpu_address, u64 cpu_address, u64 size) {
     LOG_DEBUG(Service_NVDRV, "Switch 2 GPU mapping {:#x}+{:#x} -> CPU {:#x}", gpu_address, size,
               cpu_address);
 }
+
+void nvhost_as_gpu::Nx2Unmap(u64 gpu_address, u64 size) {
+    std::scoped_lock lock(mutex);
+    if (!gmmu) {
+        return;
+    }
+    gmmu->Unmap(gpu_address, size);
+    LOG_DEBUG(Service_NVDRV, "Switch 2 GPU unmapping {:#x}+{:#x}", gpu_address, size);
+}
+
 void nvhost_as_gpu::OnClose(DeviceFD fd) {}
 
 // Switch 2 NvRm (with characteristics flag 26) asks for the read-only syncpoint shim: a GPU page

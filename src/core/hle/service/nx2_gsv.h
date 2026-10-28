@@ -254,9 +254,9 @@ public:
             {203, &INx2GpuSession::GetVaRange, "GetVaRange (guessed)"},
             // Sub-session commands (gpu 22 hands out a second session to this same object).
             {101, &INx2GpuSession::SubRegisterMemory, "CreateGpuAccessibleMemory"},
-            {102, &INx2GpuSession::SubSlotJob<3>, "Sub102 (job, slot in word 3)"},
+            {102, &INx2GpuSession::SubDestroyMemory, "DestroyGpuAccessibleMemory (guessed)"},
             {211, &INx2GpuSession::SubSubmitJob, "NormalMapGpuMemory4K"},
-            {213, &INx2GpuSession::SubSlotJob<8>, "NormalUnmapGpuMemory4K"},
+            {213, &INx2GpuSession::SubUnmapJob, "NormalUnmapGpuMemory4K"},
             {214, &INx2GpuSession::SubCreateGpuOnlyRegion, "CreateGpuOnlyRegion (guessed)"},
         });
     }
@@ -391,14 +391,53 @@ private:
         LOG_INFO(Service, "nx2:gpu 211 map [{:#x}, {:#x}] handle={} offset={:#x} slot={}", a, b,
                  handle, c, slot);
         if (const auto it = m_memory.find(handle); it != m_memory.end() && b > a) {
+            // Also at the memory's own address: an earlier 213 may have unmapped the mapping 101
+            // made there.
             const u64 cpu = it->second.address + c;
-            if (cpu != a) {
-                Nvidia::Devices::Nx2GpuMemoryRegistry::Get().MapAt(a, cpu, b - a + 1);
-            }
+            Nvidia::Devices::Nx2GpuMemoryRegistry::Get().MapAt(a, cpu, b - a + 1);
         } else {
             LOG_WARNING(Service, "nx2:gpu 211 map of unknown handle {}", handle);
         }
         EventFor(slot)->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    // Sub 213: words 3-4 first GPU address, 5-6 last, job slot in word 8.
+    void SubUnmapJob(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u64 first = u64{w[3]} | (u64{w[4]} << 32);
+        const u64 last = u64{w[5]} | (u64{w[6]} << 32);
+        LOG_DEBUG(Service, "nx2:gpu 213 unmap [{:#x}, {:#x}] slot={}", first, last, w[8]);
+        if (last > first) {
+            Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Unmap(first, last - first + 1);
+        }
+        EventFor(w[8])->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    // Sub 102: word 2 is the memory handle 101 returned, word 3 the job slot. The game frees the
+    // memory (svc 0x80 clears GPU access) and reuses it as ordinary heap right after, so nothing
+    // on the GPU side may keep it: drop the mapping 101 made at its own address.
+    void SubDestroyMemory(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u32 handle = w[2];
+        if (const auto it = m_memory.find(handle); it != m_memory.end()) {
+            const auto [address, size] = it->second;
+            LOG_DEBUG(Service, "nx2:gpu 102 destroy handle={} [{:#x}, +{:#x}] slot={}", handle,
+                      address, size, w[3]);
+            if (size != 0) {
+                Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Unmap(address, size);
+            }
+            if (size == 0x2000) {
+                Tegra::Nx2RemoveSemaphoreRegion(address);
+            }
+            m_memory.erase(it);
+        } else {
+            LOG_WARNING(Service, "nx2:gpu 102 destroy of unknown handle {}", handle);
+        }
+        EventFor(w[3])->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }

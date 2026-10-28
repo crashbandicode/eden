@@ -38,6 +38,7 @@ inline NvResult Nx2UnknownIoctl(const char* device, Ioctl command, std::span<con
 class Nx2GpuMemoryRegistry {
 public:
     using Listener = std::function<void(u64 gpu_address, u64 cpu_address, u64 size)>;
+    using UnmapListener = std::function<void(u64 gpu_address, u64 size)>;
 
     static Nx2GpuMemoryRegistry& Get() {
         static Nx2GpuMemoryRegistry registry;
@@ -50,18 +51,28 @@ public:
 
     void MapAt(u64 gpu_address, u64 cpu_address, u64 size) {
         std::scoped_lock lk{mutex};
+        TrimMappings(gpu_address, size);
         mappings.push_back({gpu_address, cpu_address, size});
         for (auto& [owner, listener] : listeners) {
-            listener(gpu_address, cpu_address, size);
+            listener.map(gpu_address, cpu_address, size);
         }
     }
 
-    void AddListener(const void* owner, Listener listener) {
+    // NormalUnmapGpuMemory4K, or destroying the memory: the GPU range stops reaching it.
+    void Unmap(u64 gpu_address, u64 size) {
+        std::scoped_lock lk{mutex};
+        TrimMappings(gpu_address, size);
+        for (auto& [owner, listener] : listeners) {
+            listener.unmap(gpu_address, size);
+        }
+    }
+
+    void AddListener(const void* owner, Listener listener, UnmapListener unmap_listener) {
         std::scoped_lock lk{mutex};
         for (const auto& m : mappings) {
             listener(m.gpu_address, m.cpu_address, m.size);
         }
-        listeners.insert_or_assign(owner, std::move(listener));
+        listeners.insert_or_assign(owner, Listeners{std::move(listener), std::move(unmap_listener)});
     }
 
     void RemoveListener(const void* owner) {
@@ -100,9 +111,35 @@ private:
         u64 size;
     };
 
+    struct Listeners {
+        Listener map;
+        UnmapListener unmap;
+    };
+
+    // Drops [gpu_address, +size) from the recorded mappings, keeping the parts outside it.
+    void TrimMappings(u64 gpu_address, u64 size) {
+        const u64 end = gpu_address + size;
+        std::vector<Mapping> kept;
+        kept.reserve(mappings.size() + 1);
+        for (const auto& m : mappings) {
+            const u64 m_end = m.gpu_address + m.size;
+            if (m_end <= gpu_address || m.gpu_address >= end) {
+                kept.push_back(m);
+                continue;
+            }
+            if (m.gpu_address < gpu_address) {
+                kept.push_back({m.gpu_address, m.cpu_address, gpu_address - m.gpu_address});
+            }
+            if (m_end > end) {
+                kept.push_back({end, m.cpu_address + (end - m.gpu_address), m_end - end});
+            }
+        }
+        mappings = std::move(kept);
+    }
+
     std::mutex mutex;
     std::vector<Mapping> mappings;
-    std::map<const void*, Listener> listeners;
+    std::map<const void*, Listeners> listeners;
 };
 
 // Device node that Switch 2 nvgpu drivers open but Switch 1 never had (e.g. /dev/nvhost-tsg-gpu).

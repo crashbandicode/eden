@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <limits>
 #include <optional>
@@ -449,6 +450,31 @@ MemoryCommit MemoryAllocator::Commit(const vk::Buffer &buffer, MemoryUsage usage
     vk::Check(res);
     vk::Check(vmaBindBufferMemory2(allocator, a, 0, raw, nullptr));
     return MemoryCommit(allocator, a, info);
+}
+
+void LogMemoryStatistics(const Device& device) {
+    const VmaAllocator allocator = device.GetAllocator();
+    const VkPhysicalDeviceMemoryProperties* properties{};
+    vmaGetMemoryProperties(allocator, &properties);
+    VmaTotalStatistics stats{};
+    vmaCalculateStatistics(allocator, &stats);
+    for (u32 type = 0; type < properties->memoryTypeCount; ++type) {
+        const VmaStatistics& s = stats.memoryType[type].statistics;
+        if (s.blockCount == 0) {
+            continue;
+        }
+        LOG_INFO(Render_Vulkan, "VMA type {} (heap {}, flags {:#x}): {} blocks {} MiB, {} allocations {} MiB",
+                 type, properties->memoryTypes[type].heapIndex,
+                 static_cast<u32>(properties->memoryTypes[type].propertyFlags), s.blockCount,
+                 s.blockBytes >> 20, s.allocationCount, s.allocationBytes >> 20);
+    }
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(allocator, budgets.data());
+    for (u32 heap = 0; heap < properties->memoryHeapCount; ++heap) {
+        LOG_INFO(Render_Vulkan, "VMA heap {}: usage {} MiB of budget {} MiB, VMA blocks {} MiB",
+                 heap, budgets[heap].usage >> 20, budgets[heap].budget >> 20,
+                 budgets[heap].statistics.blockBytes >> 20);
+    }
 }
 
 } // namespace Vulkan

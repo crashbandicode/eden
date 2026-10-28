@@ -142,4 +142,7 @@ namespace Vulkan {
         u32 valid_memory_types{~0u};
     };
 
+    /// Logs VMA's blocks and allocations per memory type, and each heap's budget.
+    void LogMemoryStatistics(const Device& device);
+
 } // namespace Vulkan

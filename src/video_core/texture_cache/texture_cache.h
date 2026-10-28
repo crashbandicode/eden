@@ -212,6 +212,9 @@ void TextureCache<P>::TickFrame() {
             LOG_INFO(HW_GPU, "  format {}: {} MiB in {} images", formats[i].second, formats[i].first >> 20,
                      by_format[formats[i].second].second);
         }
+        if constexpr (requires { runtime.LogMemoryStatistics(); }) {
+            runtime.LogMemoryStatistics();
+        }
     }
     if (total_used_memory > minimum_memory) {
         RunGarbageCollector();
@@ -1451,7 +1454,7 @@ u64 TextureCache<P>::GetScaledImageSizeBytes(const ImageBase& image) {
 template <class P>
 void TextureCache<P>::QueueAsyncDecode(Image& image, ImageId image_id) {
     UNIMPLEMENTED_IF(False(image.flags & ImageFlagBits::Converted));
-    LOG_INFO(HW_GPU, "Queuing async texture decode");
+    LOG_DEBUG(HW_GPU, "Queuing async texture decode {:#x}", image.gpu_addr);
 
     image.flags |= ImageFlagBits::IsDecoding;
     auto decode = std::make_unique<AsyncDecodeContext>();

@@ -68,6 +68,8 @@ public:
 
     bool CanReportMemoryUsage() const;
 
+    void LogMemoryStatistics() const;
+
     bool CanDownloadMsaa(const VideoCommon::ImageInfo& info) const;
 
     [[nodiscard]] VkImage AcquireMsaaScratchImage(const VkImageCreateInfo& image_ci);

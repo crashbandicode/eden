@@ -1895,6 +1895,10 @@ bool TextureCacheRuntime::CanReportMemoryUsage() const {
     return device.CanReportMemoryUsage();
 }
 
+void TextureCacheRuntime::LogMemoryStatistics() const {
+    Vulkan::LogMemoryStatistics(device);
+}
+
 void TextureCacheRuntime::FlushDeferredClear() {
     scheduler.FlushDeferredClear();
 }

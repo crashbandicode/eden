@@ -335,7 +335,7 @@ void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
         break;
     }
     case BufferMethods::MemOpA: {
-        LOG_ERROR(HW_GPU, "Memory Operation A");
+        LOG_TRACE(HW_GPU, "Memory Operation A");
         break;
     }
     case BufferMethods::MemOpB: {
@@ -345,7 +345,7 @@ void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
     }
     case BufferMethods::MemOpC:
     case BufferMethods::MemOpD: {
-        LOG_ERROR(HW_GPU, "Memory Operation C,D");
+        LOG_TRACE(HW_GPU, "Memory Operation C,D");
         break;
     }
     case BufferMethods::SemaphoreAcquire: {

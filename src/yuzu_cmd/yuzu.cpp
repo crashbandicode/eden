@@ -333,9 +333,12 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 }
 // EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,...": press (code) or release (-code) keyboard
 // keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
+double Nx2KeyClockSeconds(); // emu_window_sdl3.cpp
+
 static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
     struct KeyEvent {
-        double seconds;
+        double seconds; // when frame is 0
+        u64 frame;      // "f<frame>:code": after that many presents
         int code;
     };
     static const std::vector<KeyEvent> script = [] {
@@ -347,22 +350,27 @@ static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
                 const size_t end = std::min(list.find(',', start), list.size());
                 const std::string item = list.substr(start, end - start);
                 if (const size_t colon = item.find(':'); colon != std::string::npos) {
-                    events.push_back({std::stod(item.substr(0, colon)),
-                                      std::stoi(item.substr(colon + 1))});
+                    const std::string when = item.substr(0, colon);
+                    const int code = std::stoi(item.substr(colon + 1));
+                    if (!when.empty() && when[0] == 'f') {
+                        events.push_back({0.0, std::stoull(when.substr(1)), code});
+                    } else {
+                        events.push_back({std::stod(when), 0, code});
+                    }
                 }
                 start = end + 1;
             }
         }
         return events;
     }();
-    static const auto begin = std::chrono::steady_clock::now();
     static size_t next = 0;
-    const double elapsed =
-        std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
-    while (next < script.size() && script[next].seconds <= elapsed) {
+    const double elapsed = Nx2KeyClockSeconds();
+    const u64 frame = Core::g_nx2_present_count.load();
+    while (next < script.size() && (script[next].frame != 0 ? script[next].frame <= frame
+                                                            : script[next].seconds <= elapsed)) {
         const int code = script[next].code;
-        LOG_INFO(Frontend, "Key script: {} key {} at {:.1f} s", code < 0 ? "release" : "press",
-                 code < 0 ? -code : code, elapsed);
+        LOG_INFO(Frontend, "Key script: {} key {} at {:.1f} s (frame {})",
+                 code < 0 ? "release" : "press", code < 0 ? -code : code, elapsed, frame);
         if (code < 0) {
             input_subsystem.GetKeyboard()->ReleaseKey(static_cast<std::size_t>(-code));
         } else {

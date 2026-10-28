@@ -68,6 +68,8 @@
 
 namespace Core {
 
+std::atomic<u64> g_nx2_present_count{};
+
 FileSys::VirtualFile GetGameFileFromPath(const FileSys::VirtualFilesystem& vfs,
                                          const std::string& path) {
     // To account for split 00+01+etc files.

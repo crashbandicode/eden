@@ -2826,6 +2826,11 @@ Sampler::Sampler(TextureCacheRuntime& runtime, const Tegra::Texture::TSCEntry& t
     if (tsc.mipmap_filter != TextureMipmapFilter::None) {
         min_lod = tsc.MinLod();
         max_lod = tsc.MaxLod();
+        // EDEN_NX2_FORCE_LOD0: sample only the top mip level (debug aid for mip layout problems).
+        if (static const bool force_lod0 = std::getenv("EDEN_NX2_FORCE_LOD0") != nullptr; force_lod0) {
+            min_lod = 0.0f;
+            max_lod = 0.25f;
+        }
     }
     base_ci = VkSamplerCreateInfo{
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,

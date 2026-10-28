@@ -4,6 +4,13 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/scope_exit.h"
+#include <vector>
+#include <tuple>
+#include <mutex>
+#include <map>
+#include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <fmt/ranges.h>
 #include "common/assert.h"
@@ -125,9 +132,59 @@ void ServiceFrameworkBase::InvokeRequestTipc(HLERequestContext& ctx) {
     handler_invoker(this, info->handler_callback, ctx);
 }
 
+namespace {
+// EDEN_NX2_IPC_SUMMARY: every 5 s, log how often each service command ran and with which result
+// since the last summary (finds a game polling something that never becomes ready).
+void CountRequest(const std::string& service, u32 command, u32 type, u32 result) {
+    static const bool enabled = std::getenv("EDEN_NX2_IPC_SUMMARY") != nullptr;
+    if (!enabled) {
+        return;
+    }
+    static std::mutex mutex;
+    static std::map<std::tuple<std::string, u32, u32, u32>, u32> counts;
+    static auto last = std::chrono::steady_clock::now();
+    std::scoped_lock lock{mutex};
+    ++counts[{service, command, type, result}];
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last < std::chrono::seconds{5}) {
+        return;
+    }
+    last = now;
+    std::vector<std::pair<u32, std::string>> lines;
+    for (const auto& [key, count] : counts) {
+        lines.emplace_back(count, fmt::format("{}::{}{} -> {:#x}", std::get<0>(key), std::get<1>(key),
+                                              std::get<2>(key) >= 16 ? " (tipc)" : "",
+                                              std::get<3>(key)));
+    }
+    std::sort(lines.begin(), lines.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::string text;
+    for (size_t i = 0; i < std::min<size_t>(lines.size(), 24); ++i) {
+        text += fmt::format(" | {}x {}", lines[i].first, lines[i].second);
+    }
+    LOG_INFO(Service, "ipc summary ({} kinds){}", lines.size(), text);
+    counts.clear();
+}
+} // Anonymous namespace
+
 Result ServiceFrameworkBase::HandleSyncRequest(Kernel::KServerSession& session,
                                                HLERequestContext& ctx) {
     const auto guard = LockService();
+    SCOPE_EXIT {
+        const auto* cmd_buf = ctx.CommandBuffer();
+        u32 result_word = 0;
+        const u32 type = static_cast<u32>(ctx.GetCommandType());
+        if (type >= 16) {
+            result_word = cmd_buf[2];
+        } else {
+            for (int i = 0; i < 12; ++i) {
+                if (cmd_buf[i] == 0x4F434653) { // "SFCO"
+                    result_word = cmd_buf[i + 2];
+                    break;
+                }
+            }
+        }
+        CountRequest(service_name, ctx.GetCommand(), type, result_word);
+    };
 
     Result result = ResultSuccess;
 

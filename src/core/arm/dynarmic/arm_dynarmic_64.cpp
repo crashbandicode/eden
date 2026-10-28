@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include "common/settings.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
@@ -24,13 +25,24 @@ DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess
 
 u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
     CheckMemoryAccess(vaddr, size, Kernel::DebugWatchpointType::Read);
+    u64 value{};
     switch (size) {
-    case sizeof(u64): return m_memory.Read64(vaddr);
-    case sizeof(u32): return m_memory.Read32(vaddr);
-    case sizeof(u16): return m_memory.Read16(vaddr);
-    case sizeof(u8): return m_memory.Read8(vaddr);
+    case sizeof(u64): value = m_memory.Read64(vaddr); break;
+    case sizeof(u32): value = m_memory.Read32(vaddr); break;
+    case sizeof(u16): value = m_memory.Read16(vaddr); break;
+    case sizeof(u8): value = m_memory.Read8(vaddr); break;
     default: UNREACHABLE();
     }
+    // With memory aborts ignored the guest keeps running on zeros: say where it read from.
+    if (auto& unmapped = Core::Memory::UnmappedReadFlag(); unmapped != 0) {
+        unmapped = 0;
+        static std::atomic<u32> logged{};
+        if (logged.fetch_add(1) < 32) {
+            LOG_ERROR(Core_ARM, "Unmapped read {:#x} ({} bytes) at pc {:#x} lr {:#x} sp {:#x}", vaddr, size,
+                      m_parent.m_jit->GetPC(), m_parent.m_jit->GetRegister(30), m_parent.m_jit->GetSP());
+        }
+    }
+    return value;
 }
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
     CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read);

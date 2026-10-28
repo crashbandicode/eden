@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2020 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <array>
 #include <cstdlib>
 #include <unordered_set>
 #include <cstring>
@@ -1360,8 +1361,15 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             [&](u32 address, u32 value) {
                 if (address >= 0xe00) return false;
                 if (address == 0x556) {
-                    static u32 enable_logs{};
-                    if (enable_logs++ < 400) LOG_INFO(HW_GPU, "Native MME start={:#x} render enable mode={}", method, value);
+                    // SET_RENDER_ENABLE_OVERRIDE: 0 use the render-enable condition, 1 always,
+                    // 2 never. Log a histogram every 20000 macro writes (pop-in diagnostics).
+                    static std::array<u64, 4> modes{};
+                    static u64 enable_writes{};
+                    ++modes[value & 3];
+                    if (++enable_writes % 20000 == 0) {
+                        LOG_INFO(HW_GPU, "Native MME render enable modes: use {} always {} never {} other {}",
+                                 modes[0], modes[1], modes[2], modes[3]);
+                    }
                 }
                 maxwell3d.CallMethod(system, address, value, true);
                 // Turing MME memory reads (methods 0x550 SET_MME_MEM_ADDRESS_A/B, 0x558 data RAM
@@ -1374,6 +1382,17 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                                             maxwell3d.GetRegisterValue(MemAddressB);
                     auto& memory = maxwell3d.GetMemoryManager();
                     const u32 ram = maxwell3d.GetRegisterValue(DataRamAddress);
+                    // The words may have just been written by the GPU (e.g. indirect draw arguments
+                    // from a culling dispatch) and still be only in host buffers: flush them first,
+                    // or the macro draws with an older frame's arguments (objects pop in and out).
+                    const size_t read_bytes = size_t{std::min<u32>(value, 0x1000)} * 4;
+                    if (memory.IsMemoryDirty(source, read_bytes, VideoCommon::CacheType::BufferCache)) {
+                        memory.FlushRegion(source, read_bytes, VideoCommon::CacheType::BufferCache);
+                        static u64 flushes{};
+                        if (++flushes % 2000 == 1) {
+                            LOG_INFO(HW_GPU, "Native MME DMA read flushed GPU-written memory ({} times)", flushes);
+                        }
+                    }
                     static u32 dma_logs{};
                     if (dma_logs < 400) {
                         ++dma_logs;

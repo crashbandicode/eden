@@ -7,6 +7,7 @@
 // DO NOT MODIFY IT MANUALLY
 
 #include <cstdlib>
+#include <cstring>
 #include <type_traits>
 
 #include "core/arm/arm_interface.h"
@@ -2506,10 +2507,20 @@ void Call(Core::System& system, u32 imm) {
     LOG_TRACE(Kernel_SVC, "{} [0]={:#x} [1]={:#x} [2]={:#x} [3]={:#x} [4]={:#x} [5]={:#x} [6]={:#x}",
         imm, GetArg64(args, 0), GetArg64(args, 1), GetArg64(args, 2),
         GetArg64(args, 3), GetArg64(args, 4), GetArg64(args, 5), GetArg64(args, 6));
-    // Set EDEN_NX2_SVC_TRACE=1 to log every SVC with its arguments and results.
-    static const bool svc_trace = std::getenv("EDEN_NX2_SVC_TRACE") != nullptr;
+    // Set EDEN_NX2_SVC_TRACE=1 to log every SVC with its arguments and results, or
+    // EDEN_NX2_SVC_TRACE=<first>:<last> for presents first..last only (a frame-time profile).
+    static const std::pair<u64, u64> trace_range = [] {
+        const char* text = std::getenv("EDEN_NX2_SVC_TRACE");
+        if (text == nullptr) return std::pair<u64, u64>{1, 0};
+        const char* colon = std::strchr(text, ':');
+        if (colon == nullptr) return std::pair<u64, u64>{0, ~u64{}};
+        return std::pair<u64, u64>{std::strtoull(text, nullptr, 10), std::strtoull(colon + 1, nullptr, 10)};
+    }();
+    const u64 presents = Core::g_nx2_present_count.load(std::memory_order_relaxed);
+    const bool svc_trace = presents >= trace_range.first && presents <= trace_range.second;
     if (svc_trace) {
-        LOG_INFO(Kernel_SVC, "svc {:#04x} in  [0]={:#x} [1]={:#x} [2]={:#x} [3]={:#x}", imm,
+        LOG_INFO(Kernel_SVC, "svc {:#04x} in  t{} [0]={:#x} [1]={:#x} [2]={:#x} [3]={:#x}", imm,
+                 GetCurrentThread(kernel).GetThreadId(),
                  GetArg64(args, 0), GetArg64(args, 1), GetArg64(args, 2), GetArg64(args, 3));
     }
     if (imm == 0x80) {
@@ -2546,8 +2557,9 @@ void Call(Core::System& system, u32 imm) {
         Call32(system, imm, args);
     }
     if (svc_trace) {
-        LOG_INFO(Kernel_SVC, "svc {:#04x} out [0]={:#x} [1]={:#x} [2]={:#x}", imm,
-                 GetArg64(args, 0), GetArg64(args, 1), GetArg64(args, 2));
+        LOG_INFO(Kernel_SVC, "svc {:#04x} out t{} [0]={:#x} [1]={:#x} [2]={:#x}", imm,
+                 GetCurrentThread(kernel).GetThreadId(), GetArg64(args, 0), GetArg64(args, 1),
+                 GetArg64(args, 2));
     }
     //kernel.ExitSVCProfile();
     kernel.CurrentPhysicalCore().LoadSvcArguments(process, args);

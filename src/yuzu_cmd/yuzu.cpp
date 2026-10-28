@@ -172,6 +172,9 @@ struct SdlState {
 };
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
+    // SDL calls SDL_AppIterate back to back by default, which kept a host core at 100% polling
+    // input; 240 Hz is plenty for input and the key script.
+    SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "240");
     SdlState* state = new SdlState();
     *appstate = state;
 

@@ -752,13 +752,15 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 (u64{offset >> 2} << 30));
             break;
         }
-        case 0x9a8: { // ATOMG.E.ADD.STRONG.GPU U32 through a uniform pointer.
+        case 0x9a8: { // ATOMG.E.ADD.STRONG.GPU U32 through a uniform pointer plus an offset.
             const u32 address = uniform_register(insn.Bits(64, 6));
-            if (insn.Bits(24, 8) != 255 || insn.Bits(40, 24) ||
+            const s32 offset = static_cast<s32>(insn.Bits(40, 24) << 8) >> 8;
+            if (insn.Bits(24, 8) != 255 || offset < -0x80000 || offset > 0x7ffff ||
                 (insn.words[2] & ~0x3fU) != 0x081ee140 || address == ~0U || (address & 1))
                 return fail(index, "native global atomic mode");
             emit(0xed00000000000000ULL | predicate | dest | (u64{address} << 8) |
-                (u64{insn.Bits(32, 8)} << 20) | (u64{1} << 48));
+                (u64{insn.Bits(32, 8)} << 20) | (u64{static_cast<u32>(offset) & 0xfffff} << 28) |
+                (u64{1} << 48));
             break;
         }
         case 0xb97: { // SULD.P.2D.IGN, direct descriptor, channel mask at 72-75.
@@ -1464,14 +1466,15 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             result.instructions.push_back(translated);
             break;
         }
-        case 0x387: case 0x983: { // Captured scalar local spill at byte offset zero.
+        case 0x387: case 0x983: { // Captured scalar local spill at an immediate byte offset.
             const bool store = opcode == 0x387;
-            if (insn.Bits(24, 8) != 255 || (store && (insn.Bits(16, 8) || insn.words[1] > 247)) ||
-                (!store && (insn.words[1] || dest >= 248)) ||
+            const u32 data = insn.Bits(32, 8), offset = insn.Bits(40, 24);
+            if (insn.Bits(24, 8) != 255 || (store && (insn.Bits(16, 8) || data > 247)) ||
+                (!store && (data || dest >= 248)) || (offset & 3) || offset > 0x7fffff ||
                 insn.words[2] != (store ? 0x00100800U : 0x00300800U))
                 return fail(index, "native local scalar spill mode");
             emit((store ? 0xef50000000000000ULL : 0xef40000000000000ULL) | predicate |
-                 (store ? insn.words[1] : dest) | (u64{255} << 8) | (u64{4} << 48));
+                 (store ? data : dest) | (u64{255} << 8) | (u64{offset} << 20) | (u64{4} << 48));
             break;
         }
         case 0x803: { // P2R PR, register merge source, immediate mask, byte select (76-77)

@@ -20,8 +20,8 @@ constexpr bool IsValidVirtualCoreId(int32_t core_id) {
     return (0 <= core_id && core_id < static_cast<int32_t>(Core::Hardware::NUM_CPU_CORES));
 }
 
-// Switch 2 processes may be given virtual cores 4 and 5 (core mask 0x3f). Only four cores are
-// emulated, so fold the extra ones back onto 0..3, both in core ids and in affinity masks.
+// Switch 2 hardware has eight cores. Six are emulated (the most an application is given), so
+// fold any id past them back onto the low cores, both in core ids and in affinity masks.
 constexpr int32_t FoldExtraCoreId(int32_t core_id) {
     constexpr auto num_cores = static_cast<int32_t>(Core::Hardware::NUM_CPU_CORES);
     return core_id >= num_cores && core_id < 2 * num_cores ? core_id - num_cores : core_id;

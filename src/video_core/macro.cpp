@@ -1346,7 +1346,8 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         maxwell3d.RefreshParameters();
         const auto context = reinterpret_cast<std::uintptr_t>(this);
         static std::unordered_set<std::uintptr_t> captured_contexts;
-        if (std::getenv("EDEN_NATIVE_FRAME_CAPTURE") && captured_contexts.insert(context).second) {
+        static const bool capture = std::getenv("EDEN_NATIVE_FRAME_CAPTURE") != nullptr;
+        if (capture && captured_contexts.insert(context).second) {
             std::ofstream dump("native-graphics-mme-" + std::to_string(context) + ".bin", std::ios::binary);
             dump.write(reinterpret_cast<const char*>(native_code.data()), sizeof(native_code));
         }
@@ -1393,7 +1394,8 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             });
         if (!result.success) {
             native_execution_failed = true;
-            if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+            if (static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+                diagnostics) {
                 std::ofstream dump("native-mme-" + std::to_string(method) + ".bin", std::ios::binary);
                 dump.write(reinterpret_cast<const char*>(native_code.data()), sizeof(native_code));
             }

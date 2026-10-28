@@ -15,7 +15,7 @@ class Rsp:
         import time
         for _ in range(240):  # wait up to ~2 min for the stub to listen
             try:
-                self.s = socket.create_connection(("127.0.0.1", port), timeout=600)
+                self.s = socket.create_connection(("127.0.0.1", port), timeout=3600)
                 break
             except OSError:
                 time.sleep(0.5)
@@ -139,6 +139,47 @@ def main():
                 prev = pc
                 if pc == stop_at:
                     break
+        elif op == "hits":
+            # hits <max> <addr>...: break at the addresses and, on each hit, print the registers,
+            # the frame-pointer chain and the 0x40 bytes at x0, then step past and continue.
+            # Stops after <max> hits or when the target stops anywhere else.
+            limit, addrs = int(parts[1]), [int(a, 16) for a in parts[2:]]
+            for a in addrs:
+                rsp.cmd(f"Z0,{a:x},4")
+            for hit in range(limit):
+                reason = rsp.cmd("c")
+                # Several threads can stop at once: read and step the one this reply names.
+                tid = re.search(r"thread:([0-9a-f]+);", reason)
+                if tid:
+                    rsp.cmd(f"Hg{tid.group(1)}")
+                r = rsp.regs()
+                pc = r.get("pc", 0)
+                stamp = time.strftime("%H:%M:%S")
+                label = (f"hit {hit}" if pc in addrs else f"stopped elsewhere ({reason})") +                     (f" thread {tid.group(1)}" if tid else "")
+                print(f"[{stamp}] {label} pc={pc:#x} " + " ".join(
+                    f"{k}={r.get(k, 0):#x}" for k in ("x0", "x1", "x2", "x19", "x20", "x21", "x30", "sp")), flush=True)
+                obj = rsp.mem(r.get("x0", 0), 0x40)
+                if len(obj) == 0x40:
+                    print("   *x0: " + " ".join(f"{w:016x}" for w in struct.unpack("<8Q", obj)), flush=True)
+                fp = r.get("x29", 0)
+                chain = []
+                for _ in range(16):
+                    d = rsp.mem(fp, 16)
+                    if len(d) < 16:
+                        break
+                    nfp, ret = struct.unpack("<QQ", d)
+                    chain.append(f"{ret & 0xFFFFFFFFFFFF:x}")
+                    if nfp <= fp:
+                        break
+                    fp = nfp
+                print("   bt " + " ".join(chain), flush=True)
+                if pc not in addrs:
+                    break
+                rsp.cmd(f"z0,{pc:x},4")
+                rsp.cmd("s")
+                rsp.cmd(f"Z0,{pc:x},4")
+            for a in addrs:
+                rsp.cmd(f"z0,{a:x},4")
         elif op == "continue":
             print("stop:", rsp.cmd("c"))
         elif op == "continue_async":

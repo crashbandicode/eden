@@ -288,7 +288,10 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     submitted = true;
     static u32 native_capture_count{};
     if (maxwell3d->GetNativeMacroEngine().native_turing &&
-        std::getenv("EDEN_NATIVE_DRAW_CAPTURE") && native_capture_count < 16) {
+        native_capture_count < 16 && [] {
+            static const bool capture = std::getenv("EDEN_NATIVE_DRAW_CAPTURE") != nullptr;
+            return capture;
+        }()) {
         const u32 capture = native_capture_count++;
         const auto prefix = fmt::format("native-draw-{}", capture);
         const auto dump = [&](const std::string& name, GPUVAddr address, size_t size) {
@@ -1252,7 +1255,8 @@ std::optional<FramebufferTextureInfo> RasterizerVulkan::AccelerateDisplay(
     const auto [image_view, scaled] =
         texture_cache.TryFindFramebufferImageView(config, framebuffer_addr);
     static u32 display_trace_count{};
-    if (std::getenv("EDEN_NATIVE_FRAME_CAPTURE") && display_trace_count++ < 64) {
+    static const bool frame_capture = std::getenv("EDEN_NATIVE_FRAME_CAPTURE") != nullptr;
+    if (frame_capture && display_trace_count++ < 64) {
         LOG_INFO(HW_GPU, "Native display source: address={:#x}, offset={:#x}, dimensions={}x{}, stride={}, accelerated={}, mask={:#x}",
                  framebuffer_addr, config.offset, config.width, config.height, pixel_stride,
                  image_view != nullptr, config.layer_stack_mask);

@@ -134,7 +134,8 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             });
         if (!result.success) {
             native_macro->native_execution_failed = true;
-            if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+            if (static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+                diagnostics) {
                 std::ofstream dump("native-compute-mme.bin", std::ios::binary);
                 dump.write(reinterpret_cast<const char*>(native_macro->native_code.data()), sizeof(native_macro->native_code));
             }
@@ -162,7 +163,8 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         LOG_DEBUG(HW_GPU, "Native inline QMD: address={:#x}, program={:#x}, control={:#x}, grid={}/{}/{}",
             address, program, control, native_registers[0xc8 + 12],
             native_registers[0xc8 + 13] & 0xffff, native_registers[0xc8 + 14] & 0xffff);
-        if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+        if (static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+            diagnostics) {
             std::ofstream dump("native-inline-qmd.bin", std::ios::binary);
             dump.write(reinterpret_cast<const char*>(native_registers.data() + 0xc8), 256);
             std::ofstream registers("native-inline-compute-registers.bin", std::ios::binary);
@@ -203,7 +205,8 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             memory_manager.GpuToCpuAddress(qmd_address).value_or(0), method, argument, 0);
         if (method == 0xae || (method == 0xaf && !(argument & 2)) ||
             (method == 0xb0 && ((argument & 15) == 0 || (argument & 15) == 1))) return true;
-        if ((argument & 15) == 12 && std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+        static const bool qmd_diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+        if ((argument & 15) == 12 && qmd_diagnostics) {
             static u32 captured{};
             if (captured++ == 0 && memory_manager.IsFullyMappedRange(qmd_address, 256)) {
                 std::array<u32, 64> descriptor{};
@@ -288,7 +291,7 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         if (memory_manager.IsFullyMappedRange(qmd_address, sizeof(qmd))) {
             memory_manager.ReadBlockUnsafe(qmd_address, qmd.data(), sizeof(qmd));
         }
-        if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") && memory_manager.IsFullyMappedRange(qmd_address, sizeof(qmd))) {
+        if (qmd_diagnostics && memory_manager.IsFullyMappedRange(qmd_address, sizeof(qmd))) {
             std::ofstream dump("native-qmd.bin", std::ios::binary);
             dump.write(reinterpret_cast<const char*>(qmd.data()), sizeof(qmd));
             std::ofstream macros("native-dispatch-mme.bin", std::ios::binary);

@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <iterator>
+#include <fstream>
 #include <vector>
 #include <cstdlib>
 #include <chrono>
@@ -331,7 +333,7 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         state->system.InitializeDebugger();
     return SDL_APP_CONTINUE;
 }
-// EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,...": press (code) or release (-code) keyboard
+// EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,..." (or "@<file>"): press (code) or release (-code) keyboard
 // keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
 double Nx2KeyClockSeconds(); // emu_window_sdl3.cpp
 
@@ -344,7 +346,13 @@ static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
     static const std::vector<KeyEvent> script = [] {
         std::vector<KeyEvent> events;
         if (const char* text = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
+            // "@<file>" reads the list from a file: long scripts in the environment slow down
+            // every getenv in the process.
             std::string list{text};
+            if (!list.empty() && list[0] == '@') {
+                std::ifstream file{list.substr(1)};
+                list.assign(std::istreambuf_iterator<char>{file}, {});
+            }
             size_t start = 0;
             while (start < list.size()) {
                 const size_t end = std::min(list.find(',', start), list.size());

@@ -1966,11 +1966,13 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 break;
             }
             if (insn.Bits(72, 1) || insn.Bits(74, 1) || insn.Bits(80, 1) || insn.Bits(81, 3) != 7 ||
-                (opcode == 0x211 && insn.Bits(62, 2))) return fail(index, "native LEA carry/high mode");
+                (opcode == 0x211 && insn.Bits(62, 1))) return fail(index, "native LEA carry/high mode");
+            // 0x211 bit 63 negates Rb (LEA Rd, Ra, -Rb, s), as Maxwell ISCADD's bit 48.
             u32 b = insn.Bits(32, 8);
             if (opcode == 0x811) { mov_imm(251, insn.words[1]); b = 251; }
             emit(base(0x5c18000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) |
-                 (u64{b} << 20) | (u64{insn.Bits(75, 5)} << 39));
+                 (u64{b} << 20) | (u64{insn.Bits(75, 5)} << 39) |
+                 (u64{opcode == 0x211 ? insn.Bits(63, 1) : 0U} << 48));
             break;
         }
         case 0x210: case 0x810: case 0xa10: case 0xc10: { // IADD3 with zero third source and no carry outputs

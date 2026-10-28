@@ -597,7 +597,7 @@ void TextureCache<P>::WriteMemory(DAddr cpu_addr, size_t size) {
 
 template <class P>
 bool TextureCache<P>::IsDownloadable(const ImageBase& image) const noexcept {
-    if (!image.IsSafeGpuCopy()) {
+    if (!image.IsSafeGpuCopy() || True(image.flags & ImageFlagBits::Unbacked)) {
         return false;
     }
     if (image.info.num_samples == 1) {
@@ -1145,6 +1145,12 @@ void TextureCache<P>::RefreshContents(Image& image, ImageId image_id) {
     image.flags &= ~ImageFlagBits::CpuModified;
 
     TrackImage(image, image_id);
+
+    if (True(image.flags & ImageFlagBits::Unbacked)) {
+        // Nothing to upload into (and staging it could take tens of GB).
+        runtime.TransitionImageLayout(image);
+        return;
+    }
 
     if (image.info.num_samples > 1 && !runtime.CanUploadMSAA()) {
         LOG_WARNING(HW_GPU, "MSAA image uploads are not implemented");
@@ -2669,7 +2675,8 @@ void TextureCache<P>::BindRenderTarget(ImageViewId* old_id, ImageViewId new_id) 
     }
     if (new_id) {
         const ImageViewBase& old_view = slot_image_views[new_id];
-        if (True(old_view.flags & ImageViewFlagBits::PreemtiveDownload)) {
+        if (True(old_view.flags & ImageViewFlagBits::PreemtiveDownload) &&
+            False(slot_images[old_view.image_id].flags & ImageFlagBits::Unbacked)) {
             const PendingDownload new_download{true, 0, old_view.image_id};
             uncommitted_downloads.emplace_back(new_download);
         }

@@ -45,6 +45,7 @@ enum class ImageFlagBits : u32 {
 
     AsynchronousDecode = 1 << 16,
     IsDecoding = 1 << 17, ///< Is currently being decoded asynchronously.
+    Unbacked = 1 << 18,   ///< Host image has no memory (too big to back); never upload/download.
 };
 DECLARE_ENUM_FLAG_OPERATORS(ImageFlagBits)
 

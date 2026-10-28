@@ -1879,6 +1879,9 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
       original_image(MakeImage(runtime_.device, runtime_.memory_allocator, info,
                                runtime->ViewFormats(info.format))),
       aspect_mask(ImageAspectMask(info.format)) {
+    if (original_image.IsUnbacked()) {
+        flags |= VideoCommon::ImageFlagBits::Unbacked;
+    }
     if (IsPixelFormatASTC(info.format) && !runtime->device.IsOptimalAstcSupported()) {
         switch (Settings::values.accelerate_astc.GetValue()) {
         case Settings::AstcDecodeMode::Gpu:

@@ -8,10 +8,12 @@
 #include <bitset>
 #include <cstdlib>
 #include <fstream>
+#include <optional>
 #include "common/assert.h"
 #include "common/logging.h"
 #include "shader_recompiler/exception.h"
 #include "core/core.h"
+#include "video_core/engines/fermi_2d.h"
 #include "video_core/engines/kepler_compute.h"
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/memory_manager.h"
@@ -396,9 +398,143 @@ bool KeplerCompute::DispatchNativeCompute(const NativeQmdScheduler::Descriptor& 
         rasterizer->DispatchCompute();
     } catch (const Shader::Exception& error) {
         LOG_ERROR(HW_GPU, "Native compute shader rejected: {}", error.what());
+        if (std::string_view{error.what()}.find("matrix multiply") != std::string_view::npos) {
+            DescribeNativeResources(qmd);
+            // The console runs this on tensor cores; stand in with a plain upscale of its input.
+            return UpscaleInsteadOfNativeProgram();
+        }
         return false;
     }
     return true;
+}
+
+// Logs the images a rejected program's handles (constant bank 0, bytes 0x80-0x11c) point to, so a
+// substitute (e.g. an upscale blit for a tensor-core pass) can find its inputs and output.
+void KeplerCompute::DescribeNativeResources(const NativeQmdScheduler::Descriptor& qmd) {
+    static u32 described{};
+    if (described++ >= 2) return;
+    const auto& cbuf = launch_description.const_buffer_config[0];
+    const GPUVAddr cbuf_address = (GPUVAddr{cbuf.address_high} << 32) | cbuf.address_low;
+    LOG_INFO(HW_GPU, "Native resources: cbuf0 {:#x} size {:#x}, grid {}x{}x{}, block {}x{}x{}, tic pool {:#x}",
+             cbuf_address, cbuf.size.Value(), qmd[12], qmd[13] & 0xffff, qmd[14] & 0xffff,
+             launch_description.block_dim_x.Value(), launch_description.block_dim_y.Value(),
+             launch_description.block_dim_z.Value(), regs.tic.Address());
+    for (u32 offset = 0x80; offset < 0x120; offset += 4) {
+        const u32 handle = memory_manager.Read<u32>(cbuf_address + offset);
+        const u32 tic_index = handle & 0xfffff;
+        if (handle == 0 || tic_index > regs.tic.limit) continue;
+        const auto tic = GetTICEntry(tic_index);
+        LOG_INFO(HW_GPU, "  handle @{:#x} = {:#x}: tic {} address {:#x} {}x{} format {:#x} types {}/{}/{}/{}",
+                 offset, handle, tic_index, tic.Address(), tic.Width(), tic.Height(),
+                 static_cast<u32>(tic.format.Value()), static_cast<u32>(tic.r_type.Value()),
+                 static_cast<u32>(tic.g_type.Value()), static_cast<u32>(tic.b_type.Value()),
+                 static_cast<u32>(tic.a_type.Value()));
+    }
+}
+
+// Title 4's upscaler reads the tonemapped frame through the texture handle at cbuf0+0x90 and
+// writes the output resolution image through the surface handle at cbuf0+0xa0 (from its
+// TLD/SUST operands). Blit one to the other with bilinear filtering when both are plain 2D images
+// of the same format and the output is larger.
+bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
+    const auto& cbuf = launch_description.const_buffer_config[0];
+    const GPUVAddr cbuf_address = (GPUVAddr{cbuf.address_high} << 32) | cbuf.address_low;
+    const auto image = [&](u32 offset) -> std::optional<Texture::TICEntry> {
+        const u32 tic_index = memory_manager.Read<u32>(cbuf_address + offset) & 0xfffff;
+        if (tic_index > regs.tic.limit) return std::nullopt;
+        return GetTICEntry(tic_index);
+    };
+    const auto input = image(0x90), output = image(0xa0);
+    if (!input || !output || input->format != output->format || input->Address() == 0 ||
+        output->Address() == 0 || output->Width() <= input->Width() || !input->IsBlockLinear() ||
+        !output->IsBlockLinear())
+        return false;
+    using RTFormat = Tegra::RenderTargetFormat;
+    RTFormat format{};
+    switch (input->format) {
+    case Texture::TextureFormat::A2B10G10R10: format = RTFormat::A2B10G10R10_UNORM; break;
+    case Texture::TextureFormat::A8B8G8R8: format = RTFormat::A8B8G8R8_UNORM; break;
+    case Texture::TextureFormat::B10G11R11: format = RTFormat::B10G11R11_FLOAT; break;
+    case Texture::TextureFormat::R16G16B16A16: format = RTFormat::R16G16B16A16_FLOAT; break;
+    default: return false;
+    }
+    const auto surface = [&](const Texture::TICEntry& tic) {
+        Fermi2D::Surface result{};
+        result.format = format;
+        result.linear = Fermi2D::MemoryLayout::BlockLinear;
+        result.block_width.Assign(tic.block_width);
+        result.block_height.Assign(tic.block_height);
+        result.block_depth.Assign(tic.block_depth);
+        result.depth = 1;
+        result.width = tic.Width();
+        result.height = tic.Height();
+        result.addr_upper = static_cast<u32>(tic.Address() >> 32);
+        result.addr_lower = static_cast<u32>(tic.Address());
+        return result;
+    };
+    const Fermi2D::Config config{
+        .operation = Fermi2D::Operation::SrcCopy,
+        .filter = Fermi2D::Filter::Bilinear,
+        .must_accelerate = true,
+        .dst_x0 = 0,
+        .dst_y0 = 0,
+        .dst_x1 = static_cast<s32>(output->Width()),
+        .dst_y1 = static_cast<s32>(output->Height()),
+        .src_x0 = 0,
+        .src_y0 = 0,
+        .src_x1 = static_cast<s32>(input->Width()),
+        .src_y1 = static_cast<s32>(input->Height()),
+    };
+    // Debug: does the input hold anything? Download it once and count non-zero words.
+    if (static u32 sampled{}; sampled++ == 20) {
+        const auto sample = [&](const Texture::TICEntry& tic) {
+            const u64 size = u64{tic.Width()} * tic.Height() * 4;
+            if (const auto device = memory_manager.GpuToCpuAddress(tic.Address())) {
+                rasterizer->FlushRegion(*device, size, VideoCommon::CacheType::All);
+            }
+            u32 nonzero{}, samples{};
+            u64 sum{};
+            for (u64 offset = 0; offset < size; offset += 4096 + 4) {
+                const u32 word = memory_manager.Read<u32>(tic.Address() + offset);
+                ++samples;
+                nonzero += word != 0;
+                sum += (word & 0x3ff) + ((word >> 10) & 0x3ff) + ((word >> 20) & 0x3ff);
+            }
+            LOG_INFO(HW_GPU, "Upscale fallback image {:#x}: {}/{} sampled words non-zero, mean channel {}",
+                     tic.Address(), nonzero, samples, samples ? sum / (samples * 3) : 0);
+        };
+        sample(*input);
+        sample(*output);
+        // Every 2560x1440 target the in-game passes draw to (from EDEN_NX2_RT_TRACE).
+        for (const GPUVAddr address : {0x8116a03000ULL, 0x8117ae5000ULL, 0x8114b62000ULL,
+                                       0x8115a63000ULL, 0x8117904000ULL, 0x8114a02000ULL}) {
+            Texture::TICEntry fake = *input;
+            const u64 size = 2560ULL * 1440 * 4;
+            if (const auto device = memory_manager.GpuToCpuAddress(address)) {
+                rasterizer->FlushRegion(*device, size, VideoCommon::CacheType::All);
+            }
+            u32 nonzero{}, samples{}, distinct{};
+            u32 last{};
+            for (u64 offset = 0; offset < size; offset += 4096 + 4) {
+                const u32 word = memory_manager.Read<u32>(address + offset);
+                ++samples;
+                nonzero += word != 0;
+                distinct += word != last;
+                last = word;
+            }
+            LOG_INFO(HW_GPU, "Upscale fallback target {:#x}: {}/{} non-zero, {} changes", address, nonzero,
+                     samples, distinct);
+            (void)fake;
+        }
+    }
+    const bool done = rasterizer->AccelerateSurfaceCopy(surface(*input), surface(*output), config);
+    static u32 logged{};
+    if (logged++ < 4) {
+        LOG_INFO(HW_GPU, "Upscale fallback {:#x} {}x{} -> {:#x} {}x{}: {}", input->Address(),
+                 input->Width(), input->Height(), output->Address(), output->Width(),
+                 output->Height(), done ? "blitted" : "not accelerated");
+    }
+    return done;
 }
 
 void KeplerCompute::ProcessLaunch() {

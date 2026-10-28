@@ -891,12 +891,20 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             // g / g+8 at columns 2i, 2i+1. Rebuilt from shuffles with HFMA2, accumulating in R252/R253.
             // The expansion is correct but large: title 4's 372-HMMA network takes the host driver
             // minutes to compile, so it stays opt-in (the QMD still completes when rejected).
-            static const bool enabled = std::getenv("EDEN_NX2_TENSOR") != nullptr;
-            if (!enabled) return fail(index, "native matrix multiply (set EDEN_NX2_TENSOR to emulate)");
+            // EDEN_NX2_TENSOR=stub keeps the rest of the program but makes every HMMA D = C.
+            static const char* const mode = std::getenv("EDEN_NX2_TENSOR");
+            if (!mode) return fail(index, "native matrix multiply (set EDEN_NX2_TENSOR to emulate)");
             const u32 a = insn.Bits(24, 8), b = insn.Bits(32, 8), c = insn.Bits(64, 8);
             if ((insn.words[1] & ~0xffU) || (insn.words[2] & ~0xffU) != 0x800 || dest + 2 > 246 ||
                 a + 4 > 246 || b + 2 > 246 || (c != 255 && c + 2 > 246))
                 return fail(index, "native matrix multiply mode");
+            if (std::string_view{mode} == "stub") {
+                for (u32 row = 0; row < 2; ++row) {
+                    if (c == 255) mov_imm(static_cast<u32>(dest) + row, 0);
+                    else if (c != dest) emit(0x5c98000000000000ULL | predicate | (dest + row) | (u64{15} << 39) | (u64{c + row} << 20));
+                }
+                break;
+            }
             const auto shuffle = [&](u32 target, u32 source_reg) {
                 emit(0xef10000000000000ULL | predicate | target | (u64{source_reg} << 8) | (u64{246} << 20) |
                      (u64{1} << 29) | (u64{31} << 34) | (u64{7} << 48));

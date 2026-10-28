@@ -399,6 +399,35 @@ void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
     TraceWindowTarget(*maxwell3d, *gpu_memory, is_indexed ? "draw-indexed" : "draw",
                       is_indexed ? maxwell3d->draw_manager.draw_state.index_buffer.count
                                  : maxwell3d->draw_manager.draw_state.vertex_buffer.count);
+    // EDEN_NX2_CB24_TRACE: for draws whose vertex shader reads bank 24, show the inline
+    // constant buffer upload target (CB_ADDRESS) and its first words.
+    if (static const bool trace = std::getenv("EDEN_NX2_CB24_TRACE") != nullptr; trace) {
+        const auto& regs = maxwell3d->regs;
+        const u64 vs = (u64{regs.pipelines[1].reserved[0] & 0xff} << 32) | regs.pipelines[1].reserved[1];
+        static u32 logged{};
+        if ((vs == 0x11471c9a00 || vs == 0x11471ca600 || vs == 0x11471cd300) && logged++ < 3) {
+            std::array<u32, 24> words{};
+            gpu_memory->ReadBlockUnsafe(regs.const_buffer.Address(), words.data(), sizeof(words));
+            LOG_INFO(HW_GPU, "bank24 draw vs={:#x}: CB_ADDRESS {:#x} size {:#x} offset {:#x}: {:08x}", vs,
+                     regs.const_buffer.Address(), regs.const_buffer.size, regs.const_buffer.offset,
+                     fmt::join(words, " "));
+            // Search every bound vertex-stage buffer for render-target-size values.
+            const auto& stage = maxwell3d->state.shader_stages[0];
+            for (u32 slot = 0; slot < Tegra::Engines::Maxwell3D::Regs::MaxConstBuffers; ++slot) {
+                const auto& buffer = stage.const_buffers[slot];
+                if (!buffer.enabled || buffer.size == 0) continue;
+                std::vector<u32> data(std::min<u32>(buffer.size, 0x10000) / 4);
+                gpu_memory->ReadBlockUnsafe(buffer.address, data.data(), data.size() * 4);
+                for (size_t i = 0; i < data.size(); ++i) {
+                    const u32 w = data[i];
+                    if (w == 0x45200000 || w == 0x44b40000 || w == 0x39cccccd || w == 0x3a360b61 ||
+                        w == 0x44a00000 || w == 0x44340000 || w == 2559 || w == 1439) {
+                        LOG_INFO(HW_GPU, "  slot {} +{:#x} = {:#x}", slot, i * 4, w);
+                    }
+                }
+            }
+        }
+    }
     // EDEN_NX2_RT_TRACE: log the first draw to every distinct colour target (debug aid).
     if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
         static std::set<std::tuple<GPUVAddr, u32, u32, u64, u64>> seen;

@@ -544,7 +544,8 @@ private:
     bool immediately_free = false;
 #endif
 
-    std::array<BufferId, ((1ULL << 34) >> CACHING_PAGEBITS)> page_table;
+    // Covers the device address space (MaxwellDeviceTraits::device_virtual_bits).
+    std::array<BufferId, ((1ULL << 36) >> CACHING_PAGEBITS)> page_table;
     Common::ScratchBuffer<u8> tmp_buffer;
 };
 

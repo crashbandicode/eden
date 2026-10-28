@@ -157,7 +157,7 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 99 | VRAM over the card (8.4-9.8 GB used on an 8 GB RTX 4070 Laptop), texture cache always collecting | ~700 ASTC 8x8 textures decoded to RGBA8 (16x their size, ~4.5 GB) | astc_recompression=Bc3 + accelerate_astc=CpuAsynchronous in the config; huge ASTC arrays stay on the GPU decoder as trimmed RGBA8 (ed0a3c9): 4.6-5.6 GB, ~10 -> 16 fps |
 | 100 | 8 ImageTranscode threads at ~44% each (3.5 cores) | Eden's default pool is half the hardware threads | an eighth, at least 2 (`EDEN_NX2_TRANSCODE_THREADS` overrides): ~19 fps on the attract loop |
 | 101 | Medal's capture hook inside Eden (`medal_hook64!OBS_Negotiate` in GPU-thread stacks) | Medal registers a per-user Vulkan implicit layer that loads into every Vulkan app | launches set `DISABLE_VULKAN_MEDAL_OBS_CAPTURE=1` (the layer's own off switch) |
-| 102 | host crash (log stops, segfault) at 113 s in one run with 4 transcode threads | unknown; first seen after the BC3 change | open: catching with play1_cdb.sh |
+| 102 | host crash (log stops, segfault) at 113 s in one run; under cdb "Free Heap block modified after it was freed" at 243 s, twice | Eden's TickAsyncDecode erased a finished decode while still holding its mutex (unlocked freed memory); only reached with accelerate_astc=CpuAsynchronous (the BC3 setup) | release the lock first, cancel decodes of deleted images (8766a72); clean past 330 s. Also made nx2 service callbacks (vsync timer, syncpt actions, capture/dump) independent of their sessions' lifetime (190747a) |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,

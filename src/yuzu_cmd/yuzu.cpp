@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include <iterator>
 #include <fstream>
 #include <vector>
@@ -66,6 +67,44 @@ extern "C" {
 // graphics
 __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
+// EDEN_NX2_CRASH_DUMP=<dir>: on an unhandled exception (a real crash; fastmem faults are handled
+// before this), write <dir>/eden-crash-<pid>.dmp. A debugger changes the timing enough to hide
+// some crashes, so this catches them at full speed. dbghelp.dll is loaded only then.
+static LONG WINAPI WriteCrashDump(EXCEPTION_POINTERS* exception) {
+    static std::atomic<bool> written{};
+    const char* directory = std::getenv("EDEN_NX2_CRASH_DUMP");
+    if (directory == nullptr || written.exchange(true)) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    struct ExceptionInformation {
+        DWORD thread_id;
+        EXCEPTION_POINTERS* exception_pointers;
+        BOOL client_pointers;
+    };
+    using MiniDumpWriteDumpFn = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, int, const ExceptionInformation*,
+                                              const void*, const void*);
+    const HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
+    const auto write = dbghelp ? reinterpret_cast<MiniDumpWriteDumpFn>(
+                                     GetProcAddress(dbghelp, "MiniDumpWriteDump"))
+                               : nullptr;
+    if (write == nullptr) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    char path[MAX_PATH];
+    std::snprintf(path, sizeof(path), "%s\\eden-crash-%lu.dmp", directory, GetCurrentProcessId());
+    const HANDLE file = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        const ExceptionInformation information{GetCurrentThreadId(), exception, FALSE};
+        // MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo
+        write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x40 | 0x1000, &information,
+              nullptr, nullptr);
+        CloseHandle(file);
+        std::fprintf(stderr, "Crash dump written to %s\n", path);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
 
@@ -172,6 +211,9 @@ struct SdlState {
 };
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(WriteCrashDump);
+#endif
     // SDL calls SDL_AppIterate back to back by default, which kept a host core at 100% polling
     // input; 240 Hz is plenty for input and the key script.
     SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "240");

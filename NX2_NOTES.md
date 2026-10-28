@@ -123,6 +123,8 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 65 | fullscreen blit passes read constant bank 24 | console-provided blit parameter block, never bound by the game | bank 24 -> 17, synthesized from the render area by BlitConstantsPass in vertex and fragment shaders (22333bd, d75e57d) |
 | 66 | synthesized blit sizes were 0 | the game never programs surface_clip, which feeds Eden's render area | fall back to colour target 0's size (d75e57d) |
 | 67 | tonemap output black | the 3D colour-grading LUT is drawn once per scene by a pixel shader using CALL.REL.NOINC; capture treated it as a real call, never found the end and rejected the shader | NOINC calls count as forward branches in capture (4d58a74). **Intro cutscene renders correctly** |
+| 68 | crash ~5 s after the save that follows character customization (garbage pointers in two threads) | nx2:gpu 213 (unmap) and 102 (destroy GPU memory) were no-ops; the game reuses the freed memory as heap and stale GPU write-backs overwrote it | unmap from every address space, drop freed semaphore regions (bed817c); not yet confirmed past customization: frame-locked replays desync across loading screens |
+| 69 | hatched edges on UI portraits, buttons, squid cursor | UI textures are ASTC; the GPU ASTC decoder ignored the Switch 2 GOB swizzle | apply it in astc_decoder.comp (7fa2b46) |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,

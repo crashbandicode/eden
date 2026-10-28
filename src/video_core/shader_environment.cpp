@@ -338,8 +338,19 @@ void GenericEnvironment::InitializeNativeCode(u32 source_header_size) {
         auto& instruction = native.emplace_back();
         gpu_memory->ReadBlock(address, &instruction, sizeof(instruction));
         const auto status = capture.Observe(instruction, index);
-        if (status == Shader::Ampere::ProgramCaptureState::Result::InvalidTarget)
-            throw Shader::RuntimeError("Native shader branch outside capture bounds");
+        if (status == Shader::Ampere::ProgramCaptureState::Result::InvalidTarget) {
+            if (const char* dir = std::getenv("EDEN_NX2_SHADER_DUMP")) {
+                const auto path = fmt::format("{}/rejected-{:x}.bin", dir, program_base + native_header_size);
+                if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
+                    std::fwrite(native.data(), sizeof(Instruction), std::min<size_t>(native.size(), 4096), file);
+                    std::fclose(file);
+                }
+            }
+            throw Shader::RuntimeError("Native shader branch outside capture bounds at {:#x} +{:#x} [{:08x} {:08x} {:08x} {:08x}]",
+                                       program_base + native_header_size, index * 16,
+                                       instruction.words[0], instruction.words[1],
+                                       instruction.words[2], instruction.words[3]);
+        }
         if (status == Shader::Ampere::ProgramCaptureState::Result::Complete) break;
     }
     auto lowered = Shader::Ampere::LowerToMaxwell(native);

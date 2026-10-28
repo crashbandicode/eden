@@ -160,6 +160,40 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
           info.size.depth == 1;
 }
 
+// The host shape of an image whose decoded copy would not fit in VRAM: a GPU-decoded ASTC array
+// over 1 GiB as RGBA8 (title 1's 8192x8192x68 ASTC 8x8 virtual textures are 24 GB each) keeps only
+// its mip levels from `level_offset` on, so host mip 0 is guest mip `level_offset`. Normalized
+// coordinates and derivative LOD still address it correctly; explicit LODs sample one level lower.
+[[nodiscard]] ImageInfo TrimmedHostInfo(const Device& device, const ImageInfo& info, u32& level_offset) {
+    level_offset = 0;
+    if (!WillUseAcceleratedAstcDecode(device, info) || info.type != ImageType::e2D) {
+        return info;
+    }
+    const auto decoded_bytes = [&](u32 skip) {
+        u64 bytes = 0;
+        for (s32 level = static_cast<s32>(skip); level < info.resources.levels; ++level) {
+            bytes += u64{(std::max)(info.size.width >> level, 1U)} *
+                     (std::max)(info.size.height >> level, 1U) * 4;
+        }
+        return bytes * info.resources.layers;
+    };
+    if (decoded_bytes(0) <= (u64{1} << 30)) {
+        return info;
+    }
+    while (level_offset + 1 < static_cast<u32>(info.resources.levels) &&
+           decoded_bytes(level_offset) > (u64{512} << 20)) {
+        ++level_offset;
+    }
+    ImageInfo host = info;
+    host.size.width = (std::max)(info.size.width >> level_offset, 1U);
+    host.size.height = (std::max)(info.size.height >> level_offset, 1U);
+    host.resources.levels -= static_cast<s32>(level_offset);
+    LOG_WARNING(Render_Vulkan, "{}x{}x{} ASTC image would be {} MiB decoded; keeping mip levels {}+ ({}x{})",
+                info.size.width, info.size.height, info.resources.layers, decoded_bytes(0) >> 20,
+                level_offset, host.size.width, host.size.height);
+    return host;
+}
+
 [[nodiscard]] VkImageCreateInfo MakeImageCreateInfo(const Device& device, const ImageInfo& info,
                                                     std::optional<VkFormat> format_override = {}) {
     auto format_info =
@@ -525,6 +559,20 @@ TransformBufferCopies(std::span<const VideoCommon::BufferCopy> copies, size_t bu
         .baseArrayLayer = static_cast<u32>(range.base.layer),
         .layerCount = static_cast<u32>(range.extent.layers),
     };
+}
+
+// A guest view's levels on a host image that keeps only levels >= host_level_offset.
+[[nodiscard]] SubresourceRange HostRange(const Image& image, SubresourceRange range) {
+    const s32 skip = static_cast<s32>(image.host_level_offset);
+    if (skip == 0) {
+        return range;
+    }
+    const s32 host_levels = image.info.resources.levels - skip;
+    const s32 base = std::clamp(range.base.level - skip, 0, host_levels - 1);
+    const s32 end = std::clamp(range.base.level + range.extent.levels - skip, base + 1, host_levels);
+    range.base.level = base;
+    range.extent.levels = end - base;
+    return range;
 }
 
 [[nodiscard]] VkImageSubresourceRange MakeSubresourceRange(const ImageView* image_view) {
@@ -1876,11 +1924,15 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
              VAddr cpu_addr_)
     : VideoCommon::ImageBase(info_, gpu_addr_, cpu_addr_), scheduler{&runtime_.scheduler},
       runtime{&runtime_},
-      original_image(MakeImage(runtime_.device, runtime_.memory_allocator, info,
+      original_image(MakeImage(runtime_.device, runtime_.memory_allocator,
+                               TrimmedHostInfo(runtime_.device, info, host_level_offset),
                                runtime->ViewFormats(info.format))),
       aspect_mask(ImageAspectMask(info.format)) {
     if (original_image.IsUnbacked()) {
         flags |= VideoCommon::ImageFlagBits::Unbacked;
+    }
+    if (host_level_offset != 0) {
+        flags |= VideoCommon::ImageFlagBits::TrimmedLevels;
     }
     if (IsPixelFormatASTC(info.format) && !runtime->device.IsOptimalAstcSupported()) {
         switch (Settings::values.accelerate_astc.GetValue()) {
@@ -1906,11 +1958,12 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
         original_image.SetObjectNameEXT(VideoCommon::Name(*this).c_str());
     }
     current_image = &Image::original_image;
-    storage_image_views.resize(info.resources.levels);
+    const s32 host_levels = info.resources.levels - static_cast<s32>(host_level_offset);
+    storage_image_views.resize(host_levels);
     if (WillUseAcceleratedAstcDecode(runtime->device, info)) {
         const auto& device = runtime->device.GetLogical();
         const VkFormat storage_format = VK_FORMAT_A8B8G8R8_UNORM_PACK32;
-        for (s32 level = 0; level < info.resources.levels; ++level) {
+        for (s32 level = 0; level < host_levels; ++level) {
             storage_image_views[level] =
                 MakeStorageView(device, level, *original_image, storage_format);
         }
@@ -2575,7 +2628,7 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageViewI
         .viewType = VkImageViewType{},
         .format = format_info.format,
         .components = swizzle_mapping,
-        .subresourceRange = MakeSubresourceRange(aspect_mask, info.range),
+        .subresourceRange = MakeSubresourceRange(aspect_mask, HostRange(image, info.range)),
     };
     const auto create = [&](TextureType tex_type, std::optional<u32> num_layers) {
         VkImageViewCreateInfo ci{create_info};

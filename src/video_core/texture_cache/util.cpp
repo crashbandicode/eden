@@ -1298,6 +1298,13 @@ void DeduceBlitImages(ImageInfo& dst_info, ImageInfo& src_info, const ImageBase*
 }
 
 u32 MapSizeBytes(const ImageBase& image) {
+    if (True(image.flags & ImageFlagBits::AcceleratedUpload) && image.host_level_offset != 0) {
+        // Each layer's mip chain from host_level_offset on (see UploadImageContents).
+        const auto uploads = FullUploadSwizzles(image.info);
+        const u32 tail = image.info.layer_stride -
+                         static_cast<u32>(uploads[image.host_level_offset].buffer_offset);
+        return tail * image.info.resources.layers;
+    }
     if (True(image.flags & ImageFlagBits::AcceleratedUpload)) {
         return image.guest_size_bytes;
     } else if (True(image.flags & ImageFlagBits::Converted)) {

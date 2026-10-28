@@ -597,7 +597,7 @@ void TextureCache<P>::WriteMemory(DAddr cpu_addr, size_t size) {
 
 template <class P>
 bool TextureCache<P>::IsDownloadable(const ImageBase& image) const noexcept {
-    if (!image.IsSafeGpuCopy() || True(image.flags & ImageFlagBits::Unbacked)) {
+    if (!image.IsSafeGpuCopy() || True(image.flags & (ImageFlagBits::Unbacked | ImageFlagBits::TrimmedLevels))) {
         return false;
     }
     if (image.info.num_samples == 1) {
@@ -714,6 +714,14 @@ bool TextureCache<P>::BlitImage(const Tegra::Engines::Fermi2D::Surface& dst,
 
     Image& dst_image = slot_images[dst_id];
     Image& src_image = slot_images[src_id];
+    if (True(dst_image.flags & ImageFlagBits::Unbacked)) {
+        static u32 logged{};
+        if (logged++ < 64) {
+            LOG_INFO(HW_GPU, "2D blit into unbacked image {:#x}: dst {:#x} {}x{} from {:#x} {}x{}",
+                     dst_image.gpu_addr, dst.Address(), dst.width, dst.height, src.Address(),
+                     src.width, src.height);
+        }
+    }
     bool is_src_rescaled = True(src_image.flags & ImageFlagBits::Rescaled);
     bool is_dst_rescaled = True(dst_image.flags & ImageFlagBits::Rescaled);
 
@@ -1186,6 +1194,24 @@ void TextureCache<P>::UploadImageContents(Image& image, StagingBuffer& staging) 
     const std::span<u8> mapped_span = staging.mapped_span;
     const GPUVAddr gpu_addr = image.gpu_addr;
 
+    if (True(image.flags & ImageFlagBits::AcceleratedUpload) && image.host_level_offset != 0) {
+        // Only levels >= host_level_offset exist on the host: read each layer's tail of the mip
+        // chain into a compact buffer (layer stride = that tail's size) and decode those levels.
+        auto uploads = FullUploadSwizzles(image.info);
+        const size_t level_offset = uploads[image.host_level_offset].buffer_offset;
+        const size_t tail = image.info.layer_stride - level_offset;
+        for (s32 layer = 0; layer < image.info.resources.layers; ++layer) {
+            gpu_memory->ReadBlock(gpu_addr + layer * image.info.layer_stride + level_offset,
+                                  mapped_span.data() + layer * tail, tail,
+                                  VideoCommon::CacheType::NoTextureCache);
+        }
+        uploads.erase(uploads.begin(), uploads.begin() + image.host_level_offset);
+        for (auto& upload : uploads) {
+            upload.buffer_offset -= level_offset;
+        }
+        runtime.AccelerateImageUpload(image, staging, uploads, 0, 0);
+        return;
+    }
     if (True(image.flags & ImageFlagBits::AcceleratedUpload)) {
         gpu_memory->ReadBlock(gpu_addr, mapped_span.data(), mapped_span.size_bytes(),
                               VideoCommon::CacheType::NoTextureCache);
@@ -1908,6 +1934,13 @@ ImageId TextureCache<P>::FindDMAImage(const ImageInfo& info, GPUVAddr gpu_addr) 
                 return true;
             }
         } else if (IsSubCopy(info, existing_image, gpu_addr)) {
+            if (True(existing_image.flags & ImageFlagBits::Unbacked)) {
+                static u32 logged{};
+                if (logged++ < 64) {
+                    LOG_INFO(HW_GPU, "DMA copy at {:#x} ({}x{}) into unbacked image {:#x}", gpu_addr,
+                             info.size.width, info.size.height, existing_image.gpu_addr);
+                }
+            }
             image_id = existing_image_id;
             image_ids.push_back(existing_image_id);
             return true;
@@ -2003,6 +2036,13 @@ ImageViewId TextureCache<P>::FindRenderTargetView(const ImageInfo& info, GPUVAdd
         base = image.TryFindBase(gpu_addr).value();
     }
     const s32 layers = image.info.type == ImageType::e3D ? info.size.depth : info.resources.layers;
+    if (True(image.flags & ImageFlagBits::Unbacked)) {
+        static u32 logged{};
+        if (logged++ < 64) {
+            LOG_INFO(HW_GPU, "Render target in unbacked image {:#x} at {:#x}: {}x{} level {} layer {}",
+                     image.gpu_addr, gpu_addr, info.size.width, info.size.height, base.level, base.layer);
+        }
+    }
     const SubresourceRange range{
         .base = base,
         .extent = {.levels = 1, .layers = layers},
@@ -2184,6 +2224,13 @@ ImageViewId TextureCache<P>::FindOrEmplaceImageView(ImageId image_id, const Imag
     Image& image = slot_images[image_id];
     if (const ImageViewId image_view_id = image.FindView(info); image_view_id) {
         return image_view_id;
+    }
+    if (True(image.flags & ImageFlagBits::Unbacked)) {
+        // How the game uses an image too large to back (e.g. a sparse virtual texture).
+        LOG_INFO(HW_GPU, "View of unbacked image {:#x}: type {} format {} levels {}+{} layers {}+{}",
+                 image.gpu_addr, static_cast<u32>(info.type), static_cast<u32>(info.format),
+                 info.range.base.level, info.range.extent.levels, info.range.base.layer,
+                 info.range.extent.layers);
     }
     const ImageViewId image_view_id = slot_image_views.insert(runtime, info, image_id, image, slot_images);
     image.InsertView(info, image_view_id);
@@ -2682,7 +2729,7 @@ void TextureCache<P>::BindRenderTarget(ImageViewId* old_id, ImageViewId new_id) 
     if (new_id) {
         const ImageViewBase& old_view = slot_image_views[new_id];
         if (True(old_view.flags & ImageViewFlagBits::PreemtiveDownload) &&
-            False(slot_images[old_view.image_id].flags & ImageFlagBits::Unbacked)) {
+            False(slot_images[old_view.image_id].flags & (ImageFlagBits::Unbacked | ImageFlagBits::TrimmedLevels))) {
             const PendingDownload new_download{true, 0, old_view.image_id};
             uncommitted_downloads.emplace_back(new_download);
         }

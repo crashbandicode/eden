@@ -13,7 +13,9 @@
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/engines/maxwell_dma.h"
 #include "video_core/engines/puller.h"
+#include "video_core/macro.h"
 #include "video_core/memory_manager.h"
+#include "video_core/nx2.h"
 
 namespace Tegra::Control {
 namespace {
@@ -24,6 +26,17 @@ constexpr u32 NvkComputeSubchannel = 1;
 constexpr u32 NvkM2mfSubchannel = 2;
 constexpr u32 Nvk2DSubchannel = 3;
 constexpr u32 NvkCopySubchannel = 4;
+
+// Switch 2 channels of a process share one TSG, whose graphics context holds the macro RAM.
+std::shared_ptr<NativeMacroContext> Nx2MacroContext() {
+    static const auto context = [] {
+        auto created = std::make_shared<NativeMacroContext>();
+        created->engine.native_turing = true;
+        created->compute_engine.native_turing = true;
+        return created;
+    }();
+    return context;
+}
 
 void BindNvkDefaultSubchannels(ChannelState::Payload& payload) {
     auto& dma_pusher = payload.dma_pusher;
@@ -60,6 +73,16 @@ void ChannelState::Init(Core::System& system, u64 program_id_) {
     program_id = program_id_;
     payload.emplace(system, *memory_manager, *this);
     BindNvkDefaultSubchannels(*payload);
+    if (g_nx2_ampere) {
+        // Switch 2 command streams use Ampere classes with Turing+ (MME64) macros, and its
+        // block-linear surfaces the console's GOB swizzle.
+        memory_manager->EnableNativeTiling();
+        const auto macros = Nx2MacroContext();
+        payload->maxwell_3d.SetNativeMacroContext(macros);
+        payload->maxwell_3d.SetNativeTuringMacroMode(true);
+        payload->kepler_compute.SetNativeMacroMode(&macros->engine, macros->positions,
+                                                   macros.get());
+    }
     initialized = true;
 }
 

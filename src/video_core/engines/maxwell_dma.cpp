@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
 #include "common/algorithm.h"
 #include "common/assert.h"
 #include "common/logging.h"
@@ -63,6 +64,14 @@ void MaxwellDMA::CallMultiMethod(Core::System& system, u32 method, const u32* ba
 
 void MaxwellDMA::Launch() {
     LOG_TRACE(Render_OpenGL, "DMA copy {:#x} -> {:#x}", static_cast<GPUVAddr>(regs.offset_in), GPUVAddr(regs.offset_out));
+    if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
+        static u32 traced{};
+        if (traced++ < 64) {
+            LOG_INFO(HW_GPU, "nx2 DMA {:#x} -> {:#x} lines={} length={} launch={:#x}",
+                     static_cast<GPUVAddr>(regs.offset_in), GPUVAddr(regs.offset_out),
+                     regs.line_count, regs.line_length_in, regs.reg_array[0xc0]);
+        }
+    }
 
     // TODO(Subv): Perform more research and implement all features of this engine.
     const LaunchDMA& launch = regs.launch_dma;
@@ -223,7 +232,7 @@ void MaxwellDMA::CopyBlockLinearToPitch() {
 
     UnswizzleSubrect(tmp_write_buffer, tmp_read_buffer, bytes_per_pixel, width, height, depth,
                      x_offset, src_params.origin.y, x_elements, regs.line_count, block_height,
-                     block_depth, dst_operand.pitch);
+                     block_depth, dst_operand.pitch, memory_manager.UsesNativeTiling());
 }
 
 void MaxwellDMA::CopyPitchToBlockLinear() {
@@ -288,7 +297,7 @@ void MaxwellDMA::CopyPitchToBlockLinear() {
     //  If the input is linear and the output is tiled, swizzle the input and copy it over.
     SwizzleSubrect(tmp_write_buffer, tmp_read_buffer, bytes_per_pixel, width, height, depth,
                    x_offset, dst_params.origin.y, x_elements, regs.line_count, block_height,
-                   block_depth, regs.pitch_in);
+                   block_depth, regs.pitch_in, memory_manager.UsesNativeTiling());
 }
 
 void MaxwellDMA::CopyBlockLinearToBlockLinear() {
@@ -341,11 +350,11 @@ void MaxwellDMA::CopyBlockLinearToBlockLinear() {
 
     UnswizzleSubrect(intermediate_buffer, tmp_read_buffer, bytes_per_pixel, src_width, src.height,
                      src.depth, src_x_offset, src.origin.y, x_elements, regs.line_count,
-                     src.block_size.height, src.block_size.depth, pitch);
+                     src.block_size.height, src.block_size.depth, pitch, memory_manager.UsesNativeTiling());
 
     SwizzleSubrect(tmp_write_buffer, intermediate_buffer, bytes_per_pixel, dst_width, dst.height,
                    dst.depth, dst_x_offset, dst.origin.y, x_elements, regs.line_count,
-                   dst.block_size.height, dst.block_size.depth, pitch);
+                   dst.block_size.height, dst.block_size.depth, pitch, memory_manager.UsesNativeTiling());
 }
 
 void MaxwellDMA::ReleaseSemaphore() {

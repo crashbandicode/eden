@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
 #include "common/assert.h"
 #include "common/logging.h"
 #include "video_core/engines/fermi_2d.h"
@@ -59,6 +60,14 @@ void Fermi2D::ConsumeSinkImpl(Core::System& system) {
 }
 
 void Fermi2D::Blit() {
+    if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
+        static u32 traced{};
+        if (traced++ < 64) {
+            LOG_INFO(HW_GPU, "nx2 2D blit {:#x} {}x{} -> {:#x} {}x{}", regs.src.Address(),
+                     regs.src.width, regs.src.height, regs.dst.Address(), regs.dst.width,
+                     regs.dst.height);
+        }
+    }
     LOG_DEBUG(HW_GPU, "called. source address={:#x}, destination address={:#x}", regs.src.Address(), regs.dst.Address());
 
     UNIMPLEMENTED_IF_MSG(regs.operation != Operation::SrcCopy, "Operation is not copy");

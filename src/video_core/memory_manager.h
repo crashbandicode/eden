@@ -47,6 +47,15 @@ public:
     void SetNativeSyncpointShim(GPUVAddr address);
     static constexpr u32 NumShimSyncpoints = 192; // Tegra::Host1x::SyncpointManager
 
+    /// Switch 2 lays out block-linear surfaces with the console's GOB swizzle.
+    void EnableNativeTiling() {
+        native_tiling = true;
+    }
+    bool UsesNativeTiling() const {
+        return native_tiling;
+    }
+    bool IsShuttingDown() const;
+
     static constexpr bool HAS_FLUSH_INVALIDATION = true;
 
     inline size_t GetID() const noexcept {
@@ -225,6 +234,7 @@ private:
     boost::container::small_vector<std::pair<DAddr, std::size_t>, 32> page_stash{};
     boost::container::small_vector<std::pair<DAddr, std::size_t>, 32> page_stash2{};
 
+    bool native_tiling{};
     mutable std::mutex guard;
 
     static constexpr size_t continuous_bits = 64;

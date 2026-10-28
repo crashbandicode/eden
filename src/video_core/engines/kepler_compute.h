@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <optional>
 #include <vector>
@@ -32,6 +33,9 @@ class RasterizerInterface;
 }
 
 namespace Tegra::Engines {
+
+/// Draws left to trace after an upscale fallback (debug aid).
+extern std::atomic<u32> g_nx2_trace_draws_after_upscale;
 
 /**
  * This Engine is known as GK104_Compute. Documentation can be found in:

@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <atomic>
 #include <bitset>
 #include <cstdlib>
 #include <fstream>
@@ -432,6 +433,8 @@ void KeplerCompute::DescribeNativeResources(const NativeQmdScheduler::Descriptor
     }
 }
 
+std::atomic<u32> g_nx2_trace_draws_after_upscale{};
+
 // Title 4's upscaler reads the tonemapped frame through the texture handle at cbuf0+0x90 and
 // writes the output resolution image through the surface handle at cbuf0+0xa0 (from its
 // TLD/SUST operands). Blit one to the other with bilinear filtering when both are plain 2D images
@@ -486,7 +489,11 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
         .src_y1 = static_cast<s32>(input->Height()),
     };
     // Debug: does the input hold anything? Download it once and count non-zero words.
-    if (static u32 sampled{}; sampled++ == 20) {
+    static const u32 sample_at = [] {
+        const char* value = std::getenv("EDEN_NX2_SAMPLE_AT");
+        return value ? static_cast<u32>(std::strtoul(value, nullptr, 10)) : 20U;
+    }();
+    if (static u32 sampled{}; sampled++ == sample_at) {
         const auto sample = [&](const Texture::TICEntry& tic) {
             const u64 size = u64{tic.Width()} * tic.Height() * 4;
             if (const auto device = memory_manager.GpuToCpuAddress(tic.Address())) {
@@ -527,12 +534,50 @@ bool KeplerCompute::UpscaleInsteadOfNativeProgram() {
             (void)fake;
         }
     }
-    const bool done = rasterizer->AccelerateSurfaceCopy(surface(*input), surface(*output), config);
+    auto source = surface(*input);
+    // EDEN_NX2_UPSCALE_SOURCE=<gpu address>: blit from another same-sized image (debug aid).
+    if (static const u64 override_source = [] {
+            const char* value = std::getenv("EDEN_NX2_UPSCALE_SOURCE");
+            return value ? std::strtoull(value, nullptr, 16) : 0ULL;
+        }();
+        override_source != 0) {
+        source.addr_upper = static_cast<u32>(override_source >> 32);
+        source.addr_lower = static_cast<u32>(override_source);
+        if (const char* value = std::getenv("EDEN_NX2_UPSCALE_SOURCE_FORMAT")) {
+            source.format = static_cast<RTFormat>(std::strtoul(value, nullptr, 16));
+        }
+    }
+    const bool done = rasterizer->AccelerateSurfaceCopy(source, surface(*output), config);
+    if (static u32 checked{}; checked++ == sample_at) {
+        const u64 size = u64{output->Width()} * output->Height() * 4;
+        if (const auto device = memory_manager.GpuToCpuAddress(output->Address())) {
+            rasterizer->FlushRegion(*device, size, VideoCommon::CacheType::All);
+        }
+        u32 nonzero{}, samples{}, changes{}, last{};
+        for (u64 offset = 0; offset < size; offset += 4096 + 4) {
+            const u32 word = memory_manager.Read<u32>(output->Address() + offset);
+            ++samples;
+            nonzero += word != 0;
+            changes += word != last;
+            last = word;
+        }
+        LOG_INFO(HW_GPU, "Upscale fallback output after blit: {}/{} non-zero, {} changes", nonzero, samples,
+                 changes);
+    }
+    // Debug: trace the draws that follow one upscale (EDEN_NX2_RT_TRACE_AFTER_UPSCALE).
+    static const u32 trace_at = [] {
+        const char* value = std::getenv("EDEN_NX2_TRACE_AFTER_UPSCALE");
+        return value ? static_cast<u32>(std::strtoul(value, nullptr, 10)) : 30U;
+    }();
+    if (static u32 count{}; ++count == trace_at) g_nx2_trace_draws_after_upscale = 40;
     static u32 logged{};
     if (logged++ < 4) {
-        LOG_INFO(HW_GPU, "Upscale fallback {:#x} {}x{} -> {:#x} {}x{}: {}", input->Address(),
-                 input->Width(), input->Height(), output->Address(), output->Width(),
-                 output->Height(), done ? "blitted" : "not accelerated");
+        LOG_INFO(HW_GPU, "Upscale fallback {:#x} {}x{} block {}/{}/{} -> {:#x} {}x{} block {}/{}/{} levels {}: {}",
+                 input->Address(), input->Width(), input->Height(), input->block_width.Value(),
+                 input->block_height.Value(), input->block_depth.Value(), output->Address(),
+                 output->Width(), output->Height(), output->block_width.Value(),
+                 output->block_height.Value(), output->block_depth.Value(), output->max_mip_level.Value(),
+                 done ? "blitted" : "not accelerated");
     }
     return done;
 }

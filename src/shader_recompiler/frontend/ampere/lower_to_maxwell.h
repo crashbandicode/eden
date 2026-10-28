@@ -105,9 +105,11 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (reg == 63) return 255;
             return ~0U;
         };
+        bool rewritten_uniform = false;
         if (opcode == 0x2a4 || opcode == 0x891 || opcode == 0x890 || opcode == 0x290 ||
             opcode == 0x292 || opcode == 0x892 || opcode == 0x291) {
             if (insn.Bits(12, 4) != 7) return fail(index, "native uniform arithmetic predication");
+            rewritten_uniform = true;
             const u32 dst = uniform_register(insn.Bits(16, 8));
             const u32 a = uniform_register(insn.Bits(24, 8));
             const u32 c = uniform_register(insn.Bits(64, 8));
@@ -1233,6 +1235,33 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 return fail(index, "native dependency barrier mode");
             }
             break;
+        case 0xb69: { // TMML (LOD query), 2D. Results are 8.8 fixed point, as on Maxwell.
+            const u32 mask = insn.Bits(72, 4), second_dest = insn.Bits(64, 8);
+            const u32 source_a = insn.Bits(24, 8), source_b = insn.Bits(32, 8);
+            const u32 binding = insn.Bits(54, 5);
+            if (insn.Bits(61, 3) != 1 || insn.Bits(76, 4) || insn.Bits(80, 10) || insn.Bits(59, 1) ||
+                insn.Bits(40, 14) > 0x1fff || binding >= 18 || mask == 0 || source_a >= 246 ||
+                (result.required_texture_buffer != ~0U && result.required_texture_buffer != binding))
+                return fail(index, "native texture LOD query mode");
+            result.required_texture_buffer = binding;
+            // Coordinates: (Ra, Ra+1) when Rb is RZ, else (Ra, Rb).
+            emit(0x5c98000000000000ULL | predicate | 250 | (u64{15} << 39) | (u64{source_a} << 20));
+            emit(0x5c98000000000000ULL | predicate | 251 | (u64{15} << 39) |
+                 (u64{source_b == 255 ? source_a + 1 : source_b} << 20));
+            emit(0xdf58000000000000ULL | predicate | 250 | (u64{250} << 8) | (u64{255} << 20) |
+                 (u64{2} << 28) | (u64{mask} << 31) | (u64{insn.Bits(40, 14)} << 36) |
+                 (u64{insn.Bits(90, 1)} << 49));
+            const u32 components = static_cast<u32>(std::popcount(mask));
+            const bool split = second_dest != 255;
+            for (u32 i = 0; i < components; ++i) {
+                u32 target = 255;
+                if (!split || i < 2) target = dest == 255 ? 255U : static_cast<u32>(dest) + i;
+                else target = second_dest + (i - 2);
+                if (target != 255)
+                    emit(0x5c98000000000000ULL | predicate | target | (u64{15} << 39) | (u64{250 + i} << 20));
+            }
+            break;
+        }
         case 0xb63: { // TLD4 (gather), 2D without offsets or depth compare; component at bits 87-88.
             const u32 mask = insn.Bits(72, 4), second_dest = insn.Bits(64, 8);
             const u32 source_a = insn.Bits(24, 8), source_b = insn.Bits(32, 8);
@@ -1417,6 +1446,9 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (address % 4 || address + components * 4 > 0x400 || insn.Bits(24, 8) != 255) {
                 return fail(index, "native attribute address or indexing");
             }
+            // a[0x5c] has no Maxwell meaning (Ampere uses it for a per-primitive hint such as the
+            // shading rate). Nothing reads it back; dropping the store keeps full-rate shading.
+            if (opcode == 0x322 && address == 0x5c && components == 1) break;
             u32 value_reg = opcode == 0x321 ? static_cast<u32>(dest) : insn.Bits(32, 8);
             if (value_reg == 255) {
                 if (opcode == 0x321) break; // load into RZ: nothing to do
@@ -1715,6 +1747,53 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             break;
         }
         case 0x210: case 0x810: case 0xa10: case 0xc10: { // IADD3 with zero third source and no carry outputs
+            // 64-bit adds: IADD3 with a carry-out predicate (bits 81-83), then IADD3.X (bit 74) with
+            // a carry-in predicate (bits 87-89, negate 90). Uniform forms keep UPn in R239 bit 6-n.
+            if ((opcode == 0x210 || opcode == 0x810) && insn.Bits(64, 8) == 255 && !insn.Bits(73, 1) &&
+                !insn.Bits(75, 2) && insn.Bits(84, 3) == 7 && insn.Bits(77, 4) == 15 && !insn.Bits(72, 1) &&
+                (insn.Bits(81, 3) != 7 || insn.Bits(74, 1))) {
+                const bool carry_in = insn.Bits(74, 1) != 0;
+                const u32 carry_out = insn.Bits(81, 3);
+                const u32 a = insn.Bits(24, 8);
+                if ((carry_in && carry_out != 7) || (opcode == 0x210 && (insn.words[1] & ~0xffU)) ||
+                    (rewritten_uniform && carry_out != 7 && carry_out > 1) ||
+                    (rewritten_uniform && carry_in && insn.Bits(87, 3) > 1 && insn.Bits(87, 3) != 7))
+                    return fail(index, "native integer carry mode");
+                if (opcode == 0x810) {
+                    emit(0x1c00000000000000ULL | predicate | 250 | (u64{a} << 8) | (u64{insn.words[1]} << 20));
+                } else {
+                    emit(0x5c10000000000000ULL | predicate | 250 | (u64{a} << 8) | (u64{insn.Bits(32, 8)} << 20));
+                }
+                const auto save = [&](u32 mask) { emit(0x38e8000000070000ULL | 253 | (u64{255} << 8) | (u64{mask} << 20)); };
+                const auto restore = [&](u32 mask) { emit(0x38f0000000070000ULL | (u64{253} << 8) | (u64{mask} << 20)); };
+                if (!carry_in) {
+                    // carry = (a + b) < a, unsigned
+                    const u32 target = rewritten_uniform ? 6 - carry_out : carry_out;
+                    const u32 mask = 1U << target;
+                    if (rewritten_uniform) save(mask);
+                    emit(0x5b60000000000000ULL | predicate | 7 | (u64{target} << 3) | (u64{250} << 8) |
+                         (u64{a} << 20) | (u64{7} << 39) | (u64{1} << 49));
+                    if (rewritten_uniform) {
+                        emit(0x38e8000000070000ULL | 239 | (u64{239} << 8) | (u64{mask} << 20));
+                        restore(mask);
+                    }
+                    emit(base(0x5c98000000000000ULL) | (u64{15} << 39) | (u64{250} << 20));
+                    break;
+                }
+                const u32 condition = insn.Bits(87, 3);
+                const u32 source = rewritten_uniform && condition != 7 ? 6 - condition : condition;
+                const u32 mask = 1U << source;
+                mov_imm(252, 1);
+                if (rewritten_uniform && condition != 7) {
+                    save(mask);
+                    emit(0x38f0000000070000ULL | (u64{239} << 8) | (u64{mask} << 20));
+                }
+                emit(0x5ca0000000000000ULL | predicate | 251 | (u64{252} << 8) | (u64{255} << 20) |
+                     (u64{source} << 39) | (u64{insn.Bits(90, 1)} << 42));
+                if (rewritten_uniform && condition != 7) restore(mask);
+                emit(base(0x5c10000000000000ULL) | (u64{250} << 8) | (u64{251} << 20));
+                break;
+            }
             if (opcode == 0xa10 && insn.Bits(81, 3) != 7) {
                 if (insn.Bits(64, 8) != 255 || insn.Bits(73, 4) || insn.Bits(84, 7) != 0x7f ||
                     insn.Bits(77, 4) != 15 || insn.Bits(63, 1) || insn.Bits(72, 1))

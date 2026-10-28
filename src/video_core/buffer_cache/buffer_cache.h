@@ -10,6 +10,8 @@
 #include <memory>
 #include <numeric>
 #include <stdexcept>
+#include <vector>
+#include <fmt/ranges.h>
 
 #include "common/range_sets.inc"
 #include "video_core/buffer_cache/buffer_cache_base.h"
@@ -79,6 +81,20 @@ void BufferCache<P>::TickFrame() {
         return;
     }
     runtime.TickFrame(slot_buffers);
+    if (static u64 frames{}; ++frames % 600 == 0) {
+        u64 total{};
+        size_t count{};
+        std::vector<std::pair<u64, VAddr>> largest;
+        for (const auto [buffer_id, buffer] : slot_buffers) {
+            total += buffer->SizeBytes();
+            ++count;
+            largest.emplace_back(buffer->SizeBytes(), buffer->CpuAddr());
+        }
+        std::partial_sort(largest.begin(), largest.begin() + std::min<size_t>(6, largest.size()),
+                          largest.end(), std::greater<>{});
+        LOG_INFO(HW_GPU, "Buffer cache: {} buffers {} MiB; largest {}", count, total >> 20,
+                 fmt::join(largest.begin(), largest.begin() + std::min<size_t>(6, largest.size()), ", "));
+    }
 
     // Calculate hits and shots and move hit bits to the right
     const u32 hits = std::reduce(channel_state->uniform_cache_hits.begin(),

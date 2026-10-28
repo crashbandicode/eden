@@ -6,7 +6,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <limits>
+#include <map>
+#include <vector>
 #include <optional>
 #include <bit>
 #include "common/container/unordered_map.h"
@@ -172,6 +175,43 @@ void TextureCache<P>::TickFrame() {
     // If we can obtain the memory info, use it instead of the estimate.
     if (runtime.CanReportMemoryUsage()) {
         total_used_memory = runtime.GetDeviceMemoryUsage();
+    }
+    // Every 600 frames: device memory in use against the collector's thresholds, and what the
+    // images themselves account for (VRAM pressure makes the collector thrash).
+    if (static u64 frames{}; ++frames % 600 == 0) {
+        u64 image_bytes{};
+        size_t images{};
+        std::vector<std::pair<u64, const Image*>> largest;
+        std::map<u32, std::pair<u64, u32>> by_format;
+        for (const auto [image_id, image] : slot_images) {
+            const u64 bytes = GetScaledImageSizeBytes(*image);
+            image_bytes += bytes;
+            ++images;
+            largest.emplace_back(bytes, image);
+            auto& format = by_format[static_cast<u32>(image->info.format)];
+            format.first += bytes;
+            ++format.second;
+        }
+        LOG_INFO(HW_GPU, "Texture cache: device memory {} MiB (expected {} MiB, critical {} MiB), {} images {} MiB",
+                 total_used_memory >> 20, expected_memory >> 20, critical_memory >> 20, images,
+                 image_bytes >> 20);
+        std::partial_sort(largest.begin(), largest.begin() + std::min<size_t>(12, largest.size()),
+                          largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (size_t i = 0; i < std::min<size_t>(12, largest.size()); ++i) {
+            const Image& image = *largest[i].second;
+            LOG_INFO(HW_GPU, "  {} MiB: {:#x} {}x{}x{} layers {} levels {} format {} type {} flags {:#x}",
+                     largest[i].first >> 20, image.gpu_addr, image.info.size.width, image.info.size.height,
+                     image.info.size.depth, image.info.resources.layers, image.info.resources.levels,
+                     static_cast<u32>(image.info.format), static_cast<u32>(image.info.type),
+                     static_cast<u32>(image.flags));
+        }
+        std::vector<std::pair<u64, u32>> formats;
+        for (const auto& [format, total] : by_format) formats.emplace_back(total.first, format);
+        std::sort(formats.rbegin(), formats.rend());
+        for (size_t i = 0; i < std::min<size_t>(8, formats.size()); ++i) {
+            LOG_INFO(HW_GPU, "  format {}: {} MiB in {} images", formats[i].second, formats[i].first >> 20,
+                     by_format[formats[i].second].second);
+        }
     }
     if (total_used_memory > minimum_memory) {
         RunGarbageCollector();

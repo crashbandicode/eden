@@ -148,9 +148,40 @@ constexpr VkBorderColor ConvertBorderColor(const std::array<float, 4>& color) {
     return usage;
 }
 
+// An ASTC 2D array whose RGBA8 decode exceeds 1 GiB (title 1's 8192x8192x68 terrain textures).
+// These stay on the GPU decoder as RGBA8 with trimmed levels (TrimmedHostInfo) even when other
+// ASTC images are re-compressed to BC1/BC3 on the CPU: re-compressing them would not fit either.
+[[nodiscard]] bool IsHugeAstcArray(const Device& device, const ImageInfo& info) {
+    if (!IsPixelFormatASTC(info.format) || device.IsOptimalAstcSupported() ||
+        info.type != ImageType::e2D || info.size.depth != 1) {
+        return false;
+    }
+    u64 bytes = 0;
+    for (s32 level = 0; level < info.resources.levels; ++level) {
+        bytes += u64{(std::max)(info.size.width >> level, 1U)} *
+                 (std::max)(info.size.height >> level, 1U) * 4;
+    }
+    return bytes * info.resources.layers > (u64{1} << 30);
+}
+
+// The host format of a huge ASTC array: the GPU decoder's RGBA8 (sRGB kept for sampling).
+[[nodiscard]] std::optional<VkFormat> HugeAstcHostFormat(const Device& device, const ImageInfo& info) {
+    if (!IsHugeAstcArray(device, info)) {
+        return std::nullopt;
+    }
+    return VideoCore::Surface::IsPixelFormatSRGB(info.format) ? VK_FORMAT_A8B8G8R8_SRGB_PACK32
+                                                              : VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+}
+
+constexpr std::array<VkFormat, 2> HugeAstcViewFormats{VK_FORMAT_A8B8G8R8_UNORM_PACK32,
+                                                       VK_FORMAT_A8B8G8R8_SRGB_PACK32};
+
 [[nodiscard]] bool WillUseAcceleratedAstcDecode(const Device& device, const ImageInfo& info) {
     if (!IsPixelFormatASTC(info.format) || device.IsOptimalAstcSupported()) {
         return false;
+    }
+    if (IsHugeAstcArray(device, info)) {
+        return true;
     }
     if (Settings::values.accelerate_astc.GetValue() != Settings::AstcDecodeMode::Gpu) {
         return false;
@@ -990,7 +1021,9 @@ TextureCacheRuntime::TextureCacheRuntime(const Device& device_, Scheduler& sched
     : device{device_}, scheduler{scheduler_}, memory_allocator{memory_allocator_},
       staging_buffer_pool{staging_buffer_pool_}, blit_image_helper{blit_image_helper_},
       render_pass_cache{render_pass_cache_}, resolution{Settings::values.resolution_info} {
-    if (Settings::values.accelerate_astc.GetValue() == Settings::AstcDecodeMode::Gpu) {
+    // Huge ASTC arrays always decode on the GPU (IsHugeAstcArray), whatever the decode setting.
+    if (Settings::values.accelerate_astc.GetValue() == Settings::AstcDecodeMode::Gpu ||
+        !device.IsOptimalAstcSupported()) {
         astc_decoder_pass.emplace(device, scheduler, descriptor_pool, staging_buffer_pool,
                                   compute_pass_descriptor_queue, memory_allocator);
     }
@@ -1926,7 +1959,10 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
       runtime{&runtime_},
       original_image(MakeImage(runtime_.device, runtime_.memory_allocator,
                                TrimmedHostInfo(runtime_.device, info, host_level_offset),
-                               runtime->ViewFormats(info.format))),
+                               IsHugeAstcArray(runtime_.device, info)
+                                   ? std::span<const VkFormat>{HugeAstcViewFormats}
+                                   : runtime->ViewFormats(info.format),
+                               HugeAstcHostFormat(runtime_.device, info))),
       aspect_mask(ImageAspectMask(info.format)) {
     if (original_image.IsUnbacked()) {
         flags |= VideoCommon::ImageFlagBits::Unbacked;
@@ -1934,7 +1970,11 @@ Image::Image(TextureCacheRuntime& runtime_, const ImageInfo& info_, GPUVAddr gpu
     if (host_level_offset != 0) {
         flags |= VideoCommon::ImageFlagBits::TrimmedLevels;
     }
-    if (IsPixelFormatASTC(info.format) && !runtime->device.IsOptimalAstcSupported()) {
+    if (IsHugeAstcArray(runtime->device, info)) {
+        flags |= VideoCommon::ImageFlagBits::AcceleratedUpload;
+        flags |= VideoCommon::ImageFlagBits::Converted;
+        flags |= VideoCommon::ImageFlagBits::CostlyLoad;
+    } else if (IsPixelFormatASTC(info.format) && !runtime->device.IsOptimalAstcSupported()) {
         switch (Settings::values.accelerate_astc.GetValue()) {
         case Settings::AstcDecodeMode::Gpu:
             if (WillUseAcceleratedAstcDecode(runtime->device, info)) {
@@ -2580,6 +2620,11 @@ ImageView::ImageView(TextureCacheRuntime& runtime, const VideoCommon::ImageViewI
         }
     }
     auto format_info = MaxwellToVK::SurfaceFormat(*device, FormatType::Optimal, true, format);
+    if (IsHugeAstcArray(*device, image.info)) {
+        format_info.format = VideoCore::Surface::IsPixelFormatSRGB(format)
+                                 ? VK_FORMAT_A8B8G8R8_SRGB_PACK32
+                                 : VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+    }
     if (device->ApiVersion() >= VK_API_VERSION_1_3) {
         const VkFormatProperties3 properties3 =
             device->GetPhysical().GetFormatProperties3(format_info.format);

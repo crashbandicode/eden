@@ -19,6 +19,10 @@
 // For FileTimeStampRaw
 #include <sys/stat.h>
 
+#ifdef _WIN32
+#include <cstdio> // _getmaxstdio
+#endif
+
 #ifdef _MSC_VER
 #define stat _stat64
 #endif
@@ -33,7 +37,17 @@ namespace FS = Common::FS;
 
 namespace {
 
-constexpr size_t MaxOpenFiles = 8192;
+// Files the cache keeps open. On Windows it has to stay below the C runtime's open-file limit with
+// room to spare: at the limit every other open fails (saves, shader caches, and the cache's own
+// next file, which it only evicts for once it reaches its cap).
+size_t MaxOpenFiles() {
+#ifdef _WIN32
+    static const size_t limit = static_cast<size_t>((std::max)(_getmaxstdio() - 512, 64));
+    return (std::min)(size_t{8192}, limit);
+#else
+    return 8192;
+#endif
+}
 
 bool IsWithinRoot(std::string_view root, std::string_view full_path) {
     if (root.empty())
@@ -251,7 +265,7 @@ void RealVfsFilesystem::DropReference(std::unique_ptr<FileReference>&& reference
 }
 
 void RealVfsFilesystem::EvictSingleReferenceLocked() {
-    if (num_open_files < MaxOpenFiles || open_references.empty()) {
+    if (num_open_files < MaxOpenFiles() || open_references.empty()) {
         return;
     }
 

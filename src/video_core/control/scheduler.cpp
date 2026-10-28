@@ -4,7 +4,9 @@
 // SPDX-FileCopyrightText: 2021 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 #include "common/assert.h"
 #include "video_core/control/channel_state.h"
@@ -26,6 +28,36 @@ void Scheduler::Push(GPU& gpu, s32 channel, CommandList&& entries) {
     // Multiple channels can prepare their commands in parallel.
     channel_state->payload->dma_pusher.Push(std::move(entries));
     channel_state->payload->dma_pusher.DispatchCalls();
+    if (channel_state->payload->dma_pusher.HasPendingAcquire() &&
+        std::find(pending_channels.begin(), pending_channels.end(), channel_state) ==
+            pending_channels.end()) {
+        pending_channels.push_back(channel_state);
+    }
+    if (!pending_channels.empty()) {
+        ResumePending(gpu);
+    }
+}
+
+void Scheduler::ResumePending(GPU& gpu) {
+    // Running one channel can release the semaphore another waits for: retry until none moves.
+    for (bool progress = true; progress;) {
+        progress = false;
+        for (const auto& state : pending_channels) {
+            auto& dma_pusher = state->payload->dma_pusher;
+            if (!dma_pusher.HasPendingAcquire() || !dma_pusher.CanResumeAcquire()) {
+                continue;
+            }
+            {
+                std::scoped_lock lk{scheduling_guard};
+                gpu.BindChannel(state->bind_id);
+            }
+            dma_pusher.DispatchCalls();
+            progress = true;
+        }
+    }
+    std::erase_if(pending_channels, [](const auto& state) {
+        return !state->payload->dma_pusher.HasPendingAcquire();
+    });
 }
 
 void Scheduler::DeclareChannel(std::shared_ptr<ChannelState> new_channel) {

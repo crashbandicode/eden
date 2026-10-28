@@ -42,7 +42,11 @@ void MaxwellDMA::ConsumeSinkImpl(Core::System& system) {
 }
 
 void MaxwellDMA::CallMethod(Core::System& system, u32 method, u32 method_argument, bool is_last_call) {
-    ASSERT_MSG(method < NUM_REGS, "Invalid MaxwellDMA register");
+    if (method >= NUM_REGS) {
+        // Ampere copy (Switch 2) can use methods past this register file; don't write past it.
+        LOG_DEBUG(HW_GPU, "Ignoring MaxwellDMA method {:#x} past the register file", method);
+        return;
+    }
 
     regs.reg_array[method] = method_argument;
 

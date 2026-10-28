@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
 
 #include "common/common_types.h"
@@ -13,10 +14,34 @@ namespace Tegra {
 // Ampere classes and the Turing+ macro ISA, which Eden's Maxwell engines don't implement.
 inline std::atomic<bool> g_nx2_ampere{false};
 
-// NVN2 queues release their progress values into one GPU page and wait (GPU acquires and CPU
-// polls) on the same offsets in the page below it. Something on the console copies one into
-// the other; until that is known, the puller mirrors releases that land in the source page.
-inline std::atomic<u64> g_nx2_semaphore_source_page{0}; // GPU VA of the released-to page
-inline std::atomic<u64> g_nx2_semaphore_mirror_page{0}; // GPU VA of the waited-on page
+// NVN2 queues release their progress values into the second page of a two-page GPU-accessible
+// region and GPU acquires read the same offsets in the first page (the CPU polls the second).
+// Something on the console copies one into the other; until that is known, the puller mirrors
+// releases that land in a second page. Every queue has such a region, so keep a small table.
+inline constexpr size_t Nx2MaxSemaphoreRegions = 32;
+inline std::array<std::atomic<u64>, Nx2MaxSemaphoreRegions> g_nx2_semaphore_regions{}; // starts
+
+inline void Nx2AddSemaphoreRegion(u64 start) {
+    for (auto& region : g_nx2_semaphore_regions) {
+        u64 expected = 0;
+        if (region.load() == start || region.compare_exchange_strong(expected, start)) {
+            return;
+        }
+    }
+}
+
+/// GPU VA in the first page that mirrors a release at `address`, or 0.
+inline u64 Nx2SemaphoreMirror(u64 address) {
+    for (const auto& region : g_nx2_semaphore_regions) {
+        const u64 start = region.load(std::memory_order_relaxed);
+        if (start == 0) {
+            break;
+        }
+        if (address >= start + 0x1000 && address < start + 0x2000) {
+            return address - 0x1000;
+        }
+    }
+    return 0;
+}
 
 } // namespace Tegra

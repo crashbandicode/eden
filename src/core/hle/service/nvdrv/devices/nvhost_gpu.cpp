@@ -4,7 +4,9 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
 #include <cstring>
+#include <vector>
 #include "common/assert.h"
 #include "common/logging.h"
 #include "core/core.h"
@@ -421,6 +423,16 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
         for (const auto& entry : entries.command_lists) {
             LOG_DEBUG(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
                      entry.addr.Value(), entry.size.Value());
+        }
+        static const bool check = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
+        if (check) {
+            std::vector<u32> words;
+            for (const auto& entry : entries.command_lists) {
+                words.resize(entry.size);
+                system.ApplicationMemory().ReadBlock(entry.addr.Value(), words.data(),
+                                                     words.size() * sizeof(u32));
+                entries.submit_hashes.push_back(Tegra::HashPushbufferWords(words));
+            }
         }
     }
 

@@ -251,7 +251,10 @@ T MemoryManager::Read(GPUVAddr addr) const {
         return value;
     }
 
-    ASSERT(false);
+    static std::atomic<u32> reported{};
+    if (reported.fetch_add(1) < 16) {
+        LOG_ERROR(HW_GPU, "Read{} of unmapped GPU address {:#x}", sizeof(T) * 8, addr);
+    }
 
     return {};
 }

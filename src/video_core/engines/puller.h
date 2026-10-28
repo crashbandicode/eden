@@ -7,7 +7,9 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
+#include <optional>
 #include <vector>
 #include "common/bit_field.h"
 #include "common/common_funcs.h"
@@ -70,6 +72,24 @@ public:
         BitField<8, 24, u32> syncpoint_id;
     };
 
+    /// Switch 2: a semaphore acquire this channel is suspended on.
+    struct PendingAcquire {
+        GPUVAddr address;
+        u32 value;
+        u32 operation;
+        std::chrono::steady_clock::time_point since;
+        bool reported;
+
+        [[nodiscard]] bool Matches(u32 current) const;
+    };
+
+    [[nodiscard]] bool HasPendingAcquire() const {
+        return pending_acquire.has_value();
+    }
+    [[nodiscard]] bool CanResumeAcquire(DmaPusher& dma_pusher);
+    /// Clears the pending acquire once it is met; false while the channel has to keep waiting.
+    bool ResumeAcquire(DmaPusher& dma_pusher);
+
     void CallMethod(DmaPusher& dma_pusher, const MethodCall& method_call);
     void CallMultiMethod(DmaPusher& dma_pusher, u32 method, u32 subchannel, const u32* base_start, u32 amount, u32 methods_pending);
     void BindRasterizer(DmaPusher& dma_pusher, VideoCore::RasterizerInterface* rasterizer);
@@ -125,7 +145,10 @@ private:
     void ProcessSemaphoreAcquire(DmaPusher& dma_pusher);
     void ProcessSemaphoreRelease(DmaPusher& dma_pusher);
     void ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher);
+    void ProcessSemaphoreExecute(DmaPusher& dma_pusher, u32 argument);
     [[nodiscard]] bool ExecuteMethodOnEngine(DmaPusher& dma_pusher, u32 method);
+
+    std::optional<PendingAcquire> pending_acquire;
 
     /// Mapping of command subchannels to their bound engine ids
     std::array<EngineID, 8> bound_engines{};

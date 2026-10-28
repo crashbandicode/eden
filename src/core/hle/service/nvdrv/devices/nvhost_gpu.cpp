@@ -421,7 +421,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
 
     if (g_nx2_driver) {
         for (const auto& entry : entries.command_lists) {
-            LOG_DEBUG(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
+            LOG_TRACE(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
                      entry.addr.Value(), entry.size.Value());
         }
         static const bool check = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
@@ -471,7 +471,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
     }
 
     if (g_nx2_driver) {
-        LOG_DEBUG(Service_NVDRV,
+        LOG_TRACE(Service_NVDRV,
                  "nx2 SubmitGPFIFO entries={} flags={:#x} fence_out=({}, {}) guest_value={}",
                  params.num_entries, flags.raw, params.fence.id, params.fence.value,
                  system.Host1x().GetSyncpointManager().GetGuestSyncpointValue(params.fence.id));

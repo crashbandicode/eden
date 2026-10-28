@@ -3135,6 +3135,11 @@ public:
     /// Reads a register value located at the input method address
     u32 GetRegisterValue(u32 method) const;
 
+    /// GPU memory, for Turing macros that read memory into their FIFO or data RAM.
+    MemoryManager& GetMemoryManager() {
+        return memory_manager;
+    }
+
     void SetNativeTuringMacroMode(bool enabled) {
         GetNativeMacroEngine().native_turing = enabled;
         upload_state.SetNativePartialTransfers(enabled);

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include <vector>
 
 namespace Tegra {
 
@@ -25,8 +26,9 @@ public:
     };
 
     template <typename Read, typename Emit>
+    // `parameters` is the load FIFO; `emit` may append to it (MME_DMA_READ_FIFOED).
     Result Execute(std::span<const Word> code, Word start,
-                   std::span<const Word> parameters, Read read, Emit emit) {
+                   std::vector<Word>& parameters, Read read, Emit emit) {
         std::array<Word, 24> regs{};
         Word initialized{}, carry{}, method{}, increment{};
         Word pc = start, loop_count{}, loop_start{}, loop_end{};

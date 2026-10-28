@@ -61,9 +61,9 @@ public:
             if (!read(request.address, state.descriptor)) return "unmapped QMD";
             const auto qmd = state.descriptor;
             if ((qmd[18] & 0xff) != 0x30 || (qmd[4] & 0x100)) return "unsupported QMD version or queue";
-            // Validate both release slots before making either visible.
-            for (Word slot = 0; slot < 2; ++slot) {
-                const Word flags = qmd[25 + slot * 4];
+            // Validate the release slots before making any visible.
+            for (const Word base : ReleaseSlots) {
+                const Word flags = qmd[base + 1];
                 if (!(flags & (1U << 23))) continue;
                 const bool add = (flags & (1U << 26)) != 0;
                 if ((flags & (0x3bU << 24)) || (flags >> 30) != 1 ||
@@ -76,15 +76,15 @@ public:
             if (qmd[12] && (qmd[13] & 0xffff) && (qmd[14] & 0xffff) && !dispatch(qmd))
                 return "native shader dispatch required";
             state.completed = true;
-            for (Word slot = 0; slot < 2; ++slot) {
-                const Word flags = qmd[25 + slot * 4];
+            for (const Word base : ReleaseSlots) {
+                const Word flags = qmd[base + 1];
                 if (!(flags & (1U << 23))) continue;
-                const Address destination = (Address{flags & 0xff} << 32) | qmd[24 + slot * 4];
+                const Address destination = (Address{flags & 0xff} << 32) | qmd[base];
                 bool released{};
                 if constexpr (std::is_invocable_r_v<bool, Release, Address, Word, Word>) {
-                    released = release(destination, qmd[26 + slot * 4], flags);
+                    released = release(destination, qmd[base + 2], flags);
                 } else {
-                    released = release(destination, qmd[26 + slot * 4]);
+                    released = release(destination, qmd[base + 2]);
                 }
                 if (!released) return "unmapped QMD release";
             }
@@ -99,6 +99,10 @@ public:
         return {};
     }
 private:
+    // Release slots (address low, flags | address high, payload). NVN2 patches a third one at
+    // word 52 for queue syncs (e.g. a compute queue releasing a semaphore another queue waits on).
+    static constexpr std::array<Word, 3> ReleaseSlots{24, 28, 52};
+
     struct State {
         Descriptor descriptor{};
         std::int32_t dependencies{};

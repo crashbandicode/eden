@@ -27,6 +27,7 @@
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/dirty_flags.h"
+#include "video_core/memory_manager.h"
 #include "video_core/rasterizer_interface.h"
 #include "video_core/macro.h"
 
@@ -1351,11 +1352,43 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         }
         LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
         LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
-        const auto result = native_interpreter.Execute(native_code, method, parameters,
+        std::vector<u32> fifo(parameters.begin(), parameters.end());
+        const auto result = native_interpreter.Execute(native_code, method, fifo,
             [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },
             [&](u32 address, u32 value) {
                 if (address >= 0xe00) return false;
+                if (address == 0x556) {
+                    static u32 enable_logs{};
+                    if (enable_logs++ < 400) LOG_INFO(HW_GPU, "Native MME start={:#x} render enable mode={}", method, value);
+                }
                 maxwell3d.CallMethod(system, address, value, true);
+                // Turing MME memory reads (methods 0x550 SET_MME_MEM_ADDRESS_A/B, 0x558 data RAM
+                // address, 0x55c MME_DMA_READ into data RAM, 0x560 MME_DMA_READ_FIFOED into
+                // the load FIFO, which the macro then reads after a load barrier).
+                constexpr u32 MemAddressA = 0x154, MemAddressB = 0x155, DataRamAddress = 0x156;
+                constexpr u32 DmaRead = 0x157, DmaReadFifoed = 0x158;
+                if (address == DmaRead || address == DmaReadFifoed) {
+                    const GPUVAddr source = (GPUVAddr{maxwell3d.GetRegisterValue(MemAddressA) & 0x1ffffff} << 32) |
+                                            maxwell3d.GetRegisterValue(MemAddressB);
+                    auto& memory = maxwell3d.GetMemoryManager();
+                    const u32 ram = maxwell3d.GetRegisterValue(DataRamAddress);
+                    static u32 dma_logs{};
+                    if (dma_logs < 400) {
+                        ++dma_logs;
+                        std::array<u32, 8> words{};
+                        for (u32 i = 0; i < std::min<u32>(value, 8); ++i) words[i] = memory.Read<u32>(source + u64{i} * 4);
+                        LOG_INFO(HW_GPU, "Native MME DMA read{} start={:#x} source={:#x} count={} words={:08x}",
+                                 address == DmaReadFifoed ? " fifoed" : "", method, source, value, fmt::join(words, ","));
+                    }
+                    for (u32 i = 0; i < std::min<u32>(value, 0x1000); ++i) {
+                        const u32 word = memory.Read<u32>(source + u64{i} * 4);
+                        if (address == DmaReadFifoed) {
+                            fifo.push_back(word);
+                        } else if (ram + i < native_interpreter.dram.size()) {
+                            native_interpreter.dram[ram + i] = word;
+                        }
+                    }
+                }
                 return true;
             });
         if (!result.success) {

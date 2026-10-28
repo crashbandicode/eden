@@ -13,6 +13,7 @@
 #include "core/core.h"
 #include "core/memory.h"
 #include "video_core/dma_pusher.h"
+#include "video_core/control/channel_state.h"
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/gpu.h"
 #include "video_core/guest_memory.h"
@@ -134,6 +135,16 @@ bool DmaPusher::Step() {
     if (++dma_pushbuffer_subindex >= command_list_size) {
         // A split method resumes within the submission that split it; ring addresses repeat
         // every frame, so a stale one could otherwise swallow the headers of a later entry.
+        for (const auto& parked : parked_methods) {
+            static std::atomic<u32> reported{};
+            if (reported.fetch_add(1) < 16) {
+                LOG_WARNING(HW_GPU,
+                            "Submission ended with parked method {:#x} (sub {}, {} words left, "
+                            "resume {:#x})",
+                            parked.method, parked.subchannel, parked.method_count,
+                            parked.resume_address);
+            }
+        }
         parked_methods.clear();
         dma_pushbuffer.pop();
         dma_pushbuffer_subindex = 0;
@@ -264,7 +275,21 @@ void DmaPusher::SetState(const CommandHeader& command_header) {
     dma_state.method_count = command_header.method_count;
 }
 
+// EDEN_NX2_SEM_WATCH=<gpu address>: log every method whose argument is the low word of an
+// address in the 16 bytes there (finds the engine and method that release a semaphore).
+void DmaPusher::WatchArgument(u32 method, u32 argument) const {
+    static const u32 watch = [] {
+        const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
+        return value ? static_cast<u32>(std::strtoull(value, nullptr, 16)) : 0U;
+    }();
+    if (watch != 0 && (argument & ~0xfU) == watch) {
+        LOG_INFO(HW_GPU, "Semaphore watch: channel {} subchannel {} method {:#x} argument {:#x}",
+                 channel_state.bind_id, dma_state.subchannel, method, argument);
+    }
+}
+
 void DmaPusher::CallMethod(u32 argument) {
+    WatchArgument(dma_state.method, argument);
     if (dma_state.method < non_puller_methods) {
         puller.CallPullerMethod(*this, Engines::Puller::MethodCall{
             dma_state.method,
@@ -289,6 +314,9 @@ void DmaPusher::CallMethod(u32 argument) {
 }
 
 void DmaPusher::CallMultiMethod(const u32* base_start, u32 num_methods) {
+    for (u32 i = 0; i < num_methods; ++i) {
+        WatchArgument(dma_state.method + (dma_state.non_incrementing ? 0 : i), base_start[i]);
+    }
     if (dma_state.method < non_puller_methods) {
         puller.CallMultiMethod(*this, dma_state.method, dma_state.subchannel, base_start, num_methods, dma_state.method_count);
     } else {

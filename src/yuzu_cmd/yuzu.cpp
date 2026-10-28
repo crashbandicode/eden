@@ -4,6 +4,9 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <vector>
+#include <cstdlib>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -34,6 +37,7 @@
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/loader/loader.h"
 #include "frontend_common/config.h"
+#include "input_common/drivers/keyboard.h"
 #include "input_common/main.h"
 #include "network/network.h"
 #include "sdl_config.h"
@@ -327,8 +331,50 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         state->system.InitializeDebugger();
     return SDL_APP_CONTINUE;
 }
+// EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,...": press (code) or release (-code) keyboard
+// keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
+static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
+    struct KeyEvent {
+        double seconds;
+        int code;
+    };
+    static const std::vector<KeyEvent> script = [] {
+        std::vector<KeyEvent> events;
+        if (const char* text = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
+            std::string list{text};
+            size_t start = 0;
+            while (start < list.size()) {
+                const size_t end = std::min(list.find(',', start), list.size());
+                const std::string item = list.substr(start, end - start);
+                if (const size_t colon = item.find(':'); colon != std::string::npos) {
+                    events.push_back({std::stod(item.substr(0, colon)),
+                                      std::stoi(item.substr(colon + 1))});
+                }
+                start = end + 1;
+            }
+        }
+        return events;
+    }();
+    static const auto begin = std::chrono::steady_clock::now();
+    static size_t next = 0;
+    const double elapsed =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+    while (next < script.size() && script[next].seconds <= elapsed) {
+        const int code = script[next].code;
+        LOG_INFO(Frontend, "Key script: {} key {} at {:.1f} s", code < 0 ? "release" : "press",
+                 code < 0 ? -code : code, elapsed);
+        if (code < 0) {
+            input_subsystem.GetKeyboard()->ReleaseKey(static_cast<std::size_t>(-code));
+        } else {
+            input_subsystem.GetKeyboard()->PressKey(static_cast<std::size_t>(code));
+        }
+        ++next;
+    }
+}
+
 extern "C" SDL_AppResult SDL_AppIterate(void *appstate) {
     SdlState *state = (SdlState *)appstate;
+    RunKeyScript(state->input_subsystem);
     return state->emu_window && state->emu_window->IsOpen() ? SDL_APP_CONTINUE : SDL_APP_SUCCESS;
 }
 extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {

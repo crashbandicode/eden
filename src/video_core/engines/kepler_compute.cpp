@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <bitset>
 #include <cstdlib>
 #include <fstream>
@@ -46,6 +47,46 @@ void KeplerCompute::ConsumeSinkImpl(Core::System& system) {
     method_sink.clear();
 }
 
+// SET_REPORT_SEMAPHORE_A-D (0x6c0-0x6c3): address high/low, payload, then operation in bits 1:0
+// (release / acquire / report only / trap), reduction enable bit 3 with the op in bits 11:9, and
+// a one-word (no timestamp) structure in bit 28. NVN2 releases queue syncs from compute this way.
+void KeplerCompute::ProcessNativeReportSemaphore(u32 argument) {
+    const GPUVAddr address = (GPUVAddr{native_registers[0x6c0] & 0x1ffffff} << 32) |
+                             native_registers[0x6c1];
+    const u32 payload = native_registers[0x6c2];
+    const u32 operation = argument & 3;
+    const bool one_word = (argument >> 28) & 1;
+    static u32 logged{};
+    if (logged++ < 32) {
+        LOG_INFO(HW_GPU, "Native compute report semaphore {:#x} = {:#x}, control {:#x}", address,
+                 payload, argument);
+    }
+    if (operation != 0 && operation != 2) {
+        LOG_WARNING(HW_GPU, "Native compute report semaphore operation {} not supported", operation);
+        return;
+    }
+    if ((argument >> 3) & 1) {
+        const u32 reduction = (argument >> 9) & 7;
+        rasterizer->SignalFence([this, address, payload, reduction] {
+            const u32 old_value = memory_manager.Read<u32>(address);
+            const u32 value = reduction == 0   ? old_value + payload
+                              : reduction == 1 ? std::min(old_value, payload)
+                              : reduction == 2 ? std::max(old_value, payload)
+                              : reduction == 3 ? (old_value >= payload ? 0 : old_value + 1)
+                              : reduction == 4 ? (old_value == 0 || old_value > payload ? payload : old_value - 1)
+                              : reduction == 5 ? (old_value & payload)
+                              : reduction == 6 ? (old_value | payload)
+                                               : (old_value ^ payload);
+            memory_manager.Write<u32>(address, value);
+        });
+        return;
+    }
+    rasterizer->Query(address, VideoCommon::QueryType::Payload,
+                      one_word ? VideoCommon::QueryPropertiesFlags::IsAFence
+                               : VideoCommon::QueryPropertiesFlags::HasTimeout,
+                      payload, 0);
+}
+
 bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 argument, bool is_last_call) {
     if (native_context) {
         if (method == 0x45 || method == 0x47) native_compute_uploaded = true;
@@ -65,11 +106,22 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         if (!is_last_call) return true;
         const u32 entry = ((*native_executing_macro - 0xe00) / 2) % native_macro_positions.size();
         native_executing_macro.reset();
+        static const u32 watch = [] {
+            const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
+            return value ? static_cast<u32>(std::strtoull(value, nullptr, 16)) : 0U;
+        }();
+        const bool watched = watch != 0 && std::ranges::any_of(native_parameters,
+            [](u32 parameter) { return (parameter & ~0xfU) == watch; });
+        if (watched) {
+            LOG_INFO(HW_GPU, "Semaphore watch: compute macro start={:#x} parameters={:08x}",
+                     native_macro_positions[entry], fmt::join(native_parameters, ","));
+        }
         const auto result = native_macro->native_interpreter.Execute(native_macro->native_code,
             native_macro_positions[entry], native_parameters,
             [&](u32 address) { return address < native_registers.size() ? native_registers[address] : 0U; },
             [&](u32 address, u32 value) {
                 static u32 diagnostic_writes{};
+                if (watched) LOG_INFO(HW_GPU, "Semaphore watch: compute macro emit {:#x} = {:#x}", address, value);
                 if (diagnostic_writes++ < 4096) LOG_DEBUG(HW_GPU, "Native compute MME emit method={:#x}, value={:#x}", address, value);
                 if (address >= 0xe00) return false;
                 CallMethod(system, address, value, true);
@@ -89,6 +141,10 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         return true;
     }
     native_registers[method] = argument;
+    if (method == 0x6c3) { // SET_REPORT_SEMAPHORE_D: the compute class's semaphore release
+        ProcessNativeReportSemaphore(argument);
+        return true;
+    }
     if (method == 0x5a || (method >= 0xc6 && method <= 0x108)) {
         VideoCommon::TraceNativeQuery(12, memory_manager.GetID(), method, 0, 0, argument, 0);
     }
@@ -157,6 +213,13 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             [&](u64 address, NativeQmdScheduler::Descriptor& descriptor) {
                 if (!memory_manager.IsFullyMappedRange(address, sizeof(descriptor))) return false;
                 memory_manager.ReadBlockUnsafe(address, descriptor.data(), sizeof(descriptor));
+                if (static u32 logged{}; (descriptor[53] & (1U << 23)) && logged < 8) {
+                    ++logged;
+                    LOG_INFO(HW_GPU, "Native QMD {:#x} releases: {:08x} | {:08x} | {:08x}", address,
+                             fmt::join(std::span{descriptor}.subspan(24, 4), ","),
+                             fmt::join(std::span{descriptor}.subspan(28, 4), ","),
+                             fmt::join(std::span{descriptor}.subspan(52, 4), ","));
+                }
                 for (u32 slot = 0; slot < 2; ++slot) {
                     const u32 flags = descriptor[25 + slot * 4];
                     if (!(flags & (1U << 23))) continue;

@@ -1103,6 +1103,14 @@ void RasterizerVulkan::AccelerateInlineToMemory(GPUVAddr address, size_t copy_si
         if (memory.size() >= sizeof(first_word)) std::memcpy(&first_word, memory.data(), sizeof(first_word));
         VideoCommon::TraceNativeQuery(11, gpu_memory->GetID(), address, cpu_addr.value_or(0),
             0, first_word, static_cast<u32>(copy_size));
+        static const GPUVAddr watch = [] {
+            const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
+            return value ? GPUVAddr{std::strtoull(value, nullptr, 16)} : GPUVAddr{};
+        }();
+        if (watch != 0 && address < watch + 16 && address + copy_size > watch) {
+            LOG_INFO(Render_Vulkan, "Semaphore watch: inline write {:#x} size {} first word {:#x}",
+                     address, copy_size, first_word);
+        }
     }
     if (!cpu_addr) [[unlikely]] {
         gpu_memory->WriteBlock(address, memory.data(), copy_size);

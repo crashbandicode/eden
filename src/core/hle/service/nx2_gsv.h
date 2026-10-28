@@ -580,16 +580,24 @@ private:
     // free, so pace the game here instead: wait (bounded, in case the GPU waits on the CPU) until
     // Eden's GPU thread has processed the frame. Otherwise the game laps the GPU thread and
     // rewrites command memory it hasn't read yet.
+    u32 m_wait_timeouts{};
+
     void WaitForFrame(u32 fence_id, u32 fence_value) {
         if (fence_id >= 192) {
             return;
         }
         auto& syncpoints = system.Host1x().GetSyncpointManager();
         const auto start = std::chrono::steady_clock::now();
-        const auto deadline = start + std::chrono::milliseconds{250};
+        // Long enough to cover shader/pipeline compile stalls: a game that gets more than a few
+        // command buffers ahead misses the equal-value gates its other channels acquire.
+        const auto deadline = start + std::chrono::milliseconds{4000};
         while (!syncpoints.IsReadyGuest(fence_id, fence_value) &&
                std::chrono::steady_clock::now() < deadline && system.IsPoweredOn()) {
             std::this_thread::sleep_for(std::chrono::microseconds{200});
+        }
+        if (!syncpoints.IsReadyGuest(fence_id, fence_value) && m_wait_timeouts++ < 64) {
+            LOG_WARNING(Service, "nx2:vi2 present #{} fence ({}, {}) not reached in 4 s (now {})",
+                        m_presents, fence_id, fence_value, syncpoints.GetGuestSyncpointValue(fence_id));
         }
         if (m_presents <= 8 || (m_presents % 600) == 0) {
             LOG_INFO(Service, "nx2:vi2 present #{} fence ({}, {}) now {}, waited {} us",

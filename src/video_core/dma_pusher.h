@@ -173,6 +173,7 @@ private:
     void CallMethod(u32 argument);
     void CallMultiMethod(const u32* base_start, u32 num_methods);
     void ReportUnboundSubchannel();
+    void WatchArgument(u32 method, u32 argument) const;
 
 public:
     /// Logs the GPFIFO entry being processed (and the one before it), read through the GPU MMU

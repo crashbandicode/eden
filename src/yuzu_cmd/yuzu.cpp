@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -72,12 +73,40 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 // EDEN_NX2_CRASH_DUMP=<dir>: on an unhandled exception (a real crash; fastmem faults are handled
 // before this), write <dir>/eden-crash-<pid>.dmp. A debugger changes the timing enough to hide
 // some crashes, so this catches them at full speed. dbghelp.dll is loaded only then.
+// Prints a code address as module+offset (resolve with llvm-symbolizer and the module's PDB).
+static void PrintCodeAddress(const char* label, const void* address) {
+    HMODULE module{};
+    char name[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           static_cast<LPCSTR>(address), &module)) {
+        GetModuleFileNameA(module, name, sizeof(name));
+    }
+    const char* base_name = std::strrchr(name, '\\');
+    std::fprintf(stderr, "  %s %p %s+%#llx\n", label, address, base_name ? base_name + 1 : name,
+                 static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(address) -
+                                                 reinterpret_cast<uintptr_t>(module)));
+}
+
 static LONG WINAPI WriteCrashDump(EXCEPTION_POINTERS* exception) {
     static std::atomic<bool> written{};
     const char* directory = std::getenv("EDEN_NX2_CRASH_DUMP");
     if (directory == nullptr || written.exchange(true)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
+    // The faulting address and stack first: they survive even if the dump fails.
+    const EXCEPTION_RECORD& record = *exception->ExceptionRecord;
+    std::fprintf(stderr, "Unhandled exception %#lx on thread %lu, info %#llx %#llx\n",
+                 record.ExceptionCode, GetCurrentThreadId(),
+                 static_cast<unsigned long long>(record.NumberParameters > 0 ? record.ExceptionInformation[0] : 0),
+                 static_cast<unsigned long long>(record.NumberParameters > 1 ? record.ExceptionInformation[1] : 0));
+    PrintCodeAddress("at", record.ExceptionAddress);
+    void* frames[48];
+    const USHORT count = RtlCaptureStackBackTrace(0, 48, frames, nullptr);
+    for (USHORT i = 0; i < count; ++i) {
+        PrintCodeAddress("frame", frames[i]);
+    }
+    std::fflush(stderr);
     struct ExceptionInformation {
         DWORD thread_id;
         EXCEPTION_POINTERS* exception_pointers;
@@ -98,11 +127,14 @@ static LONG WINAPI WriteCrashDump(EXCEPTION_POINTERS* exception) {
                                     FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         const ExceptionInformation information{GetCurrentThreadId(), exception, FALSE};
-        // MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo
-        write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x40 | 0x1000, &information,
-              nullptr, nullptr);
+        // MiniDumpWithThreadInfo; the larger MiniDumpWithIndirectlyReferencedMemory failed on
+        // Eden's address space and left an empty file.
+        const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x1000,
+                              &information, nullptr, nullptr);
+        const DWORD error = ok ? 0 : GetLastError();
         CloseHandle(file);
-        std::fprintf(stderr, "Crash dump written to %s\n", path);
+        std::fprintf(stderr, ok ? "Crash dump written to %s\n" : "Crash dump to %s failed (%#lx)\n",
+                     path, error);
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }

@@ -227,6 +227,7 @@ void EmuWindow_SDL3::OnEvent(SDL_Event& event) {
         is_shown = true;
         return OnResize();
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+        LOG_INFO(Frontend, "Window close requested");
         is_open = false;
         return;
     case SDL_EVENT_KEY_DOWN:
@@ -250,6 +251,7 @@ void EmuWindow_SDL3::OnEvent(SDL_Event& event) {
     case SDL_EVENT_FINGER_UP:
         return OnFingerUp();
     case SDL_EVENT_QUIT:
+        LOG_INFO(Frontend, "Quit requested");
         is_open = false;
         return;
     default:

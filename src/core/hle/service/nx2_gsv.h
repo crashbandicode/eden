@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "common/alignment.h"
+#include "common/settings.h"
 #include "core/core.h"
 #include "video_core/renderer_base.h"
 #include "core/frontend/framebuffer_layout.h"
@@ -610,6 +611,7 @@ private:
         }
         WaitForFrame(~w[22], w[24]);
         Composite(w[5], ~w[22], w[24]);
+        PaceToVblank();
         constexpr u64 AvailableSlots = 0x7fff;
         TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
                              static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
@@ -621,6 +623,26 @@ private:
     // Eden's GPU thread has processed the frame. Otherwise the game laps the GPU thread and
     // rewrites command memory it hasn't read yet.
     u32 m_wait_timeouts{};
+
+    // The console flips one frame per 60 Hz vblank and keeps the rest queued, so a game can't
+    // present faster than that. Every slot is reported free here: hold each present until the
+    // next vblank instead (title 4 ran at up to 160 fps, its timing and audio with it).
+    std::chrono::steady_clock::time_point m_next_vblank{};
+
+    void PaceToVblank() {
+        if (!Settings::values.use_speed_limit.GetValue() || Settings::SpeedLimit() == 0) {
+            return;
+        }
+        const auto interval = std::chrono::nanoseconds{100'000'000'000LL / 60 / Settings::SpeedLimit()};
+        const auto now = std::chrono::steady_clock::now();
+        if (now > m_next_vblank + interval) {
+            // Running slower than 60 fps: show at once and don't bank the lost time.
+            m_next_vblank = now;
+        } else if (now < m_next_vblank) {
+            std::this_thread::sleep_until(m_next_vblank);
+        }
+        m_next_vblank += interval;
+    }
 
     void WaitForFrame(u32 fence_id, u32 fence_value) {
         if (fence_id >= 192) {

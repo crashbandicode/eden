@@ -68,6 +68,7 @@ struct AsyncDecodeContext {
     boost::container::small_vector<BufferImageCopy, 16> copies;
     std::mutex mutex;
     std::atomic_bool complete;
+    bool cancelled{}; ///< The image was deleted meanwhile: drop the result (GPU thread only).
 };
 
 using TextureCacheGPUMap = ::Common::unordered_map<u64, std::vector<ImageId>, Common::IdentityHash<u64>>;

@@ -1499,9 +1499,17 @@ void TextureCache<P>::TickAsyncDecode() {
     auto i = async_decodes.begin();
     while (i != async_decodes.end()) {
         auto* async_decode = i->get();
-        std::unique_lock lock{async_decode->mutex};
-        if (!async_decode->complete) {
-            ++i;
+        {
+            // Release the lock before the context is erased below: unlocking it afterwards wrote
+            // into freed memory (heap corruption, crashes minutes into title 1).
+            std::unique_lock lock{async_decode->mutex};
+            if (!async_decode->complete) {
+                ++i;
+                continue;
+            }
+        }
+        if (async_decode->cancelled) {
+            i = async_decodes.erase(i);
             continue;
         }
         Image& image = slot_images[async_decode->image_id];
@@ -2452,6 +2460,14 @@ void TextureCache<P>::UntrackImage(ImageBase& image, ImageId image_id) {
 template <class P>
 void TextureCache<P>::DeleteImage(ImageId image_id, bool immediate_delete) {
     ImageBase& image = slot_images[image_id];
+    if (True(image.flags & ImageFlagBits::IsDecoding)) {
+        // A worker is still decoding it: keep its context alive but drop the result.
+        for (auto& async_decode : async_decodes) {
+            if (async_decode->image_id == image_id) {
+                async_decode->cancelled = true;
+            }
+        }
+    }
     if (image.HasScaled()) {
         total_used_memory -= GetScaledImageSizeBytes(image);
     }

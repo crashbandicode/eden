@@ -128,6 +128,9 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 70 | freeze ~15 s after the post-customization save; channels 2/4 wait on 0x2115c98000 (equal 0x5293, now 0x5310) | a 3D queue ticks a counter two queues acquire value by value; Eden wrote several ticks between their re-checks | releases latch the waiters they meet (8e37f58) |
 | 71 | audio broken, game at 90-160 fps | vi2 presents were never paced | 60 Hz vblank pacing |
 | 72 | stuck loading the next scene ("too many files open" for route_wallClimb.pack.zs, save.dat) | VFS open-file cache cap equal to the CRT limit (8192) | cap 512 below _getmaxstdio() |
+| 73 | loading screen hangs, host GPU TDR | macro parameters split across GP entries were parked; method data continues across entries | continuous split methods (e8d060b) |
+| 74 | rejected ATOMG/STL/LDL with small immediate offsets | lowering only took a zero offset | s20 ATOM offset, 24-bit STL/LDL offset (6302be8) |
+| 75 | same crash 3 runs (415 s, 429 s, 9960 s): read 0x29 at pc 0x85096d10 (recursive mutex lock), lr 0x82ada310 | worker job runs main+0x2aba2b0 on object C = [A+0x18] whose manager [C+0x720] is null; C's destructor (main+0x2ab8e20, vtable main+0x4b660f8) nulls it before A's teardown (main+0x2b37b50) clears A+0x18; teardown and per-frame update are both jobs (via 0x8365c634); NFC Finalize comes 14-22 s before each crash; LSE atomics (exclusive pairs) and DMB (mfence) checked fine | open: catch all threads at the abort with the gdbstub (`nx2work/dbg_crash_threads.rsp`) |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,

@@ -15,7 +15,8 @@ class Rsp:
         import time
         for _ in range(240):  # wait up to ~2 min for the stub to listen
             try:
-                self.s = socket.create_connection(("127.0.0.1", port), timeout=3600)
+                self.s = socket.create_connection(("127.0.0.1", port), timeout=3)
+                self.s.settimeout(None)  # a stop can be hours of play away
                 break
             except OSError:
                 time.sleep(0.5)

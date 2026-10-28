@@ -50,6 +50,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
     std::vector<u32> call_targets;
     std::vector<u32> call_links;
     bool main_exited = false;
+    bool computed_branch = false; // a jump table: the program ends at its self-branch, not an EXIT
     bool uses_uniform_bank = false;
     for (const auto& instruction : code) {
         const u32 op = instruction.Bits(0, 12);
@@ -1264,9 +1265,10 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                                  data + (size < 4 ? 1U : 1U << (size - 4)) > 246)))
                 return fail(index, "native global store size");
             if (data == 255 && size > 4) {
-                // Zeros wider than one register: store from zeroed scratch registers.
-                for (u32 i = 0; i < (1U << (size - 4)); ++i) mov_imm(250 + i, 0);
-                data = 250;
+                // Zeros wider than one register: store from zeroed scratch registers (aligned to the
+                // access: R248-R251 for 128 bits, R250-R251 for 64).
+                data = size == 6 ? 248 : 250;
+                for (u32 i = 0; i < (1U << (size - 4)); ++i) mov_imm(data + i, 0);
             }
             u32 address = insn.Bits(24, 8);
             bool extended = insn.Bits(72, 1) != 0;
@@ -2090,6 +2092,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (source == ~0U) return fail(index, "native uniform computed branch source");
             emit(0xe25000000000000fULL | predicate | (u64{source} << 8) |
                  ((static_cast<u64>(offset) & 0xffffff) << 20));
+            computed_branch = true;
             break;
         }
         case 0x944: { // Verified CALL.REL.NOINC with R55 holding the return PC
@@ -2149,7 +2152,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (s64{index} * 16 + 16 + relative != 0)
                 return fail(index, "native return relative base");
             emit(0xe32000000007000fULL);
-            bool complete = true;
+            bool complete = !computed_branch;
             for (u32 target : call_targets) complete &= target <= index;
             if (complete) return finish(index);
             break;
@@ -2177,6 +2180,8 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (target < 0 || target % 16) return fail(index, "native branch destination alignment");
             relocations.push_back({static_cast<u32>(result.instructions.size()), target / 16});
             emit(0xe24000000000000fULL | branch_predicate);
+            if (computed_branch && target == s64{index} * 16 && branch_predicate == (u64{7} << 16))
+                return finish(index); // the closing self-branch
             break;
         }
         case 0x94d: { // EXIT
@@ -2198,7 +2203,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (call_targets.empty()) {
                 const bool pending_branch = std::any_of(relocations.begin(), relocations.end(),
                     [&](const Relocation& relocation) { return relocation.target > index; });
-                if (!pending_branch) return finish(index);
+                if (!pending_branch && !computed_branch) return finish(index);
                 break;
             }
             if (main_exited) {
@@ -2207,7 +2212,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 bool complete = std::none_of(relocations.begin(), relocations.end(),
                     [&](const Relocation& relocation) { return relocation.target > index; });
                 for (u32 target : call_targets) complete &= target <= index;
-                if (complete) return finish(index);
+                if (complete && !computed_branch) return finish(index);
                 break;
             }
             for (u32 target : call_targets) {

@@ -81,10 +81,13 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
         const ShaderInfo* shader_info{TryGet(*cpu_shader_addr)};
         if (!shader_info) {
             const u32 start_address{native ? 0 : shader_config.offset};
-            GraphicsEnvironment env{*maxwell3d, *gpu_memory, program, native ? shader_addr : base_addr, start_address};
             try {
+                // Native programs are lowered while the environment is built.
+                RethrowIfRejected(*cpu_shader_addr);
+                GraphicsEnvironment env{*maxwell3d, *gpu_memory, program, native ? shader_addr : base_addr, start_address};
                 shader_info = MakeShaderInfo(env, *cpu_shader_addr);
             } catch (const Shader::Exception&) {
+                RememberRejection(*cpu_shader_addr);
                 // Once per program: which stage slot it is bound to, its header and the slot's
                 // registers (to tell how a pipeline with task/mesh programs is set up).
                 static std::unordered_set<GPUVAddr> described;
@@ -145,8 +148,26 @@ const ShaderInfo* ShaderCache::ComputeShader() {
     if (const ShaderInfo* const shader = TryGet(*cpu_shader_addr)) {
         return shader;
     }
-    ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start};
-    return MakeShaderInfo(env, *cpu_shader_addr);
+    try {
+        RethrowIfRejected(*cpu_shader_addr);
+        ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start};
+        return MakeShaderInfo(env, *cpu_shader_addr);
+    } catch (const Shader::Exception&) {
+        RememberRejection(*cpu_shader_addr);
+        throw;
+    }
+}
+
+void ShaderCache::RethrowIfRejected(VAddr addr) {
+    std::scoped_lock lock{rejected_mutex};
+    if (const auto it = rejected_native.find(addr); it != rejected_native.end()) {
+        std::rethrow_exception(it->second);
+    }
+}
+
+void ShaderCache::RememberRejection(VAddr addr) {
+    std::scoped_lock lock{rejected_mutex};
+    rejected_native.emplace(addr, std::current_exception());
 }
 
 void ShaderCache::GetGraphicsEnvironments(GraphicsEnvironments& result,
@@ -290,22 +311,8 @@ ShaderCache::Entry* ShaderCache::NewEntry(VAddr addr, VAddr addr_end, ShaderInfo
 }
 
 const ShaderInfo* ShaderCache::MakeShaderInfo(GenericEnvironment& env, VAddr cpu_addr) {
-    {
-        std::scoped_lock lock{rejected_mutex};
-        if (const auto it = rejected_native.find(cpu_addr); it != rejected_native.end()) {
-            std::rethrow_exception(it->second);
-        }
-    }
     auto info = std::make_unique<ShaderInfo>();
-    std::optional<u64> analyzed;
-    try {
-        analyzed = env.Analyze();
-    } catch (const Shader::Exception&) {
-        std::scoped_lock lock{rejected_mutex};
-        rejected_native.emplace(cpu_addr, std::current_exception());
-        throw;
-    }
-    if (const std::optional<u64> cached_hash{analyzed}) {
+    if (const std::optional<u64> cached_hash{env.Analyze()}) {
         info->unique_hash = *cached_hash;
         info->size_bytes = env.CachedSizeBytes();
     } else {

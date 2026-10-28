@@ -21,6 +21,7 @@
 #include "common/alignment.h"
 #include "common/settings.h"
 #include "core/core.h"
+#include "video_core/rasterizer_interface.h"
 #include "video_core/renderer_base.h"
 #include "core/frontend/framebuffer_layout.h"
 #include "core/perf_stats.h"
@@ -758,6 +759,7 @@ private:
         }
         system.GPU().RequestComposite(std::move(layers), std::move(fences));
         CaptureFrame();
+        DumpRanges();
         system.SpeedLimiter().DoSpeedLimiting(system.CoreTiming().GetGlobalTimeUs());
         system.GetPerfStats().EndSystemFrame();
         system.GetPerfStats().BeginSystemFrame();
@@ -795,6 +797,46 @@ private:
                 pending->store(false);
             },
             layout);
+    }
+
+    // EDEN_NX2_DUMP=<present>:<hex address>:<hex size>[,<hex address>:<hex size>...]: at that
+    // present, flush those GPU ranges back from the host GPU and save their bytes as
+    // nx2-dump-<address>.bin in the EDEN_NX2_FRAME_CAPTURE directory (to inspect what a pass
+    // rendered, e.g. a 3D volume, offline).
+    void DumpRanges() {
+        static const std::string spec = [] {
+            const char* text = std::getenv("EDEN_NX2_DUMP");
+            return text ? std::string{text} : std::string{};
+        }();
+        if (spec.empty() || m_presents != std::strtoull(spec.c_str(), nullptr, 10)) {
+            return;
+        }
+        const char* const directory = std::getenv("EDEN_NX2_FRAME_CAPTURE");
+        size_t position = spec.find(':');
+        while (position != std::string::npos) {
+            char* end{};
+            const u64 address = std::strtoull(spec.c_str() + position + 1, &end, 16);
+            const u64 size = *end == ':' ? std::strtoull(end + 1, &end, 16) : 0;
+            position = spec.find(',', position + 1); // the next "address:size"
+            const std::string path = fmt::format("{}/nx2-dump-{:x}.bin", directory ? directory : ".", address);
+            // On the GPU thread: waiting for it here can deadlock with a GPU wait on this present.
+            static_cast<void>(system.GPU().RunOnGpuThread([this, address, size, path] {
+                std::vector<u8> bytes(size);
+                for (u64 current = address; current < address + size;) {
+                    const u64 chunk = std::min((current | 0xfff) + 1, address + size) - current;
+                    if (const auto device = Nvidia::Devices::Nx2GpuMemoryRegistry::Get().DeviceAddressOf(current)) {
+                        system.GPU().Renderer().ReadRasterizer()->FlushRegion(*device, chunk);
+                        system.Host1x().MemoryManager().ReadBlock(*device, bytes.data() + (current - address), chunk);
+                    }
+                    current += chunk;
+                }
+                if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
+                    std::fwrite(bytes.data(), 1, bytes.size(), file);
+                    std::fclose(file);
+                }
+                LOG_INFO(Service, "nx2: dumped {:#x} bytes at {:#x} to {}", size, address, path);
+            }));
+        }
     }
 
     // 228(u64 token, u32 slot): return a buffer without presenting it.

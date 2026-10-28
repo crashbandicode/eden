@@ -411,6 +411,10 @@ u64 GPU::RequestFlush(DAddr addr, std::size_t size) {
     });
 }
 
+u64 GPU::RunOnGpuThread(std::function<void()>&& action) {
+    return impl->RequestSyncOperation(std::move(action));
+}
+
 u64 GPU::CurrentSyncRequestFence() const {
     return impl->CurrentSyncRequestFence();
 }

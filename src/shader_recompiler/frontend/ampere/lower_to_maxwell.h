@@ -161,15 +161,17 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
         };
         std::string_view operand_error;
         const auto emit = [&](u64 word) { result.instructions.push_back(word); };
-        const u32 guard_mask = 1U << guard_slot;
-        const auto save_predicate = [&] {
-            emit(0x38e8000000070000ULL | 253 | (u64{255} << 8) | (u64{guard_mask} << 20));
+        // P(guard slot) while a uniform guard is swapped in; P6 for lowerings that use it as
+        // scratch (R2UR, MATCH, HFMA2.RELU), which save and restore it with the defaults below.
+        const u32 guard_mask = guard_slot < 7 ? 1U << guard_slot : 0U;
+        const auto save_predicate = [&](u32 mask = 1U << 6) {
+            emit(0x38e8000000070000ULL | 253 | (u64{255} << 8) | (u64{mask} << 20));
         };
-        const auto restore_predicate = [&] {
-            emit(0x38f0000000070000ULL | (u64{253} << 8) | (u64{guard_mask} << 20));
+        const auto restore_predicate = [&](u32 mask = 1U << 6) {
+            emit(0x38f0000000070000ULL | (u64{253} << 8) | (u64{mask} << 20));
         };
         if (guarded_uniform) {
-            save_predicate();
+            save_predicate(guard_mask);
             emit(0x38f0000000070000ULL | (u64{239} << 8) | (u64{guard_mask} << 20));
         }
         const u32 output_mask = uniform_output == 7 ? 0U : 1U << (6 - uniform_output);
@@ -2229,7 +2231,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             emit(0x38e8000000070000ULL | 239 | (u64{239} << 8) | (u64{output_mask} << 20));
             emit(0x38f0000000070000ULL | (u64{254} << 8) | (u64{output_mask} << 20));
         }
-        if (guarded_uniform) restore_predicate();
+        if (guarded_uniform) restore_predicate(guard_mask);
     }
     return fail(static_cast<u32>(code.size()), main_exited ? "native program lacks captured library return" : "native program has no unconditional EXIT");
 }

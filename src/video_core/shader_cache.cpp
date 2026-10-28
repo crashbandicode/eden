@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <string>
+#include <unordered_set>
 #include <fmt/ranges.h>
 #include <array>
 #include <vector>
@@ -91,7 +93,11 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
     if (!native.native_turing) throw;
     native.native_execution_failed = true;
     last_shaders_valid = false;
-    LOG_ERROR(HW_GPU, "Native graphics shader rejected: {}", error.what());
+    // Each rejected program is logged once (the draws that use it keep failing quietly).
+    static std::unordered_set<std::string> logged;
+    if (logged.insert(error.what()).second) {
+        LOG_ERROR(HW_GPU, "Native graphics shader rejected: {}", error.what());
+    }
     // Once: show what the vertex stage has bound, to find where an unbound bank's data lives.
     static std::vector<std::string> dumped_errors;
     if (const std::string what{error.what()};
@@ -177,6 +183,12 @@ void ShaderCache::Register(std::unique_ptr<ShaderInfo> data, VAddr addr, size_t 
 
 void ShaderCache::InvalidatePagesInRegion(VAddr addr, size_t size) {
     const VAddr addr_end = addr + size;
+    {
+        std::scoped_lock lock{rejected_mutex};
+        boost::unordered::erase_if(rejected_native, [&](const auto& rejected) {
+            return rejected.first >= addr && rejected.first < addr_end;
+        });
+    }
     const u64 page_end = (addr_end + YUZU_PAGESIZE - 1) >> YUZU_PAGEBITS;
     for (u64 page = addr >> YUZU_PAGEBITS; page < page_end; ++page) {
         auto it = invalidation_cache.find(page);
@@ -262,8 +274,22 @@ ShaderCache::Entry* ShaderCache::NewEntry(VAddr addr, VAddr addr_end, ShaderInfo
 }
 
 const ShaderInfo* ShaderCache::MakeShaderInfo(GenericEnvironment& env, VAddr cpu_addr) {
+    {
+        std::scoped_lock lock{rejected_mutex};
+        if (const auto it = rejected_native.find(cpu_addr); it != rejected_native.end()) {
+            std::rethrow_exception(it->second);
+        }
+    }
     auto info = std::make_unique<ShaderInfo>();
-    if (const std::optional<u64> cached_hash{env.Analyze()}) {
+    std::optional<u64> analyzed;
+    try {
+        analyzed = env.Analyze();
+    } catch (const Shader::Exception&) {
+        std::scoped_lock lock{rejected_mutex};
+        rejected_native.emplace(cpu_addr, std::current_exception());
+        throw;
+    }
+    if (const std::optional<u64> cached_hash{analyzed}) {
         info->unique_hash = *cached_hash;
         info->size_bytes = env.CachedSizeBytes();
     } else {

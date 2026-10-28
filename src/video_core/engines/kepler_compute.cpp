@@ -10,6 +10,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <optional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include "common/assert.h"
 #include "common/logging.h"
 #include "shader_recompiler/exception.h"
@@ -316,11 +319,18 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             return true;
         }
         native_macro->native_execution_failed = true;
-        LOG_ERROR(HW_GPU, "Native QMD failed: {}", error);
         std::array<u32, 128> qmd{};
         if (memory_manager.IsFullyMappedRange(qmd_address, sizeof(qmd))) {
             memory_manager.ReadBlockUnsafe(qmd_address, qmd.data(), sizeof(qmd));
         }
+        // Log a failing program's first few dispatches only (QMD words 48-49 hold its code
+        // address); it fails the same way every frame.
+        static std::unordered_map<u64, u32> failures;
+        const u64 program = (u64{qmd[49]} << 32) | qmd[48];
+        if (failures[program ^ std::hash<std::string>{}(std::string{error})]++ >= 2) {
+            return true;
+        }
+        LOG_ERROR(HW_GPU, "Native QMD failed: {}", error);
         if (qmd_diagnostics && memory_manager.IsFullyMappedRange(qmd_address, sizeof(qmd))) {
             std::ofstream dump("native-qmd.bin", std::ios::binary);
             dump.write(reinterpret_cast<const char*>(qmd.data()), sizeof(qmd));
@@ -438,7 +448,10 @@ bool KeplerCompute::DispatchNativeCompute(const NativeQmdScheduler::Descriptor& 
     try {
         rasterizer->DispatchCompute();
     } catch (const Shader::Exception& error) {
-        LOG_ERROR(HW_GPU, "Native compute shader rejected: {}", error.what());
+        static std::unordered_set<std::string> logged;
+        if (logged.insert(error.what()).second) {
+            LOG_ERROR(HW_GPU, "Native compute shader rejected: {}", error.what());
+        }
         if (std::string_view{error.what()}.find("matrix multiply") != std::string_view::npos) {
             DescribeNativeResources(qmd);
             // The console runs this on tensor cores; stand in with a plain upscale of its input.

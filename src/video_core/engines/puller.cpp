@@ -62,6 +62,15 @@ bool Puller::CanResumeAcquire(DmaPusher& dma_pusher) {
         return true;
     }
     const u32 current = ReadSemaphoreWord(dma_pusher, pending_acquire->address);
+    if (Nx2SemaphoreWaiters::Get().Latched(this)) {
+        if (static std::atomic<u32> rescued{};
+            !pending_acquire->Matches(current) && rescued.fetch_add(1) < 64) {
+            LOG_INFO(HW_GPU, "Channel {} met semaphore {:#x} value {:#x} at its release (now {:#x})",
+                     dma_pusher.channel_state.bind_id, pending_acquire->address,
+                     pending_acquire->value, current);
+        }
+        return true;
+    }
     if (pending_acquire->Matches(current)) {
         return true;
     }
@@ -87,6 +96,7 @@ bool Puller::ResumeAcquire(DmaPusher& dma_pusher) {
         return false;
     }
     pending_acquire.reset();
+    Nx2SemaphoreWaiters::Get().Remove(this);
     return true;
 }
 
@@ -210,9 +220,17 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         if (acquire.Matches(ReadSemaphoreWord(dma_pusher, acquire.address))) {
             return;
         }
+        // Registered before the fences run, so a release among them that meets the value counts
+        // even if a later one overwrites it.
+        auto& waiters = Nx2SemaphoreWaiters::Get();
+        if (const auto device = dma_pusher.memory_manager.GpuToCpuAddress(acquire.address)) {
+            waiters.Add(this, *device, acquire.value, acquire.operation);
+        }
         dma_pusher.rasterizer->ReleaseFences();
-        if (!acquire.Matches(ReadSemaphoreWord(dma_pusher, acquire.address))) {
+        if (!waiters.Latched(this) && !acquire.Matches(ReadSemaphoreWord(dma_pusher, acquire.address))) {
             pending_acquire = acquire;
+        } else {
+            waiters.Remove(this);
         }
     } else {
         do {

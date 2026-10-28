@@ -14,6 +14,7 @@
 #include "common/logging.h"
 #include "shader_recompiler/exception.h"
 #include "core/core.h"
+#include "video_core/nx2.h"
 #include "video_core/engines/fermi_2d.h"
 #include "video_core/engines/kepler_compute.h"
 #include "video_core/engines/maxwell_3d.h"
@@ -240,6 +241,9 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
                     rasterizer->SignalFence([this, address, payload] {
                         const u32 value = memory_manager.Read<u32>(address) + payload;
                         memory_manager.Write<u32>(address, value);
+                        if (const auto device = memory_manager.GpuToCpuAddress(address)) {
+                            Tegra::Nx2SemaphoreWaiters::Get().OnWrite(*device, value);
+                        }
                         static const u64 watch = [] {
                             const char* text = std::getenv("EDEN_NX2_SEM_WATCH");
                             return text ? u64{std::strtoull(text, nullptr, 16)} : u64{};
@@ -257,6 +261,9 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
                     rasterizer->SignalFence([this, address, payload] {
                         const u32 value = std::max(memory_manager.Read<u32>(address), payload);
                         memory_manager.Write<u32>(address, value);
+                        if (const auto device = memory_manager.GpuToCpuAddress(address)) {
+                            Tegra::Nx2SemaphoreWaiters::Get().OnWrite(*device, value);
+                        }
                     });
                 } else {
                     static const u64 watch = [] {

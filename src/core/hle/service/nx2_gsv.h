@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
+#include <cstdlib>
+#include <cstdio>
 #include <initializer_list>
 #include <atomic>
 #include <map>
@@ -12,6 +15,11 @@
 
 #include "common/alignment.h"
 #include "core/core.h"
+#include "video_core/renderer_base.h"
+#include "core/frontend/framebuffer_layout.h"
+#include "core/perf_stats.h"
+#include "video_core/gpu.h"
+#include "video_core/framebuffer_config.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_client_session.h"
 #include "core/hle/kernel/k_process.h"
@@ -331,17 +339,16 @@ private:
         const auto* b = ctx.CommandBuffer();
         const u64 start = u64{b[2]} | (u64{b[3]} << 32);
         const u64 last = u64{b[4]} | (u64{b[5]} << 32);
-        LOG_DEBUG(Service, "nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}", start,
+        LOG_INFO(Service, "nx2:gpu sub 101 start={:#x} last={:#x} [6]={:#x} [7]={:#x}", start,
                     last, b[6], b[7]);
         if (last > start) {
             Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Register(start, last - start + 1);
-            // The first two-page region holds the queue semaphores: GPU releases go to the second
-            // page, waits read the first (see video_core/nx2.h).
-            if (last - start + 1 == 0x2000 && Tegra::g_nx2_semaphore_source_page == 0) {
-                Tegra::g_nx2_semaphore_mirror_page = start;
-                Tegra::g_nx2_semaphore_source_page = start + 0x1000;
-                LOG_WARNING(Service, "nx2:gpu semaphore page {:#x} mirrored to {:#x}",
-                            start + 0x1000, start);
+            // Two-page regions hold queue semaphores: GPU releases go to the second page, waits
+            // read the first (see video_core/nx2.h).
+            if (last - start + 1 == 0x2000) {
+                Tegra::Nx2AddSemaphoreRegion(start);
+                LOG_INFO(Service, "nx2:gpu semaphore page {:#x} mirrored to {:#x}", start + 0x1000,
+                         start);
             }
         }
         // nn::gpu::sdk::CreateGpuAccessibleMemory stores word 3 of the reply as the
@@ -399,81 +406,6 @@ private:
     u32 m_next_memory_handle{1};
 };
 
-// Placeholder for the Switch 2 display session (nn::vi2::sdk), handed out by gsv 305. Reply
-// shapes read from the SDK: TIPC 1 -> u32 < 0x400, TIPC 3 -> u32 < 8, TIPC 11/31(u32) and
-// 32(handle, u32) -> one handle at word 3 then the result. Handles returned here are events (a
-// guess); everything else is auto-stubbed through the nx2: prefix.
-class INx2Vi2Session final : public ServiceFramework<INx2Vi2Session> {
-public:
-    explicit INx2Vi2Session(Core::System& system_)
-        : ServiceFramework{system_, "nx2:vi2"}, m_context{system_, "nx2:vi2"} {
-        RegisterHandlersTipc({
-            {1, &INx2Vi2Session::ReturnOne, "Unknown1"},
-            {3, &INx2Vi2Session::ReturnOne, "GetDisplayCount (guessed)"},
-            {5, &INx2Vi2Session::GetTimestampRecorderCount, "GetTimestampRecorderCount (guessed)"},
-            {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
-            {31, &INx2Vi2Session::ReturnEvent, "Unknown31"},
-            {32, &INx2Vi2Session::ReturnEvent, "Unknown32"},
-            {228, &INx2Vi2Session::CancelClientBuffer, "CancelClientBuffer"},
-            {229, &INx2Vi2Session::PresentClientBuffer, "PresentClientBuffer"},
-        });
-    }
-
-    ~INx2Vi2Session() override {
-        for (auto* event : m_events) {
-            m_context.CloseEvent(event);
-        }
-    }
-
-private:
-    // 229(u64 client token, u32 slot, u32 image, ...fences): result, u64 mask of buffer slots the
-    // client may acquire next, four zero words. Nothing is shown yet; every slot is handed back
-    // at once (changes.patch's default mask is 0x7fff).
-    void PresentClientBuffer(HLERequestContext& ctx) {
-        const auto* w = ctx.CommandBuffer();
-        ++m_presents;
-        if (m_presents <= 4 || (m_presents % 600) == 0) {
-            LOG_INFO(Service, "nx2:vi2 229 present #{} token={:#x} slot={} image={}", m_presents,
-                     u64{w[2]} | (u64{w[3]} << 32), w[4], w[5]);
-        }
-        constexpr u64 AvailableSlots = 0x7fff;
-        TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
-                             static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
-    }
-
-    // 228(u64 token, u32 slot): return a buffer without presenting it.
-    void CancelClientBuffer(HLERequestContext& ctx) {
-        constexpr u64 AvailableSlots = 0x7fff;
-        TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
-                             static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
-    }
-
-    void ReturnOne(HLERequestContext& ctx) {
-        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {}, returning 1", ctx.GetCommand());
-        TipcReplyWords(ctx, {1});
-    }
-
-    // Must be < 8; nn::vi::detail::LayerHistory creates 7 timestamp recorders per layer.
-    void GetTimestampRecorderCount(HLERequestContext& ctx) {
-        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC 5, returning 7");
-        TipcReplyWords(ctx, {7});
-    }
-
-    void ReturnEvent(HLERequestContext& ctx) {
-        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {} [2]={:#x} [3]={:#x}, returning an event",
-                    ctx.GetCommand(), ctx.CommandBuffer()[2], ctx.CommandBuffer()[3]);
-        auto* event = m_context.CreateEvent(fmt::format("nx2:vi2:Event{}", m_events.size()));
-        m_events.push_back(event);
-        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
-        rb.Push(ResultSuccess);
-        rb.PushCopyObjects(ctx, event->GetReadableEvent());
-    }
-
-    KernelHelpers::ServiceContext m_context;
-    std::vector<Kernel::KEvent*> m_events;
-    u64 m_presents{};
-};
-
 // Native memory and images handed out by the Switch 2 graphics server (gsv 111/114/423/429/315),
 // shared with the vi2 session so presents can find an image's memory. Command meanings follow
 // the shared changes.patch (IGraphicsSupervisor), re-checked against title 4's SDK.
@@ -527,6 +459,166 @@ inline Nx2ImageLayout Nx2CalculateImageLayout(const u32* preference) {
     layout.alignment = std::max<u64>(64 * block_rows, 0x1000);
     return layout;
 }
+
+// Placeholder for the Switch 2 display session (nn::vi2::sdk), handed out by gsv 305. Reply
+// shapes read from the SDK: TIPC 1 -> u32 < 0x400, TIPC 3 -> u32 < 8, TIPC 11/31(u32) and
+// 32(handle, u32) -> one handle at word 3 then the result. Handles returned here are events (a
+// guess); everything else is auto-stubbed through the nx2: prefix.
+class INx2Vi2Session final : public ServiceFramework<INx2Vi2Session> {
+public:
+    explicit INx2Vi2Session(Core::System& system_, std::shared_ptr<Nx2NativeObjects> objects_)
+        : ServiceFramework{system_, "nx2:vi2"}, m_context{system_, "nx2:vi2"},
+          m_objects{std::move(objects_)} {
+        RegisterHandlersTipc({
+            {1, &INx2Vi2Session::ReturnOne, "Unknown1"},
+            {3, &INx2Vi2Session::ReturnOne, "GetDisplayCount (guessed)"},
+            {5, &INx2Vi2Session::GetTimestampRecorderCount, "GetTimestampRecorderCount (guessed)"},
+            {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
+            {31, &INx2Vi2Session::ReturnEvent, "Unknown31"},
+            {32, &INx2Vi2Session::ReturnEvent, "Unknown32"},
+            {228, &INx2Vi2Session::CancelClientBuffer, "CancelClientBuffer"},
+            {229, &INx2Vi2Session::PresentClientBuffer, "PresentClientBuffer"},
+        });
+    }
+
+    ~INx2Vi2Session() override {
+        for (auto* event : m_events) {
+            m_context.CloseEvent(event);
+        }
+    }
+
+private:
+    // 229(u64 client token, u32 slot, u32 image, ...fences): result, u64 mask of buffer slots the
+    // client may acquire next, four zero words. Nothing is shown yet; every slot is handed back
+    // at once (changes.patch's default mask is 0x7fff).
+    void PresentClientBuffer(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        ++m_presents;
+        if (m_presents <= 4 || (m_presents % 600) == 0) {
+            LOG_INFO(Service, "nx2:vi2 229 present #{} token={:#x} slot={} image={}", m_presents,
+                     u64{w[2]} | (u64{w[3]} << 32), w[4], w[5]);
+        }
+        Composite(w[5], ~w[22], w[24]);
+        constexpr u64 AvailableSlots = 0x7fff;
+        TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
+                             static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
+    }
+
+    // Shows a presented native image: word 5 is the image id, ~word 22 / word 24 the GPU fence
+    // (syncpoint, value) to wait for (layout from changes.patch). The image is a block-linear
+    // RGBA8 surface in the console's native GOB layout at GPU address == CPU address.
+    void Composite(u32 image_id, u32 fence_id, u32 fence_value) {
+        u64 address{};
+        Nx2ImageLayout layout{};
+        {
+            std::scoped_lock lk{m_objects->mutex};
+            const auto image = m_objects->images.find(image_id);
+            if (image == m_objects->images.end()) {
+                return;
+            }
+            const auto memory = m_objects->memories.find(image->second.memory);
+            if (memory == m_objects->memories.end() || memory->second.address == 0) {
+                return;
+            }
+            address = memory->second.address;
+            layout = Nx2CalculateImageLayout(image->second.preference.data());
+        }
+        const auto device = Nvidia::Devices::Nx2GpuMemoryRegistry::Get().DeviceAddressOf(address);
+        if (!device) {
+            LOG_WARNING(Service, "nx2:vi2 present: image {} at {:#x} has no device mapping",
+                        image_id, address);
+            return;
+        }
+        std::vector<Tegra::FramebufferConfig> layers{Tegra::FramebufferConfig{
+            .address = *device,
+            .offset = 0,
+            .width = layout.width,
+            .height = layout.height,
+            .stride = static_cast<u32>(layout.pitch / 4),
+            .pixel_format = android::PixelFormat::Rgba8888,
+            .transform_flags = android::BufferTransformFlags::Unset,
+            .crop_rect = {0, 0, static_cast<int>(layout.width), static_cast<int>(layout.height)},
+            .blending = Tegra::BlendMode::Opaque,
+            .native_tiling = true,
+        }};
+        std::vector<Nvidia::NvFence> fences;
+        if (fence_id < 192) {
+            fences.push_back({static_cast<s32>(fence_id), fence_value});
+        }
+        system.GPU().RequestComposite(std::move(layers), std::move(fences));
+        CaptureFrame();
+        system.SpeedLimiter().DoSpeedLimiting(system.CoreTiming().GetGlobalTimeUs());
+        system.GetPerfStats().EndSystemFrame();
+        system.GetPerfStats().BeginSystemFrame();
+    }
+
+    // EDEN_NX2_FRAME_CAPTURE=<dir>: every 120th present, save what the renderer shows as
+    // nx2-frame-<n>.tga in <dir> (lets hidden test runs check the output; idea from changes.patch).
+    void CaptureFrame() {
+        static const char* const directory = std::getenv("EDEN_NX2_FRAME_CAPTURE");
+        if (directory == nullptr || (m_presents % 120) != 1 || m_capture_pending.exchange(true)) {
+            return;
+        }
+        const auto layout = Layout::DefaultFrameLayout(1280, 720);
+        auto pixels = std::make_shared<std::vector<u8>>(layout.width * layout.height * 4);
+        const std::string path =
+            fmt::format("{}/nx2-frame-{:05}.tga", directory, m_presents);
+        auto* pending = &m_capture_pending;
+        system.GPU().Renderer().RequestScreenshot(
+            pixels->data(),
+            [pixels, layout, path, pending](bool invert_y) {
+                std::array<u8, 18> header{};
+                header[2] = 2; // uncompressed true colour
+                header[12] = static_cast<u8>(layout.width);
+                header[13] = static_cast<u8>(layout.width >> 8);
+                header[14] = static_cast<u8>(layout.height);
+                header[15] = static_cast<u8>(layout.height >> 8);
+                header[16] = 32;
+                header[17] = invert_y ? 0x28 : 0x08;
+                if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
+                    std::fwrite(header.data(), 1, header.size(), file);
+                    std::fwrite(pixels->data(), 1, pixels->size(), file);
+                    std::fclose(file);
+                }
+                pending->store(false);
+            },
+            layout);
+    }
+
+    // 228(u64 token, u32 slot): return a buffer without presenting it.
+    void CancelClientBuffer(HLERequestContext& ctx) {
+        constexpr u64 AvailableSlots = 0x7fff;
+        TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
+                             static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
+    }
+
+    void ReturnOne(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {}, returning 1", ctx.GetCommand());
+        TipcReplyWords(ctx, {1});
+    }
+
+    // Must be < 8; nn::vi::detail::LayerHistory creates 7 timestamp recorders per layer.
+    void GetTimestampRecorderCount(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC 5, returning 7");
+        TipcReplyWords(ctx, {7});
+    }
+
+    void ReturnEvent(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {} [2]={:#x} [3]={:#x}, returning an event",
+                    ctx.GetCommand(), ctx.CommandBuffer()[2], ctx.CommandBuffer()[3]);
+        auto* event = m_context.CreateEvent(fmt::format("nx2:vi2:Event{}", m_events.size()));
+        m_events.push_back(event);
+        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, event->GetReadableEvent());
+    }
+
+    KernelHelpers::ServiceContext m_context;
+    std::shared_ptr<Nx2NativeObjects> m_objects;
+    std::vector<Kernel::KEvent*> m_events;
+    u64 m_presents{};
+    std::atomic<bool> m_capture_pending{};
+};
 
 // Placeholder for the Switch 2 graphics-system server that nn::gsv::BootWithRemoteMemory talks
 // to over TIPC. Nothing behind it is emulated: commands succeed and are logged, so boot can show
@@ -816,7 +908,7 @@ private:
         const size_t data = TipcDataOffset(cmd_buf);
         LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC 305 arg={:#x}, returning a nx2:vi2 session",
                     u64{cmd_buf[data]} | (u64{cmd_buf[data + 1]} << 32));
-        ReturnRawSession(system, ctx, std::make_shared<INx2Vi2Session>(system));
+        ReturnRawSession(system, ctx, std::make_shared<INx2Vi2Session>(system, m_objects));
     }
 
     void OpenGpuSession(HLERequestContext& ctx) {

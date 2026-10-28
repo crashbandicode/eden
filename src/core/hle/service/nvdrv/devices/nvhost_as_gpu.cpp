@@ -138,6 +138,7 @@ void nvhost_as_gpu::Nx2Map(u64 gpu_address, u64 cpu_address, u64 size) {
         smmu.Map(device_address, cpu_address, size, session->asid, true);
     }
     nx2_device_ranges[{cpu_address, size}] = device_address;
+    Nx2GpuMemoryRegistry::Get().RecordDeviceRange(cpu_address, size, device_address);
     gmmu->Map(gpu_address, device_address, size, Tegra::PTEKind::PITCH, false);
     LOG_DEBUG(Service_NVDRV, "Switch 2 GPU mapping {:#x}+{:#x} -> CPU {:#x}", gpu_address, size,
               cpu_address);

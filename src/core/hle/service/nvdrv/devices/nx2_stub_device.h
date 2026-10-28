@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -68,7 +69,31 @@ public:
         listeners.erase(owner);
     }
 
+    // Device (SMMU) address of a CPU range an address space mapped; used to present images.
+    void RecordDeviceRange(u64 cpu_address, u64 size, u64 device_address) {
+        std::scoped_lock lk{device_mutex};
+        device_ranges[cpu_address] = {size, device_address};
+    }
+
+    std::optional<u64> DeviceAddressOf(u64 cpu_address) {
+        std::scoped_lock lk{device_mutex};
+        auto it = device_ranges.upper_bound(cpu_address);
+        if (it == device_ranges.begin()) {
+            return std::nullopt;
+        }
+        --it;
+        const auto& [start, range] = *it;
+        if (cpu_address - start >= range.first) {
+            return std::nullopt;
+        }
+        return range.second + (cpu_address - start);
+    }
+
 private:
+    // Separate lock: ranges are recorded from listeners that run under `mutex`.
+    std::mutex device_mutex;
+    std::map<u64, std::pair<u64, u64>> device_ranges; // cpu start -> (size, device address)
+
     struct Mapping {
         u64 gpu_address;
         u64 cpu_address;

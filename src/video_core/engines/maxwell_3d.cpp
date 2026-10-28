@@ -392,6 +392,16 @@ void Maxwell3D::CallMacroMethod(Core::System& system, u32 method, const std::vec
     draw_manager.DrawDeferred(*this);
 }
 
+// EDEN_NX2_3D_METHODS: log the first write to each 3D register (finds methods Eden doesn't model).
+void Maxwell3D::TraceFirstMethodWrite(u32 method, u32 argument) {
+    static const bool trace = std::getenv("EDEN_NX2_3D_METHODS") != nullptr;
+    static std::array<bool, Regs::NUM_REGS> seen{};
+    if (trace && method < seen.size() && !seen[method]) {
+        seen[method] = true;
+        LOG_INFO(HW_GPU, "3D method first write: {:#x} (byte {:#x}) = {:#x}", method, method * 4, argument);
+    }
+}
+
 void Maxwell3D::CallMethod(Core::System& system, u32 method, u32 method_argument, bool is_last_call) {
     // It is an error to write to a register other than the current macro's ARG register before
     // it has finished execution.
@@ -405,6 +415,7 @@ void Maxwell3D::CallMethod(Core::System& system, u32 method, u32 method_argument
         ProcessMacro(system, method, &method_argument, 1, is_last_call);
         return;
     }
+    TraceFirstMethodWrite(method, method_argument);
 
     ASSERT(method < Regs::NUM_REGS && "Invalid Maxwell3D register, increase the size of the Regs structure");
     const u32 argument = ProcessShadowRam(method, method_argument);
@@ -605,6 +616,15 @@ void Maxwell3D::ProcessCBBind(size_t stage_index) {
     // Bind the buffer currently in CB_ADDRESS to the specified index in the desired shader
     // stage.
     const auto& bind_data = regs.bind_groups[stage_index];
+    static std::array<std::array<bool, 32>, 5> seen{};
+    if (!seen[stage_index][bind_data.shader_slot]) {
+        seen[stage_index][bind_data.shader_slot] = true;
+        LOG_INFO(HW_GPU, "Constant buffer bind: stage {} slot {} address {:#x} size {:#x}", stage_index,
+                 bind_data.shader_slot.Value(), regs.const_buffer.Address(), regs.const_buffer.size);
+    }
+    if (bind_data.shader_slot >= Regs::MaxConstBuffers) {
+        return; // slot field is 5 bits; the state array holds 18
+    }
     auto& buffer = state.shader_stages[stage_index].const_buffers[bind_data.shader_slot];
     buffer.enabled = bind_data.valid.Value() != 0;
     buffer.address = regs.const_buffer.Address();

@@ -23,6 +23,7 @@ public:
     template <typename Read, typename Release, typename Dispatch>
     std::string_view Signal(Address address, Word argument, Read read, Release release, Dispatch dispatch) {
         struct Pending { Address address; Word action; Word count; };
+        std::string_view error;
         std::array<Pending, 256> pending{};
         std::size_t count = 1;
         pending[0] = {address, argument & 15, ((argument >> 14) & 0x3ff) + 1};
@@ -73,8 +74,10 @@ public:
                         return "unsupported QMD reduction callback";
                 }
             }
-            if (qmd[12] && (qmd[13] & 0xffff) && (qmd[14] & 0xffff) && !dispatch(qmd))
-                return "native shader dispatch required";
+            // A program Eden can't run is skipped, but the QMD still completes: its releases
+            // are what other queues and the CPU wait on (the console never fails a launch).
+            const bool dispatched = !(qmd[12] && (qmd[13] & 0xffff) && (qmd[14] & 0xffff)) || dispatch(qmd);
+            if (!dispatched) error = "native shader dispatch required";
             state.completed = true;
             for (const Word base : ReleaseSlots) {
                 const Word flags = qmd[base + 1];
@@ -96,7 +99,7 @@ public:
             }
             if (qmd[16] & (1U << 5)) return "second dependent QMD unsupported";
         }
-        return {};
+        return error;
     }
 private:
     // Release slots (address low, flags | address high, payload). NVN2 patches a third one at

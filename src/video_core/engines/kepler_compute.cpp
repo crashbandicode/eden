@@ -121,7 +121,8 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
             [&](u32 address) { return address < native_registers.size() ? native_registers[address] : 0U; },
             [&](u32 address, u32 value) {
                 static u32 diagnostic_writes{};
-                if (watched) LOG_INFO(HW_GPU, "Semaphore watch: compute macro emit {:#x} = {:#x}", address, value);
+                static const bool log_emits = std::getenv("EDEN_NX2_SEM_WATCH_EMITS") != nullptr;
+                if (watched && log_emits) LOG_INFO(HW_GPU, "Semaphore watch: compute macro emit {:#x} = {:#x}", address, value);
                 if (diagnostic_writes++ < 4096) LOG_DEBUG(HW_GPU, "Native compute MME emit method={:#x}, value={:#x}", address, value);
                 if (address >= 0xe00) return false;
                 CallMethod(system, address, value, true);
@@ -154,7 +155,7 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         const GPUVAddr program = (GPUVAddr{native_registers[0xc8 + 49] & 0x1ffff} << 32) |
             native_registers[0xc8 + 48];
         const u32 control = native_registers[0xa7];
-        LOG_WARNING(HW_GPU, "Native inline QMD: address={:#x}, program={:#x}, control={:#x}, grid={}/{}/{}",
+        LOG_DEBUG(HW_GPU, "Native inline QMD: address={:#x}, program={:#x}, control={:#x}, grid={}/{}/{}",
             address, program, control, native_registers[0xc8 + 12],
             native_registers[0xc8 + 13] & 0xffff, native_registers[0xc8 + 14] & 0xffff);
         if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
@@ -236,10 +237,32 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
                     rasterizer->SignalFence([this, address, payload] {
                         const u32 value = memory_manager.Read<u32>(address) + payload;
                         memory_manager.Write<u32>(address, value);
+                        static const u64 watch = [] {
+                            const char* text = std::getenv("EDEN_NX2_SEM_WATCH");
+                            return text ? u64{std::strtoull(text, nullptr, 16)} : u64{};
+                        }();
+                        if (watch != 0 && (address & ~u64{0xf}) == watch) {
+                            LOG_INFO(HW_GPU, "Semaphore watch: QMD release add {:#x} -> {:#x}", address, value);
+                        }
                         VideoCommon::TraceNativeQuery(1, memory_manager.GetID(), address,
                             memory_manager.GpuToCpuAddress(address).value_or(0), 0, value, 1U << 26);
                     });
+                } else if (flags & (1U << 19)) {
+                    // NVN2 tracks QMD completion with a max release (bit 19) into a word other
+                    // releases also advance: a plain write would move it backwards and leave
+                    // GEQ acquires waiting forever.
+                    rasterizer->SignalFence([this, address, payload] {
+                        const u32 value = std::max(memory_manager.Read<u32>(address), payload);
+                        memory_manager.Write<u32>(address, value);
+                    });
                 } else {
+                    static const u64 watch = [] {
+                        const char* text = std::getenv("EDEN_NX2_SEM_WATCH");
+                        return text ? u64{std::strtoull(text, nullptr, 16)} : u64{};
+                    }();
+                    if (watch != 0 && (address & ~u64{0xf}) == (watch & ~u64{0xf})) {
+                        LOG_INFO(HW_GPU, "Semaphore watch: QMD release {:#x} = {:#x} flags {:#x}", address, payload, flags);
+                    }
                     rasterizer->Query(address, VideoCommon::QueryType::Payload,
                         VideoCommon::QueryPropertiesFlags::IsAFence, payload, 0);
                 }

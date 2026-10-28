@@ -170,8 +170,10 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
         return value ? GPUVAddr{std::strtoull(value, nullptr, 16)} : GPUVAddr{};
     }();
     if (watch != 0 && (regs.semaphore_address.SemaphoreAddress() & ~GPUVAddr{0xf}) == watch) {
-        LOG_INFO(HW_GPU, "Semaphore watch: channel {} op {} {:#x} value {:#x} (now {:#x})",
-                 dma_pusher.channel_state.bind_id, static_cast<u32>(op),
+        LOG_INFO(HW_GPU, "Semaphore watch: channel {} as {} device {:#x} op {} {:#x} value {:#x} (now {:#x})",
+                 dma_pusher.channel_state.bind_id, dma_pusher.memory_manager.GetID(),
+                 dma_pusher.memory_manager.GpuToCpuAddress(regs.semaphore_address.SemaphoreAddress()).value_or(0),
+                 static_cast<u32>(op),
                  regs.semaphore_address.SemaphoreAddress(), regs.semaphore_sequence,
                  dma_pusher.memory_manager.Read<u32>(regs.semaphore_address.SemaphoreAddress()));
     }

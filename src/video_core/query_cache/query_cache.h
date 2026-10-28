@@ -240,8 +240,9 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
     }();
     if (static const bool trace = std::getenv("EDEN_NX2_QUERY_TRACE") != nullptr;
         trace || (watch != 0 && (addr & ~GPUVAddr{0xf}) == watch)) {
-        LOG_INFO(HW_GPU, "nx2 report addr={:#x} type={} flags={:#x} payload={:#x}", addr,
-                 static_cast<u32>(counter_type), static_cast<u32>(flags), payload);
+        LOG_INFO(HW_GPU, "nx2 report addr={:#x} type={} flags={:#x} payload={:#x} as={} device={:#x}", addr,
+                 static_cast<u32>(counter_type), static_cast<u32>(flags), payload, gpu_memory->GetID(),
+                 gpu_memory->GpuToCpuAddress(addr).value_or(0));
     }
     size_t streamer_id = static_cast<size_t>(counter_type);
     auto* streamer = impl->streamers[streamer_id];

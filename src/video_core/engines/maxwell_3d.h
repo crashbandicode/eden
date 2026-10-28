@@ -3135,6 +3135,8 @@ public:
     /// Reads a register value located at the input method address
     u32 GetRegisterValue(u32 method) const;
 
+    void TraceFirstMethodWrite(u32 method, u32 argument);
+
     /// GPU memory, for Turing macros that read memory into their FIFO or data RAM.
     MemoryManager& GetMemoryManager() {
         return memory_manager;

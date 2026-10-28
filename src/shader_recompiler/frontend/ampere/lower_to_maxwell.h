@@ -1732,16 +1732,26 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
         case 0x308: case 0xb08: { // MUFU
             const u32 operation = insn.Bits(74, 6);
             if (operation > 8 || operation == 6 || operation == 7 || insn.Bits(80, 12)) return fail(index, "native MUFU mode");
+            // SM70+ MUFU.COS/SIN take the angle in turns (compilers multiply by 1/2pi first);
+            // Eden's Maxwell MUFU takes radians (its RRO is a plain move), so scale by 2pi.
+            const bool turns = operation == 0 || operation == 1;
+            const auto to_radians = [&](u32 source) {
+                emit(0x1e00000000000000ULL | predicate | 250 | (u64{source} << 8) |
+                     (u64{0x40c90fdbU} << 20));
+                return 250U;
+            };
             if (insn.Bits(73, 1)) {
                 if (opcode != 0x308 || insn.Bits(60, 2) > 1)
                     return fail(index, "native half special-function source");
                 emit(0x5ca8000000000000ULL | predicate | 250 | (u64{2} << 8) | (u64{1} << 10) |
                      (u64{insn.Bits(32, 8)} << 20) | (u64{insn.Bits(60, 1)} << 41) |
                      (u64{insn.Bits(63, 1)} << 45) | (u64{insn.Bits(62, 1)} << 49));
+                if (turns) to_radians(250);
                 emit(0x5080000000000000ULL | predicate | 250 | (u64{250} << 8) | (u64{operation} << 20));
                 emit(base(0x5ca8000000000000ULL) | (u64{1} << 8) | (u64{2} << 10) | (u64{250} << 20));
             } else {
-                const u32 src = operand(1);
+                u32 src = operand(1);
+                if (turns) src = to_radians(src);
                 emit(base(0x5080000000000000ULL) | (u64{src} << 8) | (u64{operation} << 20));
             }
             break;

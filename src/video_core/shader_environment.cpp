@@ -10,6 +10,7 @@
 #include <thread>
 #include <filesystem>
 #include <cstring>
+#include <string>
 #include <fstream>
 #include <memory>
 #include <optional>
@@ -354,6 +355,16 @@ void GenericEnvironment::InitializeNativeCode(u32 source_header_size) {
         if (status == Shader::Ampere::ProgramCaptureState::Result::Complete) break;
     }
     auto lowered = Shader::Ampere::LowerToMaxwell(native);
+    // EDEN_NX2_REJECT=<hex address>,...: treat these programs as rejected (to find which newly
+    // lowered program changes a game's behaviour without rebuilding).
+    if (static const std::string reject_list = [] {
+            const char* text = std::getenv("EDEN_NX2_REJECT");
+            return text ? "," + std::string{text} + "," : std::string{};
+        }();
+        !reject_list.empty() &&
+        reject_list.find(fmt::format(",{:x},", program_base)) != std::string::npos) {
+        throw Shader::RuntimeError("Native shader at {:#x} rejected by EDEN_NX2_REJECT", program_base);
+    }
     // EDEN_NX2_SHADER_DUMP=<dir>: keep every captured native program (named by its key) so the
     // lowering can be tested offline against all of a game's shaders.
     if (static const char* const dump_directory = std::getenv("EDEN_NX2_SHADER_DUMP");

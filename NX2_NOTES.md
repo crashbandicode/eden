@@ -142,6 +142,12 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 84 | title 1 GPU stalls (row 83): channels wait on semaphores 0x21f6093140/3040 until the 4 s timeout | NVN2 queue syncs run through a ring of QMDs (dependency 2 each: the previous entry's launch and macro 0xda, which patches release slot 52 and schedules/decrements via PCAS 3/7); macro 0xda reads the ring base from MME data RAM word 0x27, which each channel sets (0x21098d39, 0x213e8ff8, 0x213ea168) but Eden shared one data RAM for all channels, so every channel drove the same ring | per-channel MME data RAM, one QMD table for all channels (6c20e37); no stalls, title 1 reaches its title screen (world map with logo) |
 | 85 | title 1 address space | 214 = CreateSparseRegion, 215 = DestroySparseRegion (SDK symbols); SMMU space (16 GiB) ran out | 64 GiB device space (71b38ab), 215 handled (cc0c400) |
 | 86 | title 1 after its title screen: black frames | tens of thousands of rejected shaders: IPA interpolation modes, integer carry/third source, uniform comparison, formatted surface load/store, uniform constant load, unsupported opcodes | open |
+| 87 | title 1 loading crash: Vulkan out of memory | an 8192x8192x68-layer virtual texture (~23 GB) | images over 2^28 texels are created sparse with no memory (`Unbacked`: no uploads/downloads) (96a9b81); the game reaches its real title screen ("Press L + R"), ground black (that texture has no data) |
+| 88 | title 1 shader coverage | checked against nvdisasm (`nx2work/nvd.py` disassembles one instruction at a time, since a single illegal word stops nvdisasm); calls: RET may restore the link through IMAD.MOV with code between, library functions may EXIT, `@Pg EXIT Pc`; PLOP3/UPLOP3 any table, UP2UR, ULOP3 predicate output; UIMAD.WIDE, uniform USHF/FMNMX/I2F/F2I, LDS `[Ra.Xn+URb]`, ATOMG/RED/STG forms, PRMT, FSWZADD, REDUX.MAX | 1351c73, 52cda01, 49396b7: 1699 of 1712 dumped programs lower; left: 12 task/mesh programs (ISBERD/ISBEWR, row 89) and one SURED |
+| 89 | task/mesh shaders | title 1 draws some geometry with NV-style task + mesh programs: the task program culls a batch and writes its payload with `ISBEWR.O.ATTR [Rn+0x10]` and the mesh count with `ISBEWR [0x4]`; mesh programs read it back with `ISBERD.ATTR.SKEW`. The most-drawn rejected program (0x114c459500) is a task program. Eden has no mesh pipeline | open: needs a task/mesh pipeline (VK_EXT_mesh_shader) or a compute + indirect-draw emulation |
+| 90 | each rejected program was lowered and logged again on every draw (1.7M log lines in 13 min) | no negative cache | the shader cache keeps the first exception per address until that memory is written; logs deduplicated (bcb4ff0) |
+| 91 | a compute program with a jump table: "Failed to track indirect branch" | Eden's tracker wants IMNMX imm -> SHL imm -> LDC -> BRX; IMAD.SHL was lowered to an XMAD multiply | IMAD by a power of two lowers to SHL (49396b7+) |
+| 92 | with rows 88's compute forms, title 1 stays on its loading map (file reads stop ~46 s in) | one of the eight newly lowered compute programs (an FFT with LDS, ATOMG, RED, STG.U16, REDUX.MAX) | open: bisect with `EDEN_NX2_REJECT=<hex addresses>` (rejects those programs without a rebuild) |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
@@ -166,9 +172,12 @@ Scripted input: `EDEN_NX2_KEY_SCRIPT="50:4,50.5:-4,55:79,55.4:-79,57:4,57.5:-4"`
 
 **Title 3**: last checked before the graphics work; should now track title 4.
 
-**Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`): reached its main loop and
-the empty-command-buffer stop that blocker 45 fixed for both titles; not retested since the
-macro/shader/present work.
+**Title 1** (`first switch game\exefs`, 0400C3F00006E000, `Drive.nss`): boots, shows the world-map
+loading screen and reaches its title screen ("Press L + R to start") with sky, buildings, props,
+kart and logo drawn. Wrong: magenta/cyan colour cast, black ground (unbacked virtual texture, row
+87), task/mesh geometry missing (row 89), ~10-17 fps. Launch with frame capture:
+`EDEN_NX2_FRAME_CAPTURE=C:/dev/frames_t1x EDEN_NX2_AUTO_STUB=1 EDEN_NX2_SHADER_DUMP=C:/dev/shaders_title1 ./eden-cli.exe -g "C:/switch/first switch game/exefs/main"`.
+Offline shader check: `nx2work/lowertest/lowertest.exe C:/dev/shaders_title1 [-all [op]]`.
 
 **Title 2**: main/sdk/subsdk0 fail LZ4 and SHA-256 checks; can't be run from these files.
 

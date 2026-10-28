@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <cstring>
 #include <string>
 #include <unordered_set>
 #include <fmt/ranges.h>
@@ -81,7 +82,22 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
         if (!shader_info) {
             const u32 start_address{native ? 0 : shader_config.offset};
             GraphicsEnvironment env{*maxwell3d, *gpu_memory, program, native ? shader_addr : base_addr, start_address};
-            shader_info = MakeShaderInfo(env, *cpu_shader_addr);
+            try {
+                shader_info = MakeShaderInfo(env, *cpu_shader_addr);
+            } catch (const Shader::Exception&) {
+                // Once per program: which stage slot it is bound to, its header and the slot's
+                // registers (to tell how a pipeline with task/mesh programs is set up).
+                static std::unordered_set<GPUVAddr> described;
+                if (native && described.insert(shader_addr).second) {
+                    std::array<u32, 5> header{};
+                    gpu_memory->ReadBlockUnsafe(shader_addr, header.data(), sizeof(header));
+                    std::array<u32, sizeof(shader_config) / sizeof(u32)> config{};
+                    std::memcpy(config.data(), &shader_config, sizeof(config));
+                    LOG_ERROR(HW_GPU, "Rejected program {:#x} is bound to stage {}: header {:08x}, slot {:08x}",
+                              shader_addr, index, fmt::join(header, " "), fmt::join(config, " "));
+                }
+                throw;
+            }
         }
         shader_infos[index] = shader_info;
         unique_hashes[index] = shader_info->unique_hash;

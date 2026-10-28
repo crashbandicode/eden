@@ -547,6 +547,16 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                      (u64{insn.Bits(64, 8)} << 20) | (u64{negate_c} << 48));
                 break;
             }
+            const u32 multiplier = insn.words[1];
+            if (insn.Bits(64, 8) == 255 && !negate_c && multiplier > 1 && !(multiplier & (multiplier - 1)) &&
+                (insn.words[2] & ~0x2ffU) == 0x078e0000) {
+                // IMAD.SHL by a power of two: one shift (also the form Eden's jump-table tracking
+                // expects between the clamp and the table load).
+                u32 shift = 0;
+                while ((1U << shift) != multiplier) ++shift;
+                emit(base(0x3848000000000000ULL) | (u64{insn.Bits(24, 8)} << 8) | (u64{shift} << 20));
+                break;
+            }
             if (insn.words[1] != 48 || insn.words[2] != 0x078e02ff) {
                 if ((insn.words[2] & ~0xaffU) != 0x078e0000)
                     return fail(index, "native integer multiply mode");

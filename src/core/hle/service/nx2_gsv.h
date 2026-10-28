@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "common/alignment.h"
@@ -593,14 +594,17 @@ public:
             {3, &INx2Vi2Session::ReturnOne, "GetDisplayCount (guessed)"},
             {5, &INx2Vi2Session::GetTimestampRecorderCount, "GetTimestampRecorderCount (guessed)"},
             {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
-            {31, &INx2Vi2Session::ReturnEvent, "Unknown31"},
-            {32, &INx2Vi2Session::ReturnEvent, "Unknown32"},
+            {31, &INx2Vi2Session::GetVsyncEvent, "GetVsyncEvent (guessed)"},
+            {32, &INx2Vi2Session::GetVsyncEvent, "GetDisplayVsyncEvent (guessed)"},
             {228, &INx2Vi2Session::CancelClientBuffer, "CancelClientBuffer"},
             {229, &INx2Vi2Session::PresentClientBuffer, "PresentClientBuffer"},
         });
     }
 
     ~INx2Vi2Session() override {
+        if (m_vsync_timer) {
+            system.CoreTiming().UnscheduleEvent(m_vsync_timer);
+        }
         for (auto* event : m_events) {
             m_context.CloseEvent(event);
         }
@@ -801,9 +805,41 @@ private:
         rb.PushCopyObjects(ctx, event->GetReadableEvent());
     }
 
+    // 31(u32 kind) and 32(u32 display): events signalled on every vblank. Title 1's main thread
+    // waits on the 32 event until it has fired twice before it submits any GPU work, and hung
+    // there while it never fired.
+    void GetVsyncEvent(HLERequestContext& ctx) {
+        LOG_INFO(Service, "nx2:vi2 {} vsync event, [2]={:#x}", ctx.GetCommand(), ctx.CommandBuffer()[2]);
+        auto* event = m_context.CreateEvent(fmt::format("nx2:vi2:Vsync{}", m_events.size()));
+        {
+            std::scoped_lock lk{m_vsync_mutex};
+            m_events.push_back(event);
+            m_vsync_events.push_back(event);
+        }
+        if (!m_vsync_timer) {
+            m_vsync_timer = Core::Timing::CreateEvent(
+                "nx2:vi2 vsync",
+                [this](s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
+                    std::scoped_lock lk{m_vsync_mutex};
+                    for (auto* vsync : m_vsync_events) {
+                        vsync->Signal(system.Kernel());
+                    }
+                    return std::nullopt;
+                });
+            constexpr std::chrono::nanoseconds VblankInterval{16'666'667};
+            system.CoreTiming().ScheduleLoopingEvent(VblankInterval, VblankInterval, m_vsync_timer);
+        }
+        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, event->GetReadableEvent());
+    }
+
     KernelHelpers::ServiceContext m_context;
     std::shared_ptr<Nx2NativeObjects> m_objects;
     std::vector<Kernel::KEvent*> m_events;
+    std::mutex m_vsync_mutex;
+    std::vector<Kernel::KEvent*> m_vsync_events;
+    std::shared_ptr<Core::Timing::EventType> m_vsync_timer;
     u64 m_presents{};
     std::atomic<bool> m_capture_pending{};
 };

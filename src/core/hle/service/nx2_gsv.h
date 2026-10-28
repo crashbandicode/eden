@@ -962,6 +962,8 @@ public:
             {435, &INx2GraphicsSystemSession::CalculateNativeImageSize, "CalculateNativeImageSize"},
             {1402, &INx2GraphicsSystemSession::OpenNvsrvSession, "OpenNvsrvSession (guessed)"},
             {1510, &INx2GraphicsSystemSession::CalculateRequirements, "CalculateRequirements"},
+            {991, &INx2GraphicsSystemSession::CalculateDecoderImagePoolBuffer,
+             "CalculateDecoderImagePoolBuffer"},
         });
     }
 
@@ -1122,6 +1124,36 @@ private:
         TipcReplyWords(ctx, {static_cast<u32>(layout.size), static_cast<u32>(layout.size >> 32),
                              static_cast<u32>(layout.alignment),
                              static_cast<u32>(layout.alignment >> 32)});
+    }
+
+    // nn::codec::CalculateDecoderImagePoolBuffer(size*, alignment*, VideoDecoderImagePreference,
+    // u32 count) sends 991(preference[16], u32 count) and reads result, u64 size, u64 alignment;
+    // the client raises the alignment to at least 4 KiB and rounds the size up to it. The
+    // preference (MakeDecodeImagePreference) holds an output layout code at word 1 (1/4 for
+    // format 3, which the movie player uses, read here as NV12) and (width - 1) | (height - 1) << 16
+    // at word 2. Left to the auto stub, the reply words keep the request's, so the size became
+    // 0x167027f'00000001 and title 1's movie player aborted (main+0x19e5b58) when its first movie
+    // started. Sizes are block-linear NV12 (luma, then half-height chroma, 128-row blocks) or 4
+    // bytes per pixel for the other codes; nothing is decoded into them yet.
+    void CalculateDecoderImagePoolBuffer(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u32 code = w[3];
+        const u64 width = (w[4] & 0xFFFF) + 1;
+        const u64 height = (w[4] >> 16) + 1;
+        const u32 count = std::max<u32>(w[18], 1);
+        constexpr u64 BlockRows = 128;
+        const bool nv12 = code == 1 || code == 4;
+        const u64 pitch = Common::AlignUp(width * (nv12 ? 1 : 4), 64);
+        u64 size = pitch * Common::AlignUp(height, BlockRows);
+        if (nv12) {
+            size += pitch * Common::AlignUp((height + 1) / 2, BlockRows);
+        }
+        size *= count;
+        const u64 alignment = 64 * BlockRows;
+        LOG_INFO(Service, "nx2:gsv 991 decoder image pool code={} {}x{} count={} -> size={:#x}",
+                 code, width, height, count, size);
+        TipcReplyWords(ctx, {static_cast<u32>(size), static_cast<u32>(size >> 32),
+                             static_cast<u32>(alignment), static_cast<u32>(alignment >> 32)});
     }
 
     // 435(preference[16], u32 count): result, u64 size of a GPU native image.

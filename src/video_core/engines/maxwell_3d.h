@@ -3284,6 +3284,19 @@ private:
 
     /// Macro method that is currently being executed / being fed parameters.
     u32 executing_macro = 0;
+
+    struct RecentWrite {
+        u32 method;
+        u32 argument;
+        u32 amount;
+        u32 pending;
+    };
+    std::array<RecentWrite, 48> recent_writes{};
+    size_t recent_write_index = 0;
+    void RecordWrite(u32 method, u32 argument, u32 amount, u32 pending) {
+        recent_writes[recent_write_index++ % recent_writes.size()] = {method, argument, amount, pending};
+    }
+    void DumpRecentWrites(u32 method);
     /// Parameters that have been submitted to the macro call so far.
     std::vector<u32> macro_params;
 

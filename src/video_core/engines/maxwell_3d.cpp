@@ -405,9 +405,13 @@ void Maxwell3D::TraceFirstMethodWrite(u32 method, u32 argument) {
 void Maxwell3D::CallMethod(Core::System& system, u32 method, u32 method_argument, bool is_last_call) {
     // It is an error to write to a register other than the current macro's ARG register before
     // it has finished execution.
+    if (executing_macro != 0 && method != executing_macro + 1) {
+        DumpRecentWrites(method);
+    }
     if (executing_macro != 0) {
         ASSERT(method == executing_macro + 1);
     }
+    RecordWrite(method, method_argument, 1, is_last_call ? 1 : 2);
 
     // Methods after 0xE00 are special, they're actually triggers for some microcode that was
     // uploaded to the GPU during initialization.
@@ -423,7 +427,24 @@ void Maxwell3D::CallMethod(Core::System& system, u32 method, u32 method_argument
     ProcessMethodCall(method, argument, method_argument, is_last_call);
 }
 
+void Maxwell3D::DumpRecentWrites(u32 method) {
+    static u32 dumps{};
+    if (dumps++ >= 4) {
+        return;
+    }
+    LOG_ERROR(HW_GPU, "Write to {:#x} while macro {:#x} collects parameters ({} so far); last writes:",
+              method, executing_macro, macro_params.size());
+    for (size_t i = 0; i < recent_writes.size(); ++i) {
+        const auto& w = recent_writes[(recent_write_index + i) % recent_writes.size()];
+        if (w.amount != 0) {
+            LOG_ERROR(HW_GPU, "  method {:#x} arg {:#x} amount {} pending {}", w.method, w.argument,
+                      w.amount, w.pending);
+        }
+    }
+}
+
 void Maxwell3D::CallMultiMethod(Core::System& system, u32 method, const u32* base_start, u32 amount, u32 methods_pending) {
+    RecordWrite(method, amount ? base_start[0] : 0, amount, methods_pending);
     // Methods after 0xE00 are special, they're actually triggers for some microcode that was
     // uploaded to the GPU during initialization.
     if (method >= MacroRegistersStart) {

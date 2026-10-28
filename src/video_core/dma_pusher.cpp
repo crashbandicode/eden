@@ -101,8 +101,30 @@ bool DmaPusher::Step() {
             }
         }
         if (command_resume_offset == 0) {
+            // A method's data continues across GP entries, whatever their level: title 4 ends a
+            // main entry after a macro's first word and supplies the remaining parameters in a
+            // 5-word subroutine entry. EDEN_NX2_PARK_SPLIT_METHODS restores the old guess (an
+            // entry elsewhere is a call that starts clean; resume where the split one ended).
+            static const bool park_split_methods = std::getenv("EDEN_NX2_PARK_SPLIT_METHODS") != nullptr;
             if (g_nx2_ampere) {
-                ResolveSplitMethod(header.addr);
+                if (static u32 split_logs{}; dma_state.method_count != 0 && split_logs < 64) {
+                    ++split_logs;
+                    LOG_DEBUG(HW_GPU, "Split method {:#x} ({} left) on ch {}: next entry {:#x} size {} raw {:#x} (level bit {}, priv bit {}), expected {:#x}, parked {}",
+                             dma_state.method, dma_state.method_count, channel_state.bind_id,
+                             u64{header.addr}, u64{header.size}, header.raw, u64{header.is_push_buffer},
+                             u64{header.allow_flush}, split_method_end, parked_methods.size());
+                    std::array<u32, 8> next_words{};
+                    std::array<u32, 4> prev_words{};
+                    memory_manager.ReadBlock(header.addr, next_words.data(),
+                                             std::min<size_t>(header.size, 8) * sizeof(u32));
+                    memory_manager.ReadBlock(split_method_end - sizeof(prev_words), prev_words.data(),
+                                             sizeof(prev_words));
+                    LOG_DEBUG(HW_GPU, "  previous entry ends {:08x}; next entry starts {:08x}",
+                              fmt::join(prev_words, " "), fmt::join(next_words, " "));
+                }
+                if (park_split_methods) {
+                    ResolveSplitMethod(header.addr);
+                }
             }
             if (dma_pushbuffer_subindex < command_list.submit_hashes.size()) {
                 CheckSubmitHash(header, command_list.submit_hashes[dma_pushbuffer_subindex]);

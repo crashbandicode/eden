@@ -259,7 +259,8 @@ public:
             {102, &INx2GpuSession::SubDestroyMemory, "DestroyGpuAccessibleMemory (guessed)"},
             {211, &INx2GpuSession::SubSubmitJob, "NormalMapGpuMemory4K"},
             {213, &INx2GpuSession::SubUnmapJob, "NormalUnmapGpuMemory4K"},
-            {214, &INx2GpuSession::SubCreateGpuOnlyRegion, "CreateGpuOnlyRegion (guessed)"},
+            {214, &INx2GpuSession::SubCreateGpuOnlyRegion, "CreateSparseRegion"},
+            {215, &INx2GpuSession::SubDestroySparseRegion, "DestroySparseRegion"},
         });
     }
 
@@ -460,6 +461,8 @@ private:
         const u64 start = u64{w[3]} | (u64{w[4]} << 32);
         const u64 last = u64{w[5]} | (u64{w[6]} << 32);
         const u32 slot = w[11];
+        LOG_INFO(Service, "nx2:gpu 214 words {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x} {:#x}",
+                 w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10], w[11], w[12]);
         if (last > start && ((last + 1 - start) % Core::Memory::YUZU_PAGESIZE) == 0) {
             const u64 size = last + 1 - start;
             if (const auto address = BackGpuOnlyRegion(size)) {
@@ -471,6 +474,23 @@ private:
             LOG_WARNING(Service, "nx2:gpu 214 unexpected region [{:#x}, {:#x}]", start, last);
         }
         EventFor(slot)->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    // Sub 215 (nn::gpu::sdk::DestroySparseRegion): words 3-6 the range, word 8 the job slot, like
+    // 213. Drop the GPU mapping; backing memory 214 added stays allocated (its SMMU mapping is
+    // cached per CPU range, so its pages are not reused).
+    void SubDestroySparseRegion(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u64 first = u64{w[3]} | (u64{w[4]} << 32);
+        const u64 last = u64{w[5]} | (u64{w[6]} << 32);
+        LOG_INFO(Service, "nx2:gpu 215 destroy sparse region [{:#x}, {:#x}] words {:#x} {:#x} {:#x} {:#x}",
+                 first, last, w[1], w[2], w[7], w[8]);
+        if (last > first) {
+            Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Unmap(first, last - first + 1);
+        }
+        SignalAfterGpu(w[8]);
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }

@@ -113,6 +113,16 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 55 | GPU desyncs again after ~15-30 s | the game ran a full ring of command memory ahead of Eden's GPU thread: the vi2 229 reply reports all buffers free, so nothing paced it | vi2 229 waits (bounded) for the frame's GPU fence (325cac7) |
 | 56 | macro arguments lost | NVN interleaves several command buffers, so more than one split method can be pending | several parked methods keyed by resume address, dropped at the end of the submission (325cac7) |
 | 57 | frames all black although draws run | gpu 214 creates GPU-only memory (six 300 MB regions at 0x81_0000_0000) that the graphics server backs itself; the render targets live there and were unmapped | back each region with application-pool pages mapped into the alias code region (325cac7). Title 4 now shows its loading screen and a menu screen |
+| 58 | (title 4) hang after confirming difficulty: macro 0x142 "parameter FIFO underflow" | NVN2's conditional-render macro reads two query counters with MME_DMA_READ_FIFOED (3D methods 0x154/0x155 address, 0x158 count) and loads them after a load barrier | MME DMA reads into the load FIFO / data RAM (8cbe854) |
+| 59 | equal-value gate semaphore missed (~24 s) | the CPU side ran ~96 command buffers ahead when the 250 ms present wait timed out during shader compiles | present waits up to 4 s for the frame fence (8cbe854) |
+| 60 | 3D queue waits forever on a word the compute queue should release | NVN2 patches a third QMD release slot at word 52 for queue-to-queue syncs | fire release slots 24, 28 and 52 (8cbe854) |
+| 61 | 3D queue waits for N compute completions, 4 missing | compute jobs whose shader Eden rejected never completed, so their +1 releases never fired | rejected QMDs still complete and release (a84ec80); IMAD -UR addend, LDSM lowered |
+| 62 | queue waits for ≥ a value that keeps moving backwards | QMD release slot 0 (flag bit 19) is a max release into a word a 3D macro also advances | bit-19 QMD releases write max(old, payload) (a84ec80) |
+| 63 | in-game draws refused (~20k per run), black screen behind the dialogue | strong LDG (bit 77), 2D TLD4, RED MAX, AST of RZ unsupported | lowered (a84ec80); 210/214 post-menu shaders lower |
+| 64 | intro scene black (DLSS-style pass) | title 4 renders at 2560x1440 and upscales to 3840x2160 with a tensor-core (HMMA/MOVM/LDSM) compute network; emulating it takes the host driver minutes to compile and would cost seconds per frame | bilinear blit from its input (cbuf0+0x90) to its output (cbuf0+0xa0) when the program is rejected (22333bd); full emulation opt-in (EDEN_NX2_TENSOR) |
+| 65 | fullscreen blit passes read constant bank 24 | console-provided blit parameter block, never bound by the game | bank 24 -> 17, synthesized from the render area by BlitConstantsPass in vertex and fragment shaders (22333bd, d75e57d) |
+| 66 | synthesized blit sizes were 0 | the game never programs surface_clip, which feeds Eden's render area | fall back to colour target 0's size (d75e57d) |
+| 67 | tonemap output black | the 3D colour-grading LUT is drawn once per scene by a pixel shader using CALL.REL.NOINC; capture treated it as a real call, never found the end and rejected the shader | NOINC calls count as forward branches in capture (4d58a74). **Intro cutscene renders correctly** |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
@@ -126,12 +136,14 @@ report/semaphore write). `C:\dev\crashrun.sh` runs eden-cli under cdb and prints
 
 All runs: `EDEN_NX2_AUTO_STUB=1`, 12 GB memory layout, loose ExeFS with the sibling `romfs/`.
 
-**Title 4** (`fourth switch game\exefs`, 0400380020056000) **renders**: after boot it shows its
-animated cloud loading screen (with its ambient audio) for about 30 s, then a menu-style screen
-with three painted panels on dark green. Frames are paced on the GPU fence, ~12 presents/s.
-Still missing on the menu screen: text and the logo band at the top. Shaders that appear there
-need two more lowered forms (LDG.E register address, SHF.R.U32 low word; added, being tested),
-and one macro (start 0x142) fails with "parameter FIFO underflow" (needs a 4th parameter).
+**Title 4** (`fourth switch game\exefs`, 0400380020056000) **plays its intro cutscene correctly
+rendered**: boot, loading screen, menu (difficulty select, keyboard input), confirm, then the intro
+(plane cockpit, newspaper/map) lit, colour-graded and subtitled, matching console footage. The
+DLSS-style upscale is a bilinear stand-in. In a played session the game went on to a later loading
+screen that did not finish; open there: a compute shader with a 64-bit add (UIADD3 carry-out to
+UP0), TMML (0xb69) in two graphics shaders, "reserved attribute 23" (a[0x5c]) reads. Scripted runs
+(`C:\dev\run.sh`) move any title-4 save to `C:\dev\save_backups` first so they start a new game.
+Scripted input: `EDEN_NX2_KEY_SCRIPT="50:4,50.5:-4,55:79,55.4:-79,57:4,57.5:-4"`.
 
 **Title 3**: last checked before the graphics work; should now track title 4.
 
@@ -143,10 +155,10 @@ macro/shader/present work.
 
 ## Prioritized next steps
 
-1. **Title 4 menu text/logo**: test the LDG / SHF.R lowering on the menu shaders
-   (`EDEN_NX2_SHADER_DUMP`, lowertest), then the macro at 0x142 that wants a fourth parameter
-   (dump its code with `EDEN_NATIVE_DRAW_DIAGNOSTICS` and check the interpreter against Mesa's
-   mme_tu104 semantics).
+1. **Title 4 past the intro**: lower the 64-bit add with carry (UIADD3/IADD3 carry-out and .X
+   carry-in), TMML, and attribute 0x5c; then whatever the next area needs (dump + lowertest).
+   Squid/paint-splat hatch on the menu. A faster tensor-core emulation (shared-memory HMMA) would
+   replace the bilinear upscale stand-in.
 2. **Title 1 / title 3** retests with the current tree; dump their shaders and widen the lowering.
 3. Replace guesses with real protocol knowledge: syncpt page layout, the semaphore mirror page,
    gsv 214 (GPU-only memory) and vi2 present buffer availability (real buffer release instead of

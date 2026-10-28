@@ -128,6 +128,12 @@ public:
     }
 
     ~INx2SyncptSession() override {
+        // A registered action may be running on the GPU thread right now: mark the session dead
+        // under the lock it signals under, so it can't touch a request or event closed below.
+        {
+            std::scoped_lock lk{m_shared->mutex};
+            m_shared->alive = false;
+        }
         for (auto& [slot, request] : m_requests) {
             Cancel(request);
         }
@@ -178,6 +184,13 @@ private:
         Tegra::Host1x::SyncpointManager::ActionHandle handle{};
     };
 
+    // Outlives the session (actions hold a reference): signalling happens under `mutex` and only
+    // while `alive`.
+    struct SharedState {
+        std::mutex mutex;
+        bool alive{true};
+    };
+
     void RequestSlotEvent(HLERequestContext& ctx) {
         const auto* cmd_buf = ctx.CommandBuffer();
         const u32 slot = cmd_buf[2];
@@ -205,9 +218,14 @@ private:
         // The action runs on the GPU thread under the manager's lock, or inline if the value is
         // already reached.
         request.handle = manager.RegisterGuestAction(
-            syncpoint, static_cast<u32>(value), [this, &request, event] {
+            syncpoint, static_cast<u32>(value),
+            [shared = m_shared, &kernel = system.Kernel(), &request, event] {
+                std::scoped_lock lk{shared->mutex};
+                if (!shared->alive) {
+                    return;
+                }
                 request.pending = false;
-                event->Signal(system.Kernel());
+                event->Signal(kernel);
             });
         TipcReplyWords(ctx, {});
     }
@@ -233,6 +251,7 @@ private:
     KernelHelpers::ServiceContext m_context;
     std::map<u32, Kernel::KEvent*> m_events;
     std::map<u32, SlotRequest> m_requests;
+    std::shared_ptr<SharedState> m_shared = std::make_shared<SharedState>();
 };
 
 // Placeholder for the Switch 2 GPU session (nn::gpu::sdk), handed out by gsv 497.
@@ -623,6 +642,12 @@ public:
     }
 
     ~INx2Vi2Session() override {
+        // The vsync callback may be running on the HostTiming thread: empty its event list under
+        // its lock first (it holds the state, not this session), then close the events.
+        {
+            std::scoped_lock lk{m_vsync->mutex};
+            m_vsync->events.clear();
+        }
         if (m_vsync_timer) {
             system.CoreTiming().UnscheduleEvent(m_vsync_timer);
         }
@@ -769,14 +794,14 @@ private:
     // nx2-frame-<n>.tga in <dir> (lets hidden test runs check the output; idea from changes.patch).
     void CaptureFrame() {
         static const char* const directory = std::getenv("EDEN_NX2_FRAME_CAPTURE");
-        if (directory == nullptr || (m_presents % 120) != 1 || m_capture_pending.exchange(true)) {
+        if (directory == nullptr || (m_presents % 120) != 1 || m_capture_pending->exchange(true)) {
             return;
         }
         const auto layout = Layout::DefaultFrameLayout(1280, 720);
         auto pixels = std::make_shared<std::vector<u8>>(layout.width * layout.height * 4);
         const std::string path =
             fmt::format("{}/nx2-frame-{:05}.tga", directory, m_presents);
-        auto* pending = &m_capture_pending;
+        auto pending = m_capture_pending; // the screenshot callback can outlive the session
         system.GPU().Renderer().RequestScreenshot(
             pixels->data(),
             [pixels, layout, path, pending](bool invert_y) {
@@ -820,7 +845,7 @@ private:
             position = spec.find(',', position + 1); // the next "address:size"
             const std::string path = fmt::format("{}/nx2-dump-{:x}.bin", directory ? directory : ".", address);
             // On the GPU thread: waiting for it here can deadlock with a GPU wait on this present.
-            static_cast<void>(system.GPU().RunOnGpuThread([this, address, size, path] {
+            static_cast<void>(system.GPU().RunOnGpuThread([&system = system, address, size, path] {
                 std::vector<u8> bytes(size);
                 for (u64 current = address; current < address + size;) {
                     const u64 chunk = std::min((current | 0xfff) + 1, address + size) - current;
@@ -873,18 +898,19 @@ private:
     void GetVsyncEvent(HLERequestContext& ctx) {
         LOG_INFO(Service, "nx2:vi2 {} vsync event, [2]={:#x}", ctx.GetCommand(), ctx.CommandBuffer()[2]);
         auto* event = m_context.CreateEvent(fmt::format("nx2:vi2:Vsync{}", m_events.size()));
+        m_events.push_back(event);
         {
-            std::scoped_lock lk{m_vsync_mutex};
-            m_events.push_back(event);
-            m_vsync_events.push_back(event);
+            std::scoped_lock lk{m_vsync->mutex};
+            m_vsync->events.push_back(event);
         }
         if (!m_vsync_timer) {
             m_vsync_timer = Core::Timing::CreateEvent(
                 "nx2:vi2 vsync",
-                [this](s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
-                    std::scoped_lock lk{m_vsync_mutex};
-                    for (auto* vsync : m_vsync_events) {
-                        vsync->Signal(system.Kernel());
+                [vsync_state = m_vsync, &kernel = system.Kernel()](
+                    s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
+                    std::scoped_lock lk{vsync_state->mutex};
+                    for (auto* vsync : vsync_state->events) {
+                        vsync->Signal(kernel);
                     }
                     return std::nullopt;
                 });
@@ -899,11 +925,15 @@ private:
     KernelHelpers::ServiceContext m_context;
     std::shared_ptr<Nx2NativeObjects> m_objects;
     std::vector<Kernel::KEvent*> m_events;
-    std::mutex m_vsync_mutex;
-    std::vector<Kernel::KEvent*> m_vsync_events;
+    // Shared with the vsync timer callback, which can outlive the session by one call.
+    struct VsyncState {
+        std::mutex mutex;
+        std::vector<Kernel::KEvent*> events;
+    };
+    std::shared_ptr<VsyncState> m_vsync = std::make_shared<VsyncState>();
     std::shared_ptr<Core::Timing::EventType> m_vsync_timer;
     u64 m_presents{};
-    std::atomic<bool> m_capture_pending{};
+    std::shared_ptr<std::atomic<bool>> m_capture_pending = std::make_shared<std::atomic<bool>>(false);
 };
 
 // Placeholder for the Switch 2 graphics-system server that nn::gsv::BootWithRemoteMemory talks

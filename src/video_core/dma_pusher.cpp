@@ -4,7 +4,10 @@
 // SPDX-FileCopyrightText: Copyright 2021 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <atomic>
+#include <cstdlib>
+#include <cstdio>
 
 #include "common/settings.h"
 #include "core/core.h"
@@ -109,11 +112,13 @@ bool DmaPusher::Step() {
         if (use_safe) {
             Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader, Tegra::Memory::GuestMemoryFlags::SafeRead>headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
             const std::span<const CommandHeader> commands{headers.data(), headers.size()};
+            RecordParsedEntry(header, commands);
             command_resume_offset +=
                 ProcessCommands(commands.subspan(command_resume_offset), command_resume_offset);
         } else {
             Tegra::Memory::GpuGuestMemory<Tegra::CommandHeader, Tegra::Memory::GuestMemoryFlags::UnsafeRead>headers(memory_manager, dma_state.dma_get, header.size, &command_headers);
             const std::span<const CommandHeader> commands{headers.data(), headers.size()};
+            RecordParsedEntry(header, commands);
             command_resume_offset +=
                 ProcessCommands(commands.subspan(command_resume_offset), command_resume_offset);
         }
@@ -127,6 +132,9 @@ bool DmaPusher::Step() {
     }
 
     if (++dma_pushbuffer_subindex >= command_list_size) {
+        // A split method resumes within the submission that split it; ring addresses repeat
+        // every frame, so a stale one could otherwise swallow the headers of a later entry.
+        parked_methods.clear();
         dma_pushbuffer.pop();
         dma_pushbuffer_subindex = 0;
     } else {
@@ -211,34 +219,42 @@ size_t DmaPusher::ProcessCommands(std::span<const CommandHeader> commands, size_
 // where the first one ended. An entry starting anywhere else is such a call: run it with a clean
 // method state and resume the unfinished method when the stream continues at that address.
 void DmaPusher::ResolveSplitMethod(GPUVAddr entry_address) {
+    const auto continued = std::ranges::find(parked_methods, entry_address,
+                                             &ParkedMethod::resume_address);
+    std::optional<ParkedMethod> resume;
+    if (continued != parked_methods.end()) {
+        resume = *continued;
+        parked_methods.erase(continued);
+    }
     if (dma_state.method_count != 0 && entry_address != split_method_end) {
-        if (parked_method) {
+        if (parked_methods.size() == MaxParkedMethods) {
             static std::atomic<u32> reported{};
             if (reported.fetch_add(1) < 8) {
+                const auto& oldest = parked_methods.front();
                 LOG_WARNING(HW_GPU,
                             "Dropping parked method {:#x} (sub {}, {} words left, resume {:#x})",
-                            parked_method->method, parked_method->subchannel,
-                            parked_method->method_count, parked_method->resume_address);
+                            oldest.method, oldest.subchannel, oldest.method_count,
+                            oldest.resume_address);
             }
+            parked_methods.erase(parked_methods.begin());
         }
-        parked_method = ParkedMethod{
+        parked_methods.push_back(ParkedMethod{
             .method = dma_state.method,
             .subchannel = dma_state.subchannel,
             .method_count = dma_state.method_count,
             .non_incrementing = dma_state.non_incrementing,
             .increment_once = dma_increment_once,
             .resume_address = split_method_end,
-        };
+        });
         dma_state.method_count = 0;
         dma_increment_once = false;
-    } else if (dma_state.method_count == 0 && parked_method &&
-               entry_address == parked_method->resume_address) {
-        dma_state.method = parked_method->method;
-        dma_state.subchannel = parked_method->subchannel;
-        dma_state.method_count = parked_method->method_count;
-        dma_state.non_incrementing = parked_method->non_incrementing;
-        dma_increment_once = parked_method->increment_once;
-        parked_method.reset();
+    }
+    if (resume && dma_state.method_count == 0) {
+        dma_state.method = resume->method;
+        dma_state.subchannel = resume->subchannel;
+        dma_state.method_count = resume->method_count;
+        dma_state.non_incrementing = resume->non_incrementing;
+        dma_increment_once = resume->increment_once;
     }
 }
 
@@ -314,7 +330,50 @@ void DmaPusher::CheckSubmitHash(const CommandListHeader& header, u64 submit_hash
     }
 }
 
+void DmaPusher::RecordParsedEntry(const CommandListHeader& header,
+                                  std::span<const CommandHeader> commands) {
+    u64 hash = 0xcbf29ce484222325ULL;
+    for (const CommandHeader& command : commands) {
+        hash = (hash ^ command.argument) * 0x100000001b3ULL;
+    }
+    parsed_entries[parsed_entry_count++ % parsed_entries.size()] = {header.addr, static_cast<u32>(header.size), hash};
+}
+
 void DmaPusher::DumpCurrentEntry(const char* reason) {
+    // Entries whose memory changed after they were parsed (the CPU rewrote them meanwhile).
+    for (size_t i = 0; i < std::min(parsed_entry_count, parsed_entries.size()); ++i) {
+        const auto& entry = parsed_entries[(parsed_entry_count - 1 - i) % parsed_entries.size()];
+        std::vector<u32> words(entry.size);
+        memory_manager.ReadBlockUnsafe(entry.address, words.data(), words.size() * sizeof(u32));
+        u64 hash = 0xcbf29ce484222325ULL;
+        for (const u32 word : words) {
+            hash = (hash ^ word) * 0x100000001b3ULL;
+        }
+        LOG_WARNING(HW_GPU, "  parsed -{}: {:#x}+{:#x} {}", i, entry.address, entry.size,
+                    hash == entry.hash ? "unchanged" : "CHANGED since parsed");
+    }
+    // EDEN_NX2_PB_DUMP=<file>: also write the whole command list (u64 address, u32 size and the
+    // current words of every entry, then the current entry index) for offline replay.
+    if (static const char* const path = std::getenv("EDEN_NX2_PB_DUMP");
+        path != nullptr && !dma_pushbuffer.empty()) {
+        if (std::FILE* file = std::fopen(path, "wb")) {
+            const auto& lists = dma_pushbuffer.front().command_lists;
+            const u64 current = dma_pushbuffer_subindex;
+            const u64 count = lists.size();
+            std::fwrite(&count, sizeof(count), 1, file);
+            std::fwrite(&current, sizeof(current), 1, file);
+            for (const CommandListHeader& header : lists) {
+                const u64 address = header.addr;
+                const u32 size = static_cast<u32>(header.size);
+                std::vector<u32> words(size);
+                memory_manager.ReadBlockUnsafe(address, words.data(), words.size() * sizeof(u32));
+                std::fwrite(&address, sizeof(address), 1, file);
+                std::fwrite(&size, sizeof(size), 1, file);
+                std::fwrite(words.data(), sizeof(u32), words.size(), file);
+            }
+            std::fclose(file);
+        }
+    }
     LOG_WARNING(HW_GPU, "pushbuffer dump ({}): method={:#x} sub={} count={} non_inc={} get={:#x}",
                 reason, dma_state.method, dma_state.subchannel, dma_state.method_count,
                 dma_state.non_incrementing, dma_state.dma_get);

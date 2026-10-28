@@ -179,6 +179,7 @@ public:
     /// and straight from guest memory, to find pushbuffer desyncs. Debug aid for Switch 2.
     void DumpCurrentEntry(const char* reason);
     void CheckSubmitHash(const CommandListHeader& header, u64 submit_hash);
+    void RecordParsedEntry(const CommandListHeader& header, std::span<const CommandHeader> commands);
 
 private:
 
@@ -205,8 +206,8 @@ public:
 
     DmaState dma_state{};
 
-    // Switch 2: a method whose data continues in a later GPFIFO entry, set aside while another
-    // command buffer called in between runs.
+    // Switch 2: methods whose data continues in a later GPFIFO entry, set aside while other
+    // command buffers run (NVN interleaves several, so more than one can be pending).
     struct ParkedMethod {
         u32 method;
         u32 subchannel;
@@ -216,7 +217,17 @@ public:
         GPUVAddr resume_address; ///< Where the entry that continues the method starts
     };
     void ResolveSplitMethod(GPUVAddr entry_address);
-    std::optional<ParkedMethod> parked_method;
+    static constexpr size_t MaxParkedMethods = 16;
+
+    // Debug aid: hashes of the words of the last entries as they were parsed.
+    struct ParsedEntry {
+        GPUVAddr address;
+        u32 size;
+        u64 hash;
+    };
+    std::array<ParsedEntry, 64> parsed_entries{};
+    size_t parsed_entry_count{};
+    std::vector<ParkedMethod> parked_methods;
     GPUVAddr split_method_end{}; ///< End of the last entry that ended inside a method
 
     std::array<Engines::EngineInterface*, max_subchannels> subchannels{};

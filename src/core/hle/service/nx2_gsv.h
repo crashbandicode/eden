@@ -5,12 +5,16 @@
 
 #include <algorithm>
 #include <array>
+#include <thread>
+#include <chrono>
 #include <string>
 #include <cstdlib>
 #include <cstdio>
 #include <initializer_list>
 #include <atomic>
 #include <map>
+#include <optional>
+#include <memory>
 #include <vector>
 
 #include "common/alignment.h"
@@ -23,6 +27,10 @@
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_client_session.h"
 #include "core/hle/kernel/k_process.h"
+#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/k_system_resource.h"
+#include "core/hle/kernel/k_memory_manager.h"
+#include "core/hle/kernel/k_page_group.h"
 #include "core/hle/kernel/k_resource_limit.h"
 #include "core/hle/kernel/k_server_session.h"
 #include "core/hle/kernel/k_event.h"
@@ -249,7 +257,7 @@ public:
             {102, &INx2GpuSession::SubSlotJob<3>, "Sub102 (job, slot in word 3)"},
             {211, &INx2GpuSession::SubSubmitJob, "NormalMapGpuMemory4K"},
             {213, &INx2GpuSession::SubSlotJob<8>, "NormalUnmapGpuMemory4K"},
-            {214, &INx2GpuSession::SubSlotJob<11>, "CreateSparseRegion"},
+            {214, &INx2GpuSession::SubCreateGpuOnlyRegion, "CreateGpuOnlyRegion (guessed)"},
         });
     }
 
@@ -362,8 +370,8 @@ private:
     template <size_t Slot>
     void SubSlotJob(HLERequestContext& ctx) {
         const auto* w = ctx.CommandBuffer();
-        LOG_DEBUG(Service, "(STUBBED) nx2:gpu {} [2]={:#x} [3]={:#x} [4]={:#x} [5]={:#x} [6]={:#x} slot={}",
-                  ctx.GetCommand(), w[2], w[3], w[4], w[5], w[6], w[Slot]);
+        LOG_INFO(Service, "(STUBBED) nx2:gpu {} words {:08x} slot={}", ctx.GetCommand(),
+                 fmt::join(std::span<const u32>{w + 2, 18}, " "), w[Slot]);
         EventFor(w[Slot])->Signal(system.Kernel());
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
@@ -380,8 +388,8 @@ private:
         const u64 c = u64{cmd_buf[8]} | (u64{cmd_buf[9]} << 32);
         // Words 3-4: first GPU address, 5-6: last, 7: memory handle, 8-9: offset into it.
         const u32 handle = cmd_buf[7];
-        LOG_DEBUG(Service, "nx2:gpu 211 map [{:#x}, {:#x}] handle={} offset={:#x} slot={}", a, b,
-                  handle, c, slot);
+        LOG_INFO(Service, "nx2:gpu 211 map [{:#x}, {:#x}] handle={} offset={:#x} slot={}", a, b,
+                 handle, c, slot);
         if (const auto it = m_memory.find(handle); it != m_memory.end() && b > a) {
             const u64 cpu = it->second.address + c;
             if (cpu != a) {
@@ -394,6 +402,68 @@ private:
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
+
+    // Sub 214: GPU-only memory [start, last] (words 3-6, job slot in word 11). The graphics
+    // server backs it itself: the client never maps anything there but renders into it (title 4
+    // keeps its render targets in six 300 MB regions at 0x81_0000_0000). Back each region with
+    // kernel memory placed in the process's alias code region and map that for the GPU.
+    void SubCreateGpuOnlyRegion(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        const u64 start = u64{w[3]} | (u64{w[4]} << 32);
+        const u64 last = u64{w[5]} | (u64{w[6]} << 32);
+        const u32 slot = w[11];
+        if (last > start && ((last + 1 - start) % Core::Memory::YUZU_PAGESIZE) == 0) {
+            const u64 size = last + 1 - start;
+            if (const auto address = BackGpuOnlyRegion(size)) {
+                Nvidia::Devices::Nx2GpuMemoryRegistry::Get().MapAt(start, *address, size);
+                LOG_INFO(Service, "nx2:gpu 214 GPU-only region [{:#x}, {:#x}] backed at {:#x}",
+                         start, last, *address);
+            }
+        } else {
+            LOG_WARNING(Service, "nx2:gpu 214 unexpected region [{:#x}, {:#x}]", start, last);
+        }
+        EventFor(slot)->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
+    }
+
+    std::optional<u64> BackGpuOnlyRegion(u64 size) {
+        using Core::Memory::YUZU_PAGESIZE;
+        auto& kernel_core = system.Kernel();
+        auto* const process = system.ApplicationProcess();
+        if (process == nullptr) {
+            return std::nullopt;
+        }
+        auto pg = std::make_unique<Kernel::KPageGroup>(
+            kernel_core, std::addressof(kernel_core.GetSystemSystemResource().GetBlockInfoManager()));
+        // Not cleared: the GPU writes these before reading them, and touching 300 MB would commit
+        // it on the host.
+        if (R_FAILED(kernel_core.MemoryManager().AllocateAndOpen(
+                pg.get(), size / YUZU_PAGESIZE,
+                Kernel::KMemoryManager::EncodeOption(Kernel::KMemoryManager::Pool::Application,
+                                                     Kernel::KMemoryManager::Direction::FromBack)))) {
+            LOG_ERROR(Service, "nx2:gpu 214 could not allocate {:#x} bytes", size);
+            return std::nullopt;
+        }
+        auto& page_table = process->GetPageTable();
+        const u64 region_start = GetInteger(page_table.GetAliasCodeRegionStart());
+        const u64 region_size = page_table.GetAliasCodeRegionSize();
+        constexpr u64 Alignment = 0x200000; // 2 MiB
+        for (u64 offset = 0; offset + size <= region_size; offset += Alignment) {
+            const Common::ProcessAddress address{region_start + offset};
+            if (R_SUCCEEDED(page_table.MapPageGroup(address, *pg, Kernel::KMemoryState::IoMemory,
+                                                    Kernel::KMemoryPermission::UserReadWrite))) {
+                m_gpu_only_memory.push_back(std::move(pg));
+                return GetInteger(address);
+            }
+        }
+        LOG_ERROR(Service, "nx2:gpu 214 no room for {:#x} bytes in the alias code region "
+                           "[{:#x}, +{:#x})", size, region_start, region_size);
+        pg->Close(kernel_core);
+        return std::nullopt;
+    }
+
+    std::vector<std::unique_ptr<Kernel::KPageGroup>> m_gpu_only_memory;
 
     struct GpuMemory {
         u64 address;
@@ -498,10 +568,36 @@ private:
             LOG_INFO(Service, "nx2:vi2 229 present #{} token={:#x} slot={} image={}", m_presents,
                      u64{w[2]} | (u64{w[3]} << 32), w[4], w[5]);
         }
+        WaitForFrame(~w[22], w[24]);
         Composite(w[5], ~w[22], w[24]);
         constexpr u64 AvailableSlots = 0x7fff;
         TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
                              static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
+    }
+
+    // The console's compositor frees a buffer only once its frame's GPU fence has passed, which
+    // is what keeps a game from running ahead of the GPU. This reply always reports every buffer
+    // free, so pace the game here instead: wait (bounded, in case the GPU waits on the CPU) until
+    // Eden's GPU thread has processed the frame. Otherwise the game laps the GPU thread and
+    // rewrites command memory it hasn't read yet.
+    void WaitForFrame(u32 fence_id, u32 fence_value) {
+        if (fence_id >= 192) {
+            return;
+        }
+        auto& syncpoints = system.Host1x().GetSyncpointManager();
+        const auto start = std::chrono::steady_clock::now();
+        const auto deadline = start + std::chrono::milliseconds{250};
+        while (!syncpoints.IsReadyGuest(fence_id, fence_value) &&
+               std::chrono::steady_clock::now() < deadline && system.IsPoweredOn()) {
+            std::this_thread::sleep_for(std::chrono::microseconds{200});
+        }
+        if (m_presents <= 8 || (m_presents % 600) == 0) {
+            LOG_INFO(Service, "nx2:vi2 present #{} fence ({}, {}) now {}, waited {} us",
+                     m_presents, fence_id, fence_value, syncpoints.GetGuestSyncpointValue(fence_id),
+                     std::chrono::duration_cast<std::chrono::microseconds>(
+                         std::chrono::steady_clock::now() - start)
+                         .count());
+        }
     }
 
     // Shows a presented native image: word 5 is the image id, ~word 22 / word 24 the GPU fence

@@ -132,6 +132,7 @@ IHidServer::IHidServer(Core::System& system_, std::shared_ptr<ResourceManager> r
         {210, C<&IHidServer::EndPermitVibrationSession>, "EndPermitVibrationSession"},
         {211, C<&IHidServer::IsVibrationDeviceMounted>, "IsVibrationDeviceMounted"},
         {212, C<&IHidServer::SendVibrationValueInBool>, "SendVibrationValueInBool"},
+        {214, C<&IHidServer::SendNx2VibrationValues>, "SendNx2VibrationValues (guessed)"},
         {300, C<&IHidServer::ActivateConsoleSixAxisSensor>, "ActivateConsoleSixAxisSensor"},
         {301, C<&IHidServer::StartConsoleSixAxisSensor>, "StartConsoleSixAxisSensor"},
         {302, C<&IHidServer::StopConsoleSixAxisSensor>, "StopConsoleSixAxisSensor"},
@@ -1066,6 +1067,11 @@ Result IHidServer::IsVibrationDeviceMounted(
         *out_is_mounted = device->IsVibrationMounted();
     }
 
+    R_SUCCEED();
+}
+
+Result IHidServer::SendNx2VibrationValues() {
+    LOG_DEBUG(Service_HID, "(STUBBED) called");
     R_SUCCEED();
 }
 

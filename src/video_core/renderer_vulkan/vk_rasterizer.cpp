@@ -7,6 +7,10 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <cstdlib>
+#include <tuple>
+#include <set>
+#include <fstream>
 #include <mutex>
 
 #include <fmt/format.h>
@@ -14,12 +18,14 @@
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
 
 #include "common/assert.h"
+#include "shader_recompiler/exception.h"
 #include "common/logging.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/gpu_logging/gpu_logging.h"
 #include "video_core/control/channel_state.h"
+#include "video_core/native_query_trace.h"
 #include "video_core/engines/maxwell_3d.h"
 #include "video_core/engines/kepler_compute.h"
 #include "video_core/engines/maxwell_3d.h"
@@ -238,6 +244,14 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     SCOPE_EXIT {
         gpu.TickWork();
     };
+    bool submitted = false;
+    SCOPE_EXIT {
+        auto& native = maxwell3d->GetNativeMacroEngine();
+        if (native.native_turing && !submitted) {
+            native.native_execution_failed = true;
+            LOG_ERROR(HW_GPU, "Native graphics draw failed; refusing submission completion");
+        }
+    };
     FlushWork();
     gpu_memory->FlushCaching();
 
@@ -257,9 +271,124 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     HandleTransformFeedback();
     query_cache.CounterEnable(VideoCommon::QueryType::ZPassPixelCount64, maxwell3d->regs.zpass_pixel_count_enable);
     draw_func();
+    submitted = true;
+    static u32 native_capture_count{};
+    if (maxwell3d->GetNativeMacroEngine().native_turing &&
+        std::getenv("EDEN_NATIVE_DRAW_CAPTURE") && native_capture_count < 16) {
+        const u32 capture = native_capture_count++;
+        const auto prefix = fmt::format("native-draw-{}", capture);
+        const auto dump = [&](const std::string& name, GPUVAddr address, size_t size) {
+            if (!size || !gpu_memory->IsFullyMappedRange(address, size)) return;
+            std::vector<u8> bytes(size);
+            gpu_memory->ReadBlockUnsafe(address, bytes.data(), bytes.size());
+            std::ofstream file(prefix + name + ".bin", std::ios::binary);
+            file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            LOG_INFO(HW_GPU, "Native draw capture {}{}: address={:#x}, bytes={}, nonzero={}",
+                     capture, name, address, size,
+                     std::count_if(bytes.begin(), bytes.end(), [](u8 byte) { return byte != 0; }));
+        };
+        const auto& regs = maxwell3d->regs;
+        const auto& rt = regs.rt[0];
+        const size_t size = static_cast<size_t>(rt.array_pitch) * 4;
+        if (size && size <= 16 * 1024 * 1024) {
+            if (const auto address = gpu_memory->GpuToCpuAddress(rt.Address(), size)) {
+                LOG_INFO(HW_GPU, "Native draw {} render target physical address={:#x}", capture, *address);
+                texture_cache.DownloadMemory(*address, size);
+                dump("-rt0", rt.Address(), size);
+            }
+        }
+        std::ofstream registers(prefix + "-registers.bin", std::ios::binary);
+        registers.write(reinterpret_cast<const char*>(&regs), sizeof(regs));
+        for (size_t stream = 0; stream < 4; ++stream) {
+            if (regs.vertex_streams[stream].IsEnabled())
+                dump(fmt::format("-vertex-{}", stream), regs.vertex_streams[stream].Address(), 128);
+        }
+        for (size_t stage : {0U, 4U}) {
+            for (size_t bank : {2U, 3U}) {
+                const auto& cb = maxwell3d->state.shader_stages[stage].const_buffers[bank];
+                if (cb.enabled) dump(fmt::format("-cbuf-{}-{}", stage, bank), cb.address, std::min<size_t>(cb.size, 128));
+            }
+        }
+    }
 }
 
+
+namespace {
+// EDEN_NX2_WINDOW_TRACE: describe clears and draws into screen-sized colour targets (debug aid).
+void TraceWindowTarget(const Tegra::Engines::Maxwell3D& maxwell3d, Tegra::MemoryManager& memory,
+                       const char* kind, u32 count) {
+    static const bool trace = std::getenv("EDEN_NX2_WINDOW_TRACE") != nullptr;
+    static u32 traced{};
+    const auto& regs = maxwell3d.regs;
+    if (!trace || regs.rt[0].width != 3840 || traced >= 400) {
+        return;
+    }
+    ++traced;
+    const auto& vp = regs.viewport_transform[0];
+    const auto& sc = regs.scissor_test[0];
+    LOG_INFO(HW_GPU,
+             "nx2 window {} rt0={:#x} count={} clear={:#x} color=({},{},{},{}) mask_common={} "
+             "mask0={:#x} rt_count={} vp scale=({},{}) translate=({},{}) scissor en={} x={}..{} "
+             "y={}..{} blend0={} vs={:#x} ps={:#x} rasterize={}",
+             kind, regs.rt[0].Address(), count, regs.clear_surface.raw, regs.clear_color[0],
+             regs.clear_color[1], regs.clear_color[2], regs.clear_color[3], regs.color_mask_common,
+             regs.color_mask[0].raw, regs.rt_control.count.Value(), vp.scale_x, vp.scale_y,
+             vp.translate_x, vp.translate_y, sc.enable, sc.min_x.Value(), sc.max_x.Value(),
+             sc.min_y.Value(), sc.max_y.Value(), regs.blend.enable[0],
+             (u64{regs.pipelines[1].reserved[0] & 0xff} << 32) | regs.pipelines[1].reserved[1],
+             (u64{regs.pipelines[5].reserved[0] & 0xff} << 32) | regs.pipelines[5].reserved[1],
+             regs.rasterize_enable);
+    if (kind[0] != 'd') {
+        return;
+    }
+    // Pixel-stage constant buffer 3: colour constants of the loading-screen passes.
+    if (const auto& cb3 = maxwell3d.state.shader_stages[4].const_buffers[3]; cb3.enabled) {
+        std::array<f32, 8> values{};
+        memory.ReadBlockUnsafe(cb3.address, values.data(), sizeof(values));
+        LOG_INFO(HW_GPU, "nx2 window ps c[3]@{:#x} size={}: {}", cb3.address, cb3.size,
+                 fmt::join(values, " "));
+    }
+    static u32 texture_traces{};
+    if (texture_traces++ > 40) {
+        return;
+    }
+    // Texture used by the pixel shader's first bound TEX (handle in c[2][0x20]) and its TIC.
+    const auto& cb = maxwell3d.state.shader_stages[4].const_buffers[2];
+    const u32 handle = cb.enabled ? memory.Read<u32>(cb.address + 0x20) : 0;
+    const u32 tic_index = handle & 0xfffff;
+    const GPUVAddr tic_address = regs.tex_header.Address() + u64{tic_index} * 32;
+    std::array<u32, 8> tic{};
+    memory.ReadBlockUnsafe(tic_address, tic.data(), sizeof(tic));
+    LOG_INFO(HW_GPU,
+             "nx2 window texture: cb2={:#x} en={} handle={:#x} tic pool={:#x} limit={} "
+             "sampler pool={:#x} tic[{}]={:08x}",
+             cb.address, cb.enabled, handle, regs.tex_header.Address(), regs.tex_header.limit,
+             regs.tex_sampler.Address(), tic_index, fmt::join(tic, " "));
+    // First bytes of the texture's memory (block-linear, so just a sample).
+    const GPUVAddr texture = (GPUVAddr{tic[2] & 0xffff} << 32) | tic[1];
+    std::array<u32, 16> texels{};
+    memory.ReadBlockUnsafe(texture, texels.data(), sizeof(texels));
+    LOG_INFO(HW_GPU, "nx2 window texture {:#x} {}x{}: {:08x}", texture, (tic[4] & 0xffff) + 1,
+             (tic[5] & 0xffff) + 1, fmt::join(texels, " "));
+}
+} // Anonymous namespace
+
 void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
+    TraceWindowTarget(*maxwell3d, *gpu_memory, is_indexed ? "draw-indexed" : "draw",
+                      is_indexed ? maxwell3d->draw_manager.draw_state.index_buffer.count
+                                 : maxwell3d->draw_manager.draw_state.vertex_buffer.count);
+    // EDEN_NX2_RT_TRACE: log the first draw to every distinct colour target (debug aid).
+    if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
+        static std::set<std::tuple<GPUVAddr, u32, u32, u32>> seen;
+        const auto& rt = maxwell3d->regs.rt[0];
+        const auto key = std::make_tuple(rt.Address(), rt.width, rt.height,
+                                         static_cast<u32>(rt.format));
+        if (rt.width >= 640 && seen.size() < 400 && seen.insert(key).second) {
+            LOG_INFO(HW_GPU, "nx2 draw target {:#x} {}x{} format={:#x} tile={:#x} (targets so far {})",
+                     rt.Address(), rt.width, rt.height, static_cast<u32>(rt.format),
+                     static_cast<u32>(maxwell3d->regs.rt[0].tile_mode.block_height.Value()), seen.size());
+        }
+    }
     PrepareDraw(is_indexed, [this, is_indexed, instance_count] {
         const auto& draw_state = maxwell3d->draw_manager.draw_state;
         const u32 num_instances{instance_count};
@@ -398,6 +527,7 @@ void RasterizerVulkan::DrawTexture() {
 }
 
 void RasterizerVulkan::Clear(u32 layer_count) {
+    TraceWindowTarget(*maxwell3d, *gpu_memory, "clear", layer_count);
     FlushWork();
     gpu_memory->FlushCaching();
 
@@ -588,11 +718,13 @@ void RasterizerVulkan::DispatchCompute() {
 
     ComputePipeline* const pipeline{pipeline_cache.CurrentComputePipeline()};
     if (!pipeline) {
+        if (kepler_compute->IsNativeMode()) throw Shader::RuntimeError("Native compute pipeline unavailable");
         return;
     }
     std::scoped_lock lock{texture_cache.mutex, buffer_cache.mutex};
     if (!pipeline->Configure(*kepler_compute, *gpu_memory, scheduler, buffer_cache,
                              texture_cache)) {
+        if (kepler_compute->IsNativeMode()) throw Shader::RuntimeError("Native compute resources unavailable");
         return;
     }
 
@@ -942,6 +1074,12 @@ Tegra::Engines::AccelerateDMAInterface& RasterizerVulkan::AccessAccelerateDMA() 
 void RasterizerVulkan::AccelerateInlineToMemory(GPUVAddr address, size_t copy_size,
                                                 std::span<const u8> memory) {
     auto cpu_addr = gpu_memory->GpuToCpuAddress(address);
+    if (gpu_memory->UsesNativeTiling()) {
+        u32 first_word{};
+        if (memory.size() >= sizeof(first_word)) std::memcpy(&first_word, memory.data(), sizeof(first_word));
+        VideoCommon::TraceNativeQuery(11, gpu_memory->GetID(), address, cpu_addr.value_or(0),
+            0, first_word, static_cast<u32>(copy_size));
+    }
     if (!cpu_addr) [[unlikely]] {
         gpu_memory->WriteBlock(address, memory.data(), copy_size);
         return;
@@ -969,6 +1107,12 @@ std::optional<FramebufferTextureInfo> RasterizerVulkan::AccelerateDisplay(
     std::scoped_lock lock{texture_cache.mutex};
     const auto [image_view, scaled] =
         texture_cache.TryFindFramebufferImageView(config, framebuffer_addr);
+    static u32 display_trace_count{};
+    if (std::getenv("EDEN_NATIVE_FRAME_CAPTURE") && display_trace_count++ < 64) {
+        LOG_INFO(HW_GPU, "Native display source: address={:#x}, offset={:#x}, dimensions={}x{}, stride={}, accelerated={}, mask={:#x}",
+                 framebuffer_addr, config.offset, config.width, config.height, pixel_stride,
+                 image_view != nullptr, config.layer_stack_mask);
+    }
     if (!image_view) {
         return {};
     }

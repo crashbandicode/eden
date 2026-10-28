@@ -632,10 +632,7 @@ private:
             .height = layout.height,
             .stride = static_cast<u32>(layout.pitch / 4),
             .pixel_format = android::PixelFormat::Rgba8888,
-            // Title 4 renders with a lower-left origin (negative viewport scale), so its image is
-            // stored bottom-up and the console's compositor shows it flipped. Whether vi2 carries
-            // this per present is not known yet; flip unconditionally for now.
-            .transform_flags = android::BufferTransformFlags::FlipV,
+            .transform_flags = android::BufferTransformFlags::Unset,
             .crop_rect = {0, 0, static_cast<int>(layout.width), static_cast<int>(layout.height)},
             .blending = Tegra::BlendMode::Opaque,
             .native_tiling = true,
@@ -673,7 +670,8 @@ private:
                 header[14] = static_cast<u8>(layout.height);
                 header[15] = static_cast<u8>(layout.height >> 8);
                 header[16] = 32;
-                header[17] = invert_y ? 0x28 : 0x08;
+                // Descriptor bit 5: rows top to bottom. invert_y means the data is bottom-up.
+                header[17] = invert_y ? 0x08 : 0x28;
                 if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
                     std::fwrite(header.data(), 1, header.size(), file);
                     std::fwrite(pixels->data(), 1, pixels->size(), file);

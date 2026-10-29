@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
@@ -15,6 +16,7 @@
 #include <bit>
 #include <numeric>
 #include "common/cityhash.h"
+#include "common/scope_exit.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
 #include "common/thread_worker.h"
@@ -930,7 +932,38 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
     return nullptr;
 }
 
+namespace {
+// Pipelines built on the GPU thread at run time (shader translation; the driver compile is on
+// workers): every one over 2 ms is logged, and the total every 10 s, to tell how much of the
+// stutter on new content is translation.
+void ReportRuntimePipeline(const char* kind, std::chrono::steady_clock::time_point begin) {
+    static std::chrono::steady_clock::duration total{};
+    static u32 count{}, logged{};
+    static auto window = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    const auto elapsed = now - begin;
+    total += elapsed;
+    ++count;
+    const auto ms = [](auto d) { return std::chrono::duration<double, std::milli>(d).count(); };
+    if (elapsed > std::chrono::milliseconds{2} && logged < 400) {
+        ++logged;
+        LOG_INFO(Render_Vulkan, "{} pipeline built on the GPU thread in {:.1f} ms", kind, ms(elapsed));
+    }
+    if (now - window > std::chrono::seconds{10}) {
+        LOG_INFO(Render_Vulkan, "Runtime pipelines in the last 10 s: {} built, {:.1f} ms on the GPU thread",
+                 count, ms(total));
+        total = {};
+        count = 0;
+        window = now;
+    }
+}
+} // Anonymous namespace
+
 std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
+    const auto begin = std::chrono::steady_clock::now();
+    SCOPE_EXIT {
+        ReportRuntimePipeline("Graphics", begin);
+    };
     GraphicsEnvironments environments;
     GetGraphicsEnvironments(environments, graphics_key.unique_hashes);
 
@@ -956,6 +989,10 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline() {
 
 std::unique_ptr<ComputePipeline> PipelineCache::CreateComputePipeline(
     const ComputePipelineCacheKey& key, const ShaderInfo* shader) {
+    const auto begin = std::chrono::steady_clock::now();
+    SCOPE_EXIT {
+        ReportRuntimePipeline("Compute", begin);
+    };
     const GPUVAddr program_base{kepler_compute->regs.code_loc.Address()};
     const auto& qmd{kepler_compute->launch_description};
     ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start};

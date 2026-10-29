@@ -754,15 +754,20 @@ private:
             m_stats.pace_us += to_us(paced - composited);
             m_stats.max_fence_us = (std::max)(m_stats.max_fence_us, to_us(waited - entered));
             if (m_stats.last_present != std::chrono::steady_clock::time_point{}) {
-                m_stats.frame_us += to_us(entered - m_stats.last_present);
+                const long long frame = to_us(entered - m_stats.last_present);
+                m_stats.frame_us += frame;
+                m_stats.max_frame_us = (std::max)(m_stats.max_frame_us, frame);
+                m_stats.hitches += frame > 100'000 ? 1 : 0;
             }
             m_stats.last_present = entered;
             if (++m_stats.presents == 600) {
                 LOG_INFO(Service,
-                         "nx2:vi2 last 600 presents: frame {} us, blocked on the GPU fence {} us "
-                         "(max {}), composite {} us, vblank pacing {} us",
-                         m_stats.frame_us / 599, m_stats.fence_us / 600, m_stats.max_fence_us,
-                         m_stats.composite_us / 600, m_stats.pace_us / 600);
+                         "nx2:vi2 last 600 presents: frame {} us (max {}, {} over 100 ms), "
+                         "blocked on the GPU fence {} us (max {}), composite {} us, vblank "
+                         "pacing {} us",
+                         m_stats.frame_us / 599, m_stats.max_frame_us, m_stats.hitches,
+                         m_stats.fence_us / 600, m_stats.max_fence_us, m_stats.composite_us / 600,
+                         m_stats.pace_us / 600);
                 m_stats = {.last_present = entered};
             }
         }
@@ -779,6 +784,7 @@ private:
     u32 m_wait_timeouts{};
     struct PresentStats {
         long long frame_us{}, fence_us{}, composite_us{}, pace_us{}, max_fence_us{};
+        long long max_frame_us{}, hitches{};
         u32 presents{};
         std::chrono::steady_clock::time_point last_present{};
     } m_stats{};

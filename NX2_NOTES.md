@@ -165,12 +165,22 @@ With the patched decoder, games 1/3/4 only leave ~60-110 rare SIMD encodings in 
 | 107 | streamed textures shown as garbage/black for seconds; 2 transcode threads pegged | ASTC was decoded and re-compressed to BC on the CPU, ~40 textures/s on the attract loop | accelerate_astc=Gpu (config value 1) + BC recompression: GPU ASTC decode into a temporary RGBA8 image and `bc_encoder.comp` (69cc66b); textures ready the frame they are used |
 | 108 | frame time is CPU work + GPU-thread work in series | nx2:vi2 229 blocks the game until Eden's GPU thread has processed the frame (WaitForFrame), and RequestComposite waits for the GPU thread to drain its queue too; the present timeline log shows 8-56 ms of each 34-105 ms frame blocked | `EDEN_NX2_FRAMES_AHEAD=1` (wait for the previous frame) deadlocks at the first scene change: the main thread waits on syncpoint 1 (present fences) for a value no queued work reaches. Open |
 | 109 | ~1,400 SVCs per frame | the job system's WaitForAddress (0x34) / SignalToAddress (0x35) pairs and yields, all through Eden's global scheduler lock (3 of 6 cores seen blocked on it) | idle-core spinning (`EDEN_NX2_IDLE_SPIN_US`) gave no gain. Open |
+| 110 | (title 1) GPU thread saturated, 3D attract scenes ~22 fps | profiled with the new GPU zone timers (`EDEN_NX2_GPU_PROFILE`) and the in-process sampler (`EDEN_NX2_SAMPLE`): per second, ~355 ms command parsing outside macros, ~210 ms in 745k macro calls, ~325 ms draw setup (33k draws), ~89 ms compute (4.4k dispatches) | see 111-115; now ~27-33 ms per frame in the same scenes |
+| 111 | the guest clock (CNTPCT) cost ~10% of the main core | AMD CPUs have no CPUID leaf 0x15, so the TSC frequency stayed 0 and every read went through QueryPerformanceCounter | measure the TSC when the leaf is missing (948a391) |
+| 112 | C++ exceptions on the GPU thread (~1-2%) | a rejected native shader (mesh/task programs) was rethrown twice every time it was bound | return false for remembered rejections (948a391) |
+| 113 | debug aids on the hot path (~4% of the GPU thread) | semaphore watch per command word, FNV hash of every pushbuffer entry, first-write trace, two debug logs per macro call | flag checks unless their variable is set (948a391) |
+| 114 | texture churn: 1,400-2,600 textures deleted and recreated per 600 frames, one purge of 4,300 | ~38% of device memory was empty space in 256 MiB VMA blocks; usage came from the driver, so evictions did not lower it | 64 MiB blocks and usage minus VMA block slack (7b0ff0b): 0-224 per 600 frames, 6.24 of 6.97 GB used |
+| 115 | main core: ~12% slow-path reads of GPU-tracked pages, GPU thread and CPU fighting over the caches' mutex | `use_reactive_flushing` (on by default on desktop) protects tracked pages against reads too | off in the test config: the slow reads are gone, no visual differences seen in the attract loop. Kernel lock spins before sleeping (5c99031): ~20-25% less time blocked |
+| 116 | macro interpreter is ~11-13% of the GPU thread | operand fetch is not the cost: a slot-based rewrite matched the old interpreter on 200,000 recorded calls (`EDEN_NX2_MME_RECORD`, `C:\dev\nx2work\mme_test`) but was no faster | open: needs a JIT or pre-built handlers |
 
 Run settings used (in `build/bin/user/config/sdl2-config.ini`): `memory_layout_mode=4`
 (12 GB). Debug knobs: `EDEN_NX2_TC_EXPECTED_MIB` / `EDEN_NX2_TC_CRITICAL_MIB` (collector thresholds),
 `EDEN_NX2_ASTC_FLUSH=1` (GPU ASTC decode without the full wait), `EDEN_NX2_CRASH_DUMP=<dir>` (prints the
 faulting stack as module+offset, then a minidump), `EDEN_NX2_AUTO_STUB`, `EDEN_NX2_IPC_TRACE`, `EDEN_NX2_SVC_TRACE`,
 `EDEN_NX2_PULLER_TRACE`, `EDEN_NX2_METHOD_TRACE`, `EDEN_NX2_HIDE_WINDOW`,
+`EDEN_NX2_GPU_PROFILE` (GPU-thread zone timers every 10 s), `EDEN_NX2_SAMPLE=<threads>` with
+`_START`/`_SECONDS`/`_OUT` (sampling profiler; `C:\dev\nx2work\folded.py` reads its .folded stacks),
+`EDEN_NX2_MME_RECORD=<file>` (macro calls for `C:\dev\nx2work\mme_test`),
 `EDEN_NX2_FRAME_CAPTURE=<dir>` (every 120th presented frame as TGA), `EDEN_NX2_PB_CHECK`
 (pushbuffer entries changed between submit and execution), `EDEN_NX2_QUERY_TRACE` (every GPU
 report/semaphore write). `C:\dev\crashrun.sh` runs eden-cli under cdb and prints the crash stack;

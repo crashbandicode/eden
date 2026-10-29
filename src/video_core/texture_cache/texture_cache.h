@@ -175,7 +175,7 @@ void TextureCache<P>::RunGarbageCollector() {
 }
 
 template <class P>
-void TextureCache<P>::ApplyThresholdOverrides() {
+void TextureCache<P>::ApplyThresholdOverrides(bool log) {
     // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds.
     for (const auto& [name, target] : {std::pair{"EDEN_NX2_TC_EXPECTED_MIB", &expected_memory},
                                        std::pair{"EDEN_NX2_TC_CRITICAL_MIB", &critical_memory}}) {
@@ -183,8 +183,10 @@ void TextureCache<P>::ApplyThresholdOverrides() {
             *target = std::strtoull(value, nullptr, 10) << 20;
         }
     }
-    LOG_INFO(HW_GPU, "Texture cache thresholds: expected {} MiB, critical {} MiB, minimum {} MiB",
-             expected_memory >> 20, critical_memory >> 20, minimum_memory >> 20);
+    if (log) {
+        LOG_INFO(HW_GPU, "Texture cache thresholds: expected {} MiB, critical {} MiB, minimum {} MiB",
+                 expected_memory >> 20, critical_memory >> 20, minimum_memory >> 20);
+    }
 }
 
 template <class P>
@@ -203,14 +205,23 @@ void TextureCache<P>::TickFrame() {
             native_critical_memory = critical_memory;
             native_expected_memory = expected_memory;
         }
-        // The budget shrinks when other programs use VRAM (another game: 7.0 -> 6.4 GB), and
-        // collecting only past it means the driver pages textures out. Re-read it now and then.
+        // Follow the driver's budget (re-read now and then): it shrinks when other programs use
+        // VRAM (another game: 7.0 -> 6.4 GB), and collecting only past it means the driver pages
+        // textures out. It is also the room to use: Eden's device memory figure is capped near
+        // 7 GB, which on a 12 GB card (11.2 GB budget) kept title 1 evicting textures with 3 GB
+        // unused. EDEN_NX2_TC_*_MIB overrides still win.
         if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
-            if (native_thresholds_applied && ++budget_check_frames % 60 == 0) {
+            if (native_thresholds_applied && budget_check_frames++ % 60 == 0) {
                 const u64 budget = runtime.GetDeviceMemoryBudget();
                 if (budget > 2_GiB) {
-                    critical_memory = (std::min)(native_critical_memory, budget - 512_MiB);
-                    expected_memory = (std::min)(native_expected_memory, budget - 1280_MiB);
+                    const u64 old_critical = critical_memory;
+                    critical_memory = budget - 768_MiB;
+                    expected_memory = budget - 1536_MiB;
+                    // Log only real changes (the budget moves by a few MiB all the time).
+                    const u64 change = critical_memory > old_critical
+                                           ? critical_memory - old_critical
+                                           : old_critical - critical_memory;
+                    ApplyThresholdOverrides(change >= 256_MiB);
                 }
             }
         }

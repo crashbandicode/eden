@@ -235,7 +235,12 @@ private:
     void Nx2Map(u64 gpu_address, u64 cpu_address, u64 size);
     void Nx2Unmap(u64 gpu_address, u64 size);
     NvCore::SessionId nx2_session{};
-    std::map<std::pair<u64, u64>, DAddr> nx2_device_ranges;
+    struct Nx2DeviceRange {
+        DAddr address;
+        bool heap; ///< Mapped through the session's heap mapper (else an SMMU allocation)
+    };
+    std::map<std::pair<u64, u64>, Nx2DeviceRange> nx2_device_ranges;
+    void Nx2Release(u64 cpu_address, u64 size);
 };
 
 } // namespace Service::Nvidia::Devices

@@ -495,7 +495,8 @@ private:
                  w[1], w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10], w[11], w[12]);
         if (last > start && ((last + 1 - start) % Core::Memory::YUZU_PAGESIZE) == 0) {
             const u64 size = last + 1 - start;
-            if (const auto address = BackGpuOnlyRegion(size)) {
+            FreeReleasedRegions();
+            if (const auto address = BackGpuOnlyRegion(start, size)) {
                 Nvidia::Devices::Nx2GpuMemoryRegistry::Get().MapAt(start, *address, size);
                 LOG_INFO(Service, "nx2:gpu 214 GPU-only region [{:#x}, {:#x}] backed at {:#x}",
                          start, last, *address);
@@ -509,23 +510,54 @@ private:
     }
 
     // Sub 215 (nn::gpu::sdk::DestroySparseRegion): words 3-6 the range, word 8 the job slot, like
-    // 213. Drop the GPU mapping; backing memory 214 added stays allocated (its SMMU mapping is
-    // cached per CPU range, so its pages are not reused).
+    // 213. Drop the GPU mapping, then the backing 214 added: its SMMU mapping (in GPU-thread
+    // order) and, once the GPU thread is past that, its pages. Kept allocated, title 1 ran the
+    // pool dry within minutes and later regions had no memory at all (GPU writes to them lost).
     void SubDestroySparseRegion(HLERequestContext& ctx) {
         const auto* w = ctx.CommandBuffer();
         const u64 first = u64{w[3]} | (u64{w[4]} << 32);
         const u64 last = u64{w[5]} | (u64{w[6]} << 32);
         LOG_INFO(Service, "nx2:gpu 215 destroy sparse region [{:#x}, {:#x}] words {:#x} {:#x} {:#x} {:#x}",
                  first, last, w[1], w[2], w[7], w[8]);
+        FreeReleasedRegions();
         if (last > first) {
             Nvidia::Devices::Nx2GpuMemoryRegistry::Get().Unmap(first, last - first + 1);
+            const auto region = m_gpu_only_regions.find(first);
+            if (region != m_gpu_only_regions.end() && region->second.size == last - first + 1) {
+                Nvidia::Devices::Nx2GpuMemoryRegistry::Get().ReleaseBacking(
+                    region->second.cpu_address, region->second.size);
+                auto done = std::make_shared<std::atomic<bool>>(false);
+                system.GPU().RunInOrder([done] { done->store(true, std::memory_order_release); });
+                m_released_regions.push_back({std::move(region->second), std::move(done)});
+                m_gpu_only_regions.erase(region);
+            }
         }
         SignalAfterGpu(w[8]);
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
     }
 
-    std::optional<u64> BackGpuOnlyRegion(u64 size) {
+    // Returns the pages of destroyed regions the GPU thread is done with to the kernel.
+    void FreeReleasedRegions() {
+        auto* const process = system.ApplicationProcess();
+        std::erase_if(m_released_regions, [&](ReleasedRegion& released) {
+            if (!released.done->load(std::memory_order_acquire)) {
+                return false;
+            }
+            auto& region = released.region;
+            if (process != nullptr &&
+                R_FAILED(process->GetPageTable().UnmapPageGroup(
+                    region.cpu_address, *region.pages, Kernel::KMemoryState::IoMemory))) {
+                LOG_ERROR(Service, "nx2:gpu could not unmap GPU-only backing {:#x}+{:#x}",
+                          region.cpu_address, region.size);
+                return true; // still mapped: keep its pages
+            }
+            region.pages->Close(system.Kernel());
+            return true;
+        });
+    }
+
+    std::optional<u64> BackGpuOnlyRegion(u64 gpu_address, u64 size) {
         using Core::Memory::YUZU_PAGESIZE;
         auto& kernel_core = system.Kernel();
         auto* const process = system.ApplicationProcess();
@@ -553,7 +585,7 @@ private:
             const Common::ProcessAddress address{region_start + offset};
             if (R_SUCCEEDED(page_table.MapPageGroup(address, *pg, Kernel::KMemoryState::IoMemory,
                                                     Kernel::KMemoryPermission::UserReadWrite))) {
-                m_gpu_only_memory.push_back(std::move(pg));
+                m_gpu_only_regions[gpu_address] = {GetInteger(address), size, std::move(pg)};
                 return GetInteger(address);
             }
         }
@@ -563,7 +595,17 @@ private:
         return std::nullopt;
     }
 
-    std::vector<std::unique_ptr<Kernel::KPageGroup>> m_gpu_only_memory;
+    struct GpuOnlyRegion {
+        u64 cpu_address;
+        u64 size;
+        std::unique_ptr<Kernel::KPageGroup> pages;
+    };
+    struct ReleasedRegion {
+        GpuOnlyRegion region;
+        std::shared_ptr<std::atomic<bool>> done; ///< Set by the GPU thread past the region's last use
+    };
+    std::map<u64, GpuOnlyRegion> m_gpu_only_regions; ///< By GPU address
+    std::vector<ReleasedRegion> m_released_regions;
 
     struct GpuMemory {
         u64 address;

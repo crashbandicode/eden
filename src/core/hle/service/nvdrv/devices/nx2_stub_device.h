@@ -39,6 +39,7 @@ class Nx2GpuMemoryRegistry {
 public:
     using Listener = std::function<void(u64 gpu_address, u64 cpu_address, u64 size)>;
     using UnmapListener = std::function<void(u64 gpu_address, u64 size)>;
+    using ReleaseListener = std::function<void(u64 cpu_address, u64 size)>;
 
     static Nx2GpuMemoryRegistry& Get() {
         static Nx2GpuMemoryRegistry registry;
@@ -67,12 +68,29 @@ public:
         }
     }
 
-    void AddListener(const void* owner, Listener listener, UnmapListener unmap_listener) {
+    // Backing memory [cpu_address, +size) is about to be freed (its GPU mappings are gone): each
+    // address space drops its SMMU mapping of it, in GPU-thread order.
+    void ReleaseBacking(u64 cpu_address, u64 size) {
+        {
+            std::scoped_lock lk{device_mutex};
+            device_ranges.erase(cpu_address);
+        }
+        std::scoped_lock lk{mutex};
+        for (auto& [owner, listener] : listeners) {
+            if (listener.release) {
+                listener.release(cpu_address, size);
+            }
+        }
+    }
+
+    void AddListener(const void* owner, Listener listener, UnmapListener unmap_listener,
+                     ReleaseListener release_listener = {}) {
         std::scoped_lock lk{mutex};
         for (const auto& m : mappings) {
             listener(m.gpu_address, m.cpu_address, m.size);
         }
-        listeners.insert_or_assign(owner, Listeners{std::move(listener), std::move(unmap_listener)});
+        listeners.insert_or_assign(owner, Listeners{std::move(listener), std::move(unmap_listener),
+                                                    std::move(release_listener)});
     }
 
     void RemoveListener(const void* owner) {
@@ -114,6 +132,7 @@ private:
     struct Listeners {
         Listener map;
         UnmapListener unmap;
+        ReleaseListener release;
     };
 
     // Drops [gpu_address, +size) from the recorded mappings, keeping the parts outside it.

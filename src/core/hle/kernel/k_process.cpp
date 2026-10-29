@@ -1265,6 +1265,7 @@ Result KProcess::LoadFromMetadata(KernelCore& kernel, const FileSys::ProgramMeta
     // its heap as total memory minus ~6.3 GiB), so count the alias region as well, bounded by the
     // pool through the resource limit.
     if (metadata.IsSwitch2()) {
+        m_is_switch2 = true;
         m_max_process_memory = m_page_table.GetHeapRegionSize() + m_page_table.GetAliasRegionSize();
     }
 

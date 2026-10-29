@@ -135,6 +135,7 @@ private:
     bool m_is_signaled : 1 = false;
     bool m_is_initialized : 1 = false;
     bool m_is_application : 1 = false;
+    bool m_is_switch2 : 1 = false;
     bool m_is_default_application_system_resource : 1 = false;
     bool m_is_suspended : 1 = false;
     bool m_is_immortal : 1 = false;
@@ -246,6 +247,10 @@ public:
 
     bool IsApplication() const {
         return m_is_application;
+    }
+
+    bool IsSwitch2() const {
+        return m_is_switch2;
     }
 
     bool IsDefaultApplicationSystemResource() const {

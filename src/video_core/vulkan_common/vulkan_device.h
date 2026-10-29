@@ -1148,7 +1148,7 @@ private:
 
 private:
     VkInstance instance;         ///< Vulkan instance.
-    VmaAllocator allocator;      ///< VMA allocator.
+    VmaAllocator allocator{};    ///< VMA allocator.
     vk::DeviceDispatch dld;      ///< Device function pointers.
     vk::PhysicalDevice physical; ///< Physical device.
     vk::Device logical;          ///< Logical device.

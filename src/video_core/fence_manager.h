@@ -68,6 +68,10 @@ public:
     }
 
     void SyncOperation(std::function<void()>&& func) {
+        // Not only the GPU thread queues these (query cache work runs elsewhere too), while
+        // SignalFence moves the list into pending_operations: unguarded, the list was corrupted
+        // and the fencing thread crashed walking it. Its own lock, held for no callbacks.
+        std::scoped_lock lock{uncommitted_guard};
         uncommitted_operations.emplace_back(std::move(func));
     }
 
@@ -82,10 +86,14 @@ public:
         if constexpr (can_async_check) {
             guard.lock();
         }
-        if (delay_fence) {
-            uncommitted_operations.emplace_back(std::move(func));
+        {
+            std::scoped_lock lock{uncommitted_guard};
+            if (delay_fence) {
+                uncommitted_operations.emplace_back(std::move(func));
+            }
+            pending_operations.emplace_back(std::move(uncommitted_operations));
+            uncommitted_operations.clear(); // moved-from: make it empty explicitly
         }
-        pending_operations.emplace_back(std::move(uncommitted_operations));
         QueueFence(new_fence);
         if (!delay_fence) {
             func();
@@ -261,6 +269,7 @@ private:
 
     std::mutex guard;
     std::mutex ring_guard;
+    std::mutex uncommitted_guard; ///< Guards uncommitted_operations
     std::condition_variable cv;
 
     std::jthread fence_thread;

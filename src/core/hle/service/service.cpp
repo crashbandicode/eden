@@ -72,7 +72,9 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(HLERequestContext& ctx,
 
     fmt::memory_buffer buf;
     fmt::format_to(std::back_inserter(buf), "function '{}({})': port='{}' cmd_buf={{[0]={:#x}", ctx.GetCommand(), function_name, service_name, cmd_buf[0]);
-    for (int i = 1; i <= 8; ++i)
+    // The Switch 2 video decoder sessions are being reverse engineered: dump whole requests.
+    const int last_word = std::string_view{service_name}.starts_with("nx2:vdec") ? 47 : 8;
+    for (int i = 1; i <= last_word; ++i)
         fmt::format_to(std::back_inserter(buf), ", [{}]={:#x}", i, cmd_buf[i]);
     buf.push_back('}');
 

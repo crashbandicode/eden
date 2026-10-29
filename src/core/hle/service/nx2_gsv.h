@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <initializer_list>
 #include <atomic>
+#include <deque>
 #include <map>
 #include <optional>
 #include <memory>
@@ -101,26 +102,6 @@ inline void ReturnRawSession(Core::System& system, HLERequestContext& ctx, std::
 class INx2NvsrvSession final : public ServiceFramework<INx2NvsrvSession> {
 public:
     explicit INx2NvsrvSession(Core::System& system_) : ServiceFramework{system_, "nx2:nvsrv"} {}
-};
-
-// Placeholder for the Switch 2 video decoder (nn::codec::video::detail::ipc), handed out by gsv
-// 902 and 1002 (two sessions; `name` tells them apart in logs). TIPC 1 is
-// CreateVideoDecoderService (ipc::CreateVideoDecoderService): handle at word 3, result at word
-// 4, a session the decoders then talk to. Everything else is auto-stubbed through the nx2: prefix.
-class INx2VideoSession final : public ServiceFramework<INx2VideoSession> {
-public:
-    explicit INx2VideoSession(Core::System& system_, const char* name)
-        : ServiceFramework{system_, name} {
-        RegisterHandlersTipc({
-            {1, &INx2VideoSession::CreateDecoderService, "CreateVideoDecoderService"},
-        });
-    }
-
-private:
-    void CreateDecoderService(HLERequestContext& ctx) {
-        LOG_WARNING(Service, "(STUBBED) {} TIPC 1, returning a video decoder service session", GetServiceName());
-        ReturnRawSession(system, ctx, std::make_shared<INx2VideoSession>(system, "nx2:vdecsvc"));
-    }
 };
 
 // Placeholder for the Switch 2 syncpoint server (nn::syncpt), handed out by gsv 202. TIPC 1
@@ -1028,6 +1009,207 @@ private:
     std::shared_ptr<std::atomic<bool>> m_capture_pending = std::make_shared<std::atomic<bool>>(false);
 };
 
+// The Switch 2 video decoder (nn::codec::video::detail::ipc). gsv 902/1002 hand out a session
+// whose TIPC 1 (CreateVideoDecoderService: handle at word 3, result at word 4) creates a decoder
+// service, another session of this class. Layouts read from the SDK's nn::codec VP9 decoder:
+// - 200(copy handle: work buffer transfer memory, u64 size, u32, u32, u32): initialize.
+// - 101(X: codec configuration, u32 0, u32 width, u32 height, u32 rate, u32 max input): configure.
+// - 3(): an event (copy handle at word 3, result at word 4) the client attaches as its
+//   submission-ready event.
+// - 6 / 207 / 8: start / stop / flush; 115: finalize.
+// - 311(u32 image id): register an output image (gsv 911 creates it); reply a 16-byte
+//   NativeSyncHandle, all zero reading as already signalled. The client acquires output images
+//   in registration/release order from a ring of its own (no IPC).
+// - 314(u32 image id, u32, NativeSyncHandle): give an output image back; reply a new handle.
+// - 212(u32 image id): unregister it.
+// - 109(A: one compressed frame, u64 pts in us, u8 end of stream): submit input; reply a u64.
+// - 213(): the next finished frame (16 words): u32 image id, u32 width, u32 height, u32 width,
+//   u32 height, u32 colour space, u64 pts, u8 end of stream.
+// Frames are not decoded yet: each submitted frame completes at once into the next free output
+// image, so movies run to their end (with no picture) instead of stalling.
+class INx2VideoSession final : public ServiceFramework<INx2VideoSession> {
+public:
+    explicit INx2VideoSession(Core::System& system_, std::shared_ptr<Nx2NativeObjects> objects_,
+                              const char* name)
+        : ServiceFramework{system_, name}, m_context{system_, name},
+          m_objects{std::move(objects_)} {
+        RegisterHandlersTipc({
+            {1, &INx2VideoSession::CreateDecoderService, "CreateVideoDecoderService"},
+            {3, &INx2VideoSession::GetEvent, "GetEvent"},
+            {6, &INx2VideoSession::Succeed, "Start"},
+            {8, &INx2VideoSession::Succeed, "Flush"},
+            {101, &INx2VideoSession::Configure, "Configure"},
+            {109, &INx2VideoSession::SubmitInput, "SubmitInputBuffer"},
+            {115, &INx2VideoSession::Succeed, "Finalize"},
+            {200, &INx2VideoSession::Succeed, "Initialize"},
+            {207, &INx2VideoSession::Succeed, "Stop"},
+            {212, &INx2VideoSession::UnregisterBuffer, "UnregisterBuffer"},
+            {213, &INx2VideoSession::GetOutputInfo, "GetOutputInfo"},
+            {311, &INx2VideoSession::RegisterBuffer, "RegisterBuffer"},
+            {314, &INx2VideoSession::ReleaseBuffer, "ReleaseBuffer"},
+        });
+    }
+
+    ~INx2VideoSession() override {
+        // The ready timer runs on the HostTiming thread: clear its event under its lock first.
+        {
+            std::scoped_lock lk{m_ready->mutex};
+            m_ready->event = nullptr;
+        }
+        if (m_ready_timer) {
+            system.CoreTiming().UnscheduleEvent(m_ready_timer);
+        }
+        if (m_event != nullptr) {
+            m_context.CloseEvent(m_event);
+        }
+    }
+
+private:
+    struct Output {
+        u32 image;
+        u64 pts;
+        bool end;
+    };
+
+    void Log(HLERequestContext& ctx, std::string_view what) {
+        if (m_logged++ < 64) {
+            const auto* w = ctx.CommandBuffer();
+            LOG_INFO(Service, "{} TIPC {} {}: [2]={:#x} [3]={:#x} [4]={:#x} [5]={:#x} [6]={:#x} [7]={:#x}",
+                     GetServiceName(), ctx.GetCommand(), what, w[2], w[3], w[4], w[5], w[6], w[7]);
+        }
+    }
+
+    void CreateDecoderService(HLERequestContext& ctx) {
+        Log(ctx, "create decoder service");
+        ReturnRawSession(system, ctx,
+                         std::make_shared<INx2VideoSession>(system, m_objects, "nx2:vdecsvc"));
+    }
+
+    void Succeed(HLERequestContext& ctx) {
+        Log(ctx, "");
+        TipcReplyWords(ctx, {});
+    }
+
+    void Configure(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        // Words 2-3 are the X descriptor of the configuration data.
+        m_width = w[5];
+        m_height = w[6];
+        Log(ctx, "configure");
+        TipcReplyWords(ctx, {});
+    }
+
+    void GetEvent(HLERequestContext& ctx) {
+        Log(ctx, "event");
+        if (m_event == nullptr) {
+            m_event = m_context.CreateEvent(fmt::format("{}:Ready", GetServiceName()));
+            // Ready for input at all times (frames complete as they are submitted). The client
+            // attaches it auto-clearing, so one signal is consumed by the first wait: re-signal
+            // every 4 ms; a spurious wake only makes it check again.
+            {
+                std::scoped_lock lk{m_ready->mutex};
+                m_ready->event = m_event;
+            }
+            m_ready_timer = Core::Timing::CreateEvent(
+                "nx2:vdec ready",
+                [ready = m_ready, &kernel = system.Kernel()](
+                    s64, std::chrono::nanoseconds) -> std::optional<std::chrono::nanoseconds> {
+                    std::scoped_lock lk{ready->mutex};
+                    if (ready->event != nullptr) {
+                        ready->event->Signal(kernel);
+                    }
+                    return std::nullopt;
+                });
+            constexpr std::chrono::nanoseconds ReadyInterval{std::chrono::milliseconds{4}};
+            system.CoreTiming().ScheduleLoopingEvent(ReadyInterval, ReadyInterval, m_ready_timer);
+        }
+        m_event->Signal(system.Kernel());
+        IPC::ResponseBuilder rb{ctx, 2, 1, 0};
+        rb.Push(ResultSuccess);
+        rb.PushCopyObjects(ctx, m_event->GetReadableEvent());
+    }
+
+    void RegisterBuffer(HLERequestContext& ctx) {
+        Log(ctx, "register output");
+        GiveBack(ctx.CommandBuffer()[2]);
+        TipcReplyWords(ctx, {0, 0, 0, 0});
+    }
+
+    void ReleaseBuffer(HLERequestContext& ctx) {
+        Log(ctx, "release output");
+        GiveBack(ctx.CommandBuffer()[2]);
+        TipcReplyWords(ctx, {0, 0, 0, 0});
+    }
+
+    void UnregisterBuffer(HLERequestContext& ctx) {
+        Log(ctx, "unregister output");
+        std::erase(m_free, ctx.CommandBuffer()[2]);
+        TipcReplyWords(ctx, {});
+    }
+
+    // An output image is free again: a frame waiting for one completes into it.
+    void GiveBack(u32 image) {
+        if (!m_waiting.empty()) {
+            m_outputs.push_back({image, m_waiting.front().pts, m_waiting.front().end});
+            m_waiting.pop_front();
+            return;
+        }
+        m_free.push_back(image);
+    }
+
+    void SubmitInput(HLERequestContext& ctx) {
+        const auto* w = ctx.CommandBuffer();
+        // Words 2-4 are the A descriptor of the compressed frame.
+        const u64 pts = u64{w[5]} | (u64{w[6]} << 32);
+        const bool end = (w[7] & 0xFF) != 0;
+        Log(ctx, "submit");
+        if (!m_free.empty()) {
+            m_outputs.push_back({m_free.front(), pts, end});
+            m_free.pop_front();
+        } else {
+            m_waiting.push_back({0, pts, end});
+        }
+        const u64 id = ++m_submitted;
+        if (m_event != nullptr) {
+            m_event->Signal(system.Kernel());
+        }
+        TipcReplyWords(ctx, {static_cast<u32>(id), static_cast<u32>(id >> 32)});
+    }
+
+    void GetOutputInfo(HLERequestContext& ctx) {
+        Log(ctx, "output info");
+        if (m_outputs.empty()) {
+            // Nothing finished: the code the client's own Acquire uses for an empty ring.
+            IPC::ResponseBuilder rb{ctx, 2};
+            rb.PushRaw<u32>(0x1c286f);
+            return;
+        }
+        const Output output = m_outputs.front();
+        m_outputs.pop_front();
+        TipcReplyWords(ctx, {output.image, m_width, m_height, m_width, m_height, 0,
+                             static_cast<u32>(output.pts), static_cast<u32>(output.pts >> 32),
+                             output.end ? 1U : 0U, 0, 0, 0, 0, 0, 0, 0});
+    }
+
+    struct ReadyState {
+        std::mutex mutex;
+        Kernel::KEvent* event{};
+    };
+
+    KernelHelpers::ServiceContext m_context;
+    std::shared_ptr<Nx2NativeObjects> m_objects;
+    Kernel::KEvent* m_event{};
+    std::shared_ptr<ReadyState> m_ready = std::make_shared<ReadyState>();
+    std::shared_ptr<Core::Timing::EventType> m_ready_timer;
+    u32 m_width{};
+    u32 m_height{};
+    u64 m_submitted{};
+    u32 m_logged{};
+    std::deque<u32> m_free;
+    std::deque<Output> m_waiting;
+    std::deque<Output> m_outputs;
+};
+
 // Placeholder for the Switch 2 graphics-system server that nn::gsv::BootWithRemoteMemory talks
 // to over TIPC. Nothing behind it is emulated: commands succeed and are logged, so boot can show
 // what comes next. Commands 202 and 1402 hand out the syncpt and nvsrv sessions the SDK uses.
@@ -1060,6 +1242,8 @@ public:
             {902, &INx2GraphicsSystemSession::OpenVideoSession, "OpenVideoDecoderSession (guessed)"},
             {1001, &INx2GraphicsSystemSession::Stub, "VideoInitialize2 (guessed)"},
             {1002, &INx2GraphicsSystemSession::OpenVideoSession, "OpenVideoDecoderSession2 (guessed)"},
+            // Same request as 429: the image backing a decoder output (nn::codec image pools).
+            {911, &INx2GraphicsSystemSession::CreateNativeImage, "CreateDecoderImage (guessed)"},
         });
     }
 
@@ -1101,7 +1285,8 @@ private:
         LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC {}, returning a video decoder session",
                     ctx.GetCommand());
         ReturnRawSession(system, ctx,
-                         std::make_shared<INx2VideoSession>(system, second ? "nx2:vdec2" : "nx2:vdec"));
+                         std::make_shared<INx2VideoSession>(system, m_objects,
+                                                            second ? "nx2:vdec2" : "nx2:vdec"));
     }
 
     void OpenSyncptSession(HLERequestContext& ctx) {

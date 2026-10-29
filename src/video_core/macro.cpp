@@ -1457,6 +1457,17 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             return value == nullptr || value[0] != '0';
         }();
         if (use_memo) {
+            // EDEN_NX2_MME_MEMO_STATS: log the memo's counters every 2^24 calls.
+            if (static const bool memo_stats = std::getenv("EDEN_NX2_MME_MEMO_STATS") != nullptr;
+                memo_stats && (++native_calls & 0xffffff) == 0) {
+                const auto& stats = native_memo.GetStatistics();
+                LOG_INFO(HW_GPU,
+                         "Macro memo: {} hits, {} misses, {} guard failures, {} stores ({} in "
+                         "place), {} clears; {} entries, {} KiB",
+                         stats.hits, stats.misses, stats.guard_failures, stats.stores,
+                         stats.overwrites, stats.clears, native_memo.Size(),
+                         native_memo.ArenaWords() * 4 / 1024);
+            }
             native_memo.Synchronize(native_code_generation);
             if (decltype(native_memo)::Effects effects;
                 native_memo.Find(method, parameters, *native_interpreter.active_dram, effects)) {

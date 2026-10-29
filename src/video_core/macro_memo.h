@@ -7,12 +7,22 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace Tegra {
 
 using MacroMemoPairs = std::vector<std::pair<std::uint32_t, std::uint32_t>>;
+
+/// The memo's keys are already well mixed hashes: use them as they are (std::hash<u64> is a
+/// byte-wise FNV-1a on MSVC, ~20% of a lookup).
+struct MacroMemoHash {
+    using is_avalanching = std::true_type;
+    std::size_t operator()(std::uint64_t key) const noexcept {
+        return static_cast<std::size_t>(key);
+    }
+};
 
 // The effects of native macro calls that depend on nothing but their start address, their
 // parameters and data RAM words they read (no register or memory reads), so that a repeated
@@ -29,11 +39,16 @@ public:
         std::span<const std::uint32_t> writes; ///< (method, value) in order
     };
 
+    struct Statistics {
+        std::uint64_t hits{}, misses{}, guard_failures{}, stores{}, overwrites{}, clears{};
+    };
+
     /// An earlier call with this start and these parameters whose data RAM reads still hold.
     bool Find(std::uint32_t start, std::span<const std::uint32_t> parameters,
-              std::span<const std::uint32_t> data_ram, Effects& effects) const {
+              std::span<const std::uint32_t> data_ram, Effects& effects) {
         const auto it = entries.find(Hash(start, parameters));
         if (it == entries.end()) {
+            ++statistics.misses;
             return false;
         }
         // Record: start, parameter count, read count, data RAM write count, write count, then
@@ -43,14 +58,17 @@ public:
         const std::uint32_t num_data_ram_writes = record[3], num_writes = record[4];
         if (record[0] != start || num_parameters != parameters.size() ||
             !std::equal(parameters.begin(), parameters.end(), record + HeaderWords)) {
+            ++statistics.misses;
             return false; // another call with the same hash
         }
         const std::uint32_t* reads = record + HeaderWords + num_parameters;
         for (std::uint32_t i = 0; i < num_reads; ++i) {
             if (data_ram[reads[i * 2]] != reads[i * 2 + 1]) {
+                ++statistics.guard_failures;
                 return false;
             }
         }
+        ++statistics.hits;
         const std::uint32_t* data_ram_writes = reads + num_reads * 2;
         effects.data_ram_writes = {data_ram_writes, num_data_ram_writes * 2};
         effects.writes = {data_ram_writes + num_data_ram_writes * 2, num_writes * 2};
@@ -60,9 +78,31 @@ public:
     void Store(std::uint32_t start, std::span<const std::uint32_t> parameters,
                const MacroMemoPairs& data_ram_reads, const MacroMemoPairs& data_ram_writes,
                const MacroMemoPairs& writes) {
+        ++statistics.stores;
+        const std::uint64_t hash = Hash(start, parameters);
+        // A call stored again (its data RAM reads no longer held) usually has the same shape:
+        // rewrite its record in place, or the arena fills with stale copies.
+        if (const auto it = entries.find(hash); it != entries.end()) {
+            std::uint32_t* record = arena.data() + it->second;
+            if (record[0] == start && record[1] == parameters.size() &&
+                record[2] == data_ram_reads.size() && record[3] == data_ram_writes.size() &&
+                record[4] == writes.size() &&
+                std::equal(parameters.begin(), parameters.end(), record + HeaderWords)) {
+                std::uint32_t* out = record + HeaderWords + parameters.size();
+                for (const MacroMemoPairs* pairs : {&data_ram_reads, &data_ram_writes, &writes}) {
+                    for (const auto& [address, value] : *pairs) {
+                        *out++ = address;
+                        *out++ = value;
+                    }
+                }
+                ++statistics.overwrites;
+                return;
+            }
+        }
         if (arena.size() >= MaxArenaWords) {
             arena.clear();
             entries.clear();
+            ++statistics.clears;
         }
         const auto offset = static_cast<std::uint32_t>(arena.size());
         arena.push_back(start);
@@ -77,7 +117,19 @@ public:
                 arena.push_back(value);
             }
         }
-        entries.insert_or_assign(Hash(start, parameters), offset);
+        entries.insert_or_assign(hash, offset);
+    }
+
+    const Statistics& GetStatistics() const {
+        return statistics;
+    }
+
+    std::size_t Size() const {
+        return entries.size();
+    }
+
+    std::size_t ArenaWords() const {
+        return arena.size();
     }
 
     /// Forgets every call when the macro code is no longer the code they ran.
@@ -105,6 +157,7 @@ private:
     Map entries;
     std::vector<std::uint32_t> arena;
     std::uint64_t generation{};
+    Statistics statistics;
 };
 
 } // namespace Tegra

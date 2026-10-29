@@ -256,8 +256,9 @@ struct MacroEngine {
     std::vector<u32> native_fifo;
     // Calls replayed instead of interpreted (macro_memo.h), and what the current call wrote.
     u64 native_code_generation{};
-    BasicMacroMemo<::Common::unordered_map<u64, u32>> native_memo;
+    BasicMacroMemo<::Common::unordered_map<u64, u32, MacroMemoHash>> native_memo;
     MacroMemoPairs native_writes;
+    u64 native_calls{};
 
 };
 

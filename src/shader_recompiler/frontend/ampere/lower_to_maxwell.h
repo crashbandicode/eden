@@ -416,7 +416,7 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
                 return fail(index, "native half min/max mode");
             const auto a = half_source(0);
             const auto b = opcode == 0x840 ? HalfSource{255, 0, false, false} : half_source(1);
-            if (a.swizzle == 1 || b.swizzle == 1 || b.reg >= 250 && b.reg != 255)
+            if (a.swizzle == 1 || b.swizzle == 1 || (b.reg >= 250 && b.reg != 255))
                 return fail(index, "native half min/max source mode");
             for (u32 lane = 0; lane < 2; ++lane) {
                 extract_half(a, lane, 250);

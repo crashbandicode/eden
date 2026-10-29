@@ -29,6 +29,7 @@
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/gpu_logging/gpu_logging.h"
 #include "common/settings.h"
+#include "video_core/nx2_profile.h"
 
 #if defined(_MSC_VER) && defined(NDEBUG)
 #define LAMBDA_FORCEINLINE [[msvc::forceinline]]
@@ -355,7 +356,11 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
     views.reserve(num_image_elements);
     samplers.reserve(num_textures);
 
-    texture_cache.SynchronizeDescriptors(false);
+    namespace Profile = VideoCommon::Nx2Profile;
+    {
+        Profile::Scope scope{Profile::Zone::SyncDescriptors};
+        texture_cache.SynchronizeDescriptors(false);
+    }
 
     buffer_cache.SetUniformBuffersState(enabled_uniform_buffer_masks, &uniform_buffer_sizes);
 
@@ -432,24 +437,31 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
 
         return true;
     }};
-    if constexpr (Spec::enabled_stages[0]) {
-        config_stage(0);
-    }
-    if constexpr (Spec::enabled_stages[1]) {
-        config_stage(1);
-    }
-    if constexpr (Spec::enabled_stages[2]) {
-        config_stage(2);
-    }
-    if constexpr (Spec::enabled_stages[3]) {
-        config_stage(3);
-    }
-    if constexpr (Spec::enabled_stages[4]) {
-        config_stage(4);
+    {
+        Profile::Scope scope{Profile::Zone::ReadHandles};
+        if constexpr (Spec::enabled_stages[0]) {
+            config_stage(0);
+        }
+        if constexpr (Spec::enabled_stages[1]) {
+            config_stage(1);
+        }
+        if constexpr (Spec::enabled_stages[2]) {
+            config_stage(2);
+        }
+        if constexpr (Spec::enabled_stages[3]) {
+            config_stage(3);
+        }
+        if constexpr (Spec::enabled_stages[4]) {
+            config_stage(4);
+        }
     }
     ASSERT(views.size() == num_image_elements);
     ASSERT(samplers.size() == num_textures);
-    texture_cache.FillImageViews(std::span(views.data(), views.size()), false, Spec::has_images);
+    {
+        Profile::Scope scope{Profile::Zone::FillImageViews};
+        texture_cache.FillImageViews(std::span(views.data(), views.size()), false,
+                                     Spec::has_images);
+    }
 
     VideoCommon::ImageViewInOut* texture_buffer_it{views.data()};
     const auto bind_stage_info{[&](size_t stage) LAMBDA_FORCEINLINE {
@@ -493,39 +505,54 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
             texture_buffer_it += Shader::NumDescriptors(info.image_descriptors);
         }
     }};
-    if constexpr (Spec::enabled_stages[0]) {
-        bind_stage_info(0);
-    }
-    if constexpr (Spec::enabled_stages[1]) {
-        bind_stage_info(1);
-    }
-    if constexpr (Spec::enabled_stages[2]) {
-        bind_stage_info(2);
-    }
-    if constexpr (Spec::enabled_stages[3]) {
-        bind_stage_info(3);
-    }
-    if constexpr (Spec::enabled_stages[4]) {
-        bind_stage_info(4);
+    {
+        Profile::Scope scope{Profile::Zone::TextureBuffers};
+        if constexpr (Spec::enabled_stages[0]) {
+            bind_stage_info(0);
+        }
+        if constexpr (Spec::enabled_stages[1]) {
+            bind_stage_info(1);
+        }
+        if constexpr (Spec::enabled_stages[2]) {
+            bind_stage_info(2);
+        }
+        if constexpr (Spec::enabled_stages[3]) {
+            bind_stage_info(3);
+        }
+        if constexpr (Spec::enabled_stages[4]) {
+            bind_stage_info(4);
+        }
     }
 
     if (regs.transform_feedback_enabled != 0) {
         scheduler.RequestOutsideRenderPassOperationContext();
     }
 
-    buffer_cache.UpdateGraphicsBuffers(is_indexed);
-    buffer_cache.BindHostGeometryBuffers(is_indexed);
+    {
+        Profile::Scope scope{Profile::Zone::UpdateBuffers};
+        buffer_cache.UpdateGraphicsBuffers(is_indexed);
+        buffer_cache.BindHostGeometryBuffers(is_indexed);
+    }
 
-    guest_descriptor_queue.Acquire(scheduler, num_descriptor_entries, uses_descriptor_buffer);
+    {
+        Profile::Scope scope{Profile::Zone::DescriptorAcquire};
+        guest_descriptor_queue.Acquire(scheduler, num_descriptor_entries, uses_descriptor_buffer);
+    }
 
     RescalingPushConstant rescaling;
     RenderAreaPushConstant render_area;
     const VideoCommon::SamplerId* samplers_it{samplers.data()};
     const VideoCommon::ImageViewInOut* views_it{views.data()};
     const auto prepare_stage{[&](size_t stage) LAMBDA_FORCEINLINE {
-        buffer_cache.BindHostStageBuffers(stage);
-        PushImageDescriptors(texture_cache, guest_descriptor_queue, stage_infos[stage], rescaling,
-                             samplers_it, views_it);
+        {
+            Profile::Scope scope{Profile::Zone::BindStageBuffers};
+            buffer_cache.BindHostStageBuffers(stage);
+        }
+        {
+            Profile::Scope scope{Profile::Zone::PushDescriptors};
+            PushImageDescriptors(texture_cache, guest_descriptor_queue, stage_infos[stage],
+                                 rescaling, samplers_it, views_it);
+        }
         const auto& info{stage_infos[stage]};
         if (info.uses_render_area) {
             render_area.uses_render_area = true;
@@ -555,12 +582,16 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
         buffer_cache.runtime.PostCopyBarrier();
         buffer_cache.any_buffer_uploaded = false;
     }
-    texture_cache.UpdateRenderTargets(false);
-    texture_cache.CheckFeedbackLoop(std::span<const VideoCommon::ImageViewInOut>{views.data(),
-                                                                                 views.size()});
+    {
+        Profile::Scope scope{Profile::Zone::RenderTargets};
+        texture_cache.UpdateRenderTargets(false);
+        texture_cache.CheckFeedbackLoop(
+            std::span<const VideoCommon::ImageViewInOut>{views.data(), views.size()});
+    }
     if (IsBuilt() && !pipeline) {
         return false;
     }
+    Profile::Scope scope{Profile::Zone::ConfigureDraw};
     return ConfigureDraw(rescaling, render_area);
 }
 

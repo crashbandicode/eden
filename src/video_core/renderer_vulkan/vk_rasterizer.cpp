@@ -49,6 +49,7 @@
 #include "video_core/texture_cache/texture_cache_base.h"
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
+#include "video_core/nx2_profile.h"
 
 namespace Vulkan {
 
@@ -253,8 +254,12 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
             LOG_DEBUG(HW_GPU, "Native graphics draw failed; refusing submission completion");
         }
     };
-    FlushWork();
-    gpu_memory->FlushCaching();
+    namespace Profile = VideoCommon::Nx2Profile;
+    {
+        Profile::Scope scope{Profile::Zone::FlushWork};
+        FlushWork();
+        gpu_memory->FlushCaching();
+    }
 
     const auto report_failure = [&](std::string_view reason) {
         static std::set<std::tuple<u64, u64, std::string_view>> seen;
@@ -266,7 +271,10 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
                         regs.rt[0].Address(), regs.rt[0].width, regs.rt[0].height);
         }
     };
-    GraphicsPipeline* const pipeline{pipeline_cache.CurrentGraphicsPipeline()};
+    GraphicsPipeline* const pipeline{[&] {
+        Profile::Scope scope{Profile::Zone::PipelineLookup};
+        return pipeline_cache.CurrentGraphicsPipeline();
+    }()};
     if (!pipeline) {
         report_failure("no pipeline");
         return;
@@ -274,17 +282,23 @@ void RasterizerVulkan::PrepareDraw(bool is_indexed, Func&& draw_func) {
     std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
     // update engine as channel may be different.
     pipeline->SetEngine(maxwell3d, gpu_memory);
-    if (!pipeline->Configure(is_indexed)) {
+    if (Profile::Scope scope{Profile::Zone::Configure}; !pipeline->Configure(is_indexed)) {
         report_failure("configure failed");
         return;
     }
 
-    UpdateDynamicStates();
+    {
+        Profile::Scope scope{Profile::Zone::DynamicState};
+        UpdateDynamicStates();
+    }
 
     query_cache.NotifySegment(true);
     HandleTransformFeedback();
     query_cache.CounterEnable(VideoCommon::QueryType::ZPassPixelCount64, maxwell3d->regs.zpass_pixel_count_enable);
-    draw_func();
+    {
+        Profile::Scope scope{Profile::Zone::DrawRecord};
+        draw_func();
+    }
     submitted = true;
     static u32 native_capture_count{};
     if (maxwell3d->GetNativeMacroEngine().native_turing &&
@@ -412,6 +426,7 @@ void TraceWindowTarget(const Tegra::Engines::Maxwell3D& maxwell3d, Tegra::Memory
 } // Anonymous namespace
 
 void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
+    VideoCommon::Nx2Profile::Scope profile_scope{VideoCommon::Nx2Profile::Zone::Draw};
     TraceWindowTarget(*maxwell3d, *gpu_memory, is_indexed ? "draw-indexed" : "draw",
                       is_indexed ? maxwell3d->draw_manager.draw_state.index_buffer.count
                                  : maxwell3d->draw_manager.draw_state.vertex_buffer.count);
@@ -554,6 +569,7 @@ void RasterizerVulkan::Draw(bool is_indexed, u32 instance_count) {
 }
 
 void RasterizerVulkan::DrawIndirect() {
+    VideoCommon::Nx2Profile::Scope profile_scope{VideoCommon::Nx2Profile::Zone::Draw};
     const auto& params = maxwell3d->draw_manager.indirect_state;
     buffer_cache.SetDrawIndirect(&params);
     PrepareDraw(params.is_indexed, [this, &params] {
@@ -659,6 +675,7 @@ void RasterizerVulkan::DrawTexture() {
 }
 
 void RasterizerVulkan::Clear(u32 layer_count) {
+    VideoCommon::Nx2Profile::Scope profile_scope{VideoCommon::Nx2Profile::Zone::Clear};
     if (Tegra::Engines::g_nx2_trace_draws_after_upscale > 0) {
         const auto& regs = maxwell3d->regs;
         LOG_INFO(HW_GPU, "after upscale: clear rt0 {:#x} {}x{} fmt {:#x} surface {:#x} colour {} {} {} {}",
@@ -852,6 +869,7 @@ void RasterizerVulkan::Clear(u32 layer_count) {
 }
 
 void RasterizerVulkan::DispatchCompute() {
+    VideoCommon::Nx2Profile::Scope profile_scope{VideoCommon::Nx2Profile::Zone::Compute};
     FlushWork();
     gpu_memory->FlushCaching();
 

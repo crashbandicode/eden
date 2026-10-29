@@ -1,0 +1,149 @@
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#include <array>
+#include <chrono>
+#include <cstdlib>
+#include <string>
+
+#include "common/common_types.h"
+#include "common/logging.h"
+
+// EDEN_NX2_GPU_PROFILE: time where the GPU thread spends its time. Each zone counts its own
+// (exclusive) time, nested zones excluded; every 10 s the thread logs each zone's share.
+namespace VideoCommon::Nx2Profile {
+
+enum class Zone : u32 {
+    Other, ///< GPU thread time outside every zone below (register writes, command parsing)
+    Idle,
+    PendingSleep,
+    ResumePending,
+    Push,
+    Tick,
+    Run,
+    FlushInvalidate,
+    Macro,
+    Draw,
+    Clear,
+    Compute,
+    FlushWork,
+    PipelineLookup,
+    Configure,
+    SyncDescriptors,
+    ReadHandles,
+    FillImageViews,
+    TextureBuffers,
+    UpdateBuffers,
+    DescriptorAcquire,
+    BindStageBuffers,
+    PushDescriptors,
+    RenderTargets,
+    ConfigureDraw,
+    DynamicState,
+    DrawRecord,
+    TextureUpload,
+    Count,
+};
+
+inline constexpr std::array<const char*, static_cast<size_t>(Zone::Count)> zone_names{
+    "other",         "idle",          "pending sleep",  "resume pending", "push",
+    "tick",          "run",           "flush/inval",    "macro",          "draw",
+    "clear",         "compute",       "flush work",     "pipeline lookup", "configure",
+    "sync descriptors", "read handles", "fill image views", "texture buffers", "update buffers",
+    "descriptor acquire", "bind stage buffers", "push descriptors", "render targets",
+    "configure draw", "dynamic state", "draw record", "texture upload",
+};
+
+inline bool Enabled() {
+    static const bool enabled = std::getenv("EDEN_NX2_GPU_PROFILE") != nullptr;
+    return enabled;
+}
+
+inline u64 Now() {
+    return static_cast<u64>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count());
+}
+
+struct ThreadData {
+    std::array<u64, static_cast<size_t>(Zone::Count)> exclusive_ns{};
+    std::array<u64, static_cast<size_t>(Zone::Count)> count{};
+    u64 child_ns{};    ///< Time of the zones nested in the current one
+    u64 window_start{};
+};
+
+inline thread_local ThreadData t_data;
+
+class Scope {
+public:
+    explicit Scope(Zone zone_) : zone{zone_}, enabled{Enabled()} {
+        if (!enabled) {
+            return;
+        }
+        parent_child_ns = t_data.child_ns;
+        t_data.child_ns = 0;
+        start = Now();
+    }
+
+    ~Scope() {
+        if (!enabled) {
+            return;
+        }
+        const u64 elapsed = Now() - start;
+        auto& data = t_data;
+        const auto index = static_cast<size_t>(zone);
+        data.exclusive_ns[index] += elapsed - data.child_ns;
+        ++data.count[index];
+        data.child_ns = parent_child_ns + elapsed;
+    }
+
+    Scope(const Scope&) = delete;
+    Scope& operator=(const Scope&) = delete;
+
+private:
+    Zone zone;
+    bool enabled;
+    u64 start{};
+    u64 parent_child_ns{};
+};
+
+/// Called by the GPU thread between commands: logs and resets the totals every 10 s.
+inline void Report() {
+    if (!Enabled()) {
+        return;
+    }
+    auto& data = t_data;
+    const u64 now = Now();
+    if (data.window_start == 0) {
+        data.window_start = now;
+        data.child_ns = 0;
+        return;
+    }
+    const u64 window = now - data.window_start;
+    if (window < 10'000'000'000ULL) {
+        return;
+    }
+    // Time in no zone at all is the wall time minus the zones' totals.
+    u64 zoned{};
+    for (size_t i = 1; i < data.exclusive_ns.size(); ++i) {
+        zoned += data.exclusive_ns[i];
+    }
+    data.exclusive_ns[0] = window > zoned ? window - zoned : 0;
+    std::string line;
+    for (size_t i = 0; i < data.exclusive_ns.size(); ++i) {
+        if (data.exclusive_ns[i] == 0 && data.count[i] == 0) {
+            continue;
+        }
+        // Per second of wall time: milliseconds spent and calls made.
+        const double ms = static_cast<double>(data.exclusive_ns[i]) * 1000.0 / window;
+        const double calls = static_cast<double>(data.count[i]) * 1e9 / window;
+        line += fmt::format(" | {} {:.1f} ms ({:.0f}/s)", zone_names[i], ms, calls);
+    }
+    LOG_INFO(HW_GPU, "GPU thread per second:{}", line);
+    data = {};
+    data.window_start = now;
+}
+
+} // namespace VideoCommon::Nx2Profile

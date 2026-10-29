@@ -1036,11 +1036,13 @@ void RasterizerVulkan::InvalidateRegion(DAddr addr, u64 size, VideoCommon::Cache
 
 void RasterizerVulkan::InnerInvalidation(std::span<const std::pair<DAddr, std::size_t>> sequences) {
     {
-        // Both caches under one lock: this runs before most draws (constant buffer updates).
-        std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
+        std::scoped_lock lock{texture_cache.mutex};
         for (const auto& [addr, size] : sequences) {
             texture_cache.WriteMemory(addr, size);
         }
+    }
+    {
+        std::scoped_lock lock{buffer_cache.mutex};
         for (const auto& [addr, size] : sequences) {
             buffer_cache.WriteMemory(addr, size);
         }
@@ -1248,12 +1250,16 @@ void RasterizerVulkan::AccelerateInlineToMemory(GPUVAddr address, size_t copy_si
         return;
     }
     gpu_memory->WriteBlockUnsafe(address, memory.data(), copy_size);
+    // One cache at a time: holding both while waiting for either (std::lock) waited longer, the
+    // fencing thread and CPU write traps holding one of them most of the time.
     {
-        // Both caches under one lock (title 1 makes thousands of inline uploads a second).
-        std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
+        std::scoped_lock lock{buffer_cache.mutex};
         if (!buffer_cache.InlineMemory(*cpu_addr, copy_size, memory)) {
             buffer_cache.WriteMemory(*cpu_addr, copy_size);
         }
+    }
+    {
+        std::scoped_lock lock{texture_cache.mutex};
         texture_cache.WriteMemory(*cpu_addr, copy_size);
     }
     pipeline_cache.InvalidateRegion(*cpu_addr, copy_size);

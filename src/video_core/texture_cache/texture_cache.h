@@ -990,6 +990,11 @@ bool TextureCache<P>::HasUncommittedFlushes() const noexcept {
 }
 
 template <class P>
+bool TextureCache<P>::HasAsyncFlushWork() const noexcept {
+    return !uncommitted_downloads.empty() || !uncommitted_async_buffers.empty();
+}
+
+template <class P>
 bool TextureCache<P>::ShouldWaitAsyncFlushes() const noexcept {
     return !committed_downloads.empty() && !committed_downloads.front().empty();
 }

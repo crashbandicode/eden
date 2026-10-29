@@ -81,7 +81,7 @@ public:
         if constexpr (!can_async_check) {
             TryReleasePendingFences<false>();
         }
-        CommitAsyncFlushes();
+        const u8 committed_flushes = CommitAsyncFlushes();
         TFence new_fence = CreateFence(!should_flush);
         if constexpr (can_async_check) {
             guard.lock();
@@ -94,6 +94,7 @@ public:
             pending_operations.emplace_back(std::move(uncommitted_operations));
             uncommitted_operations.clear(); // moved-from: make it empty explicitly
         }
+        pending_flushes.push_back(committed_flushes);
         QueueFence(new_fence);
         if (!delay_fence) {
             func();
@@ -186,7 +187,8 @@ private:
                     return;
                 }
             }
-            PopAsyncFlushes();
+            PopAsyncFlushes(pending_flushes.front());
+            pending_flushes.pop_front();
             auto operations = std::move(pending_operations.front());
             pending_operations.pop_front();
             for (auto& operation : operations) {
@@ -207,6 +209,7 @@ private:
 
         TFence current_fence;
         std::deque<std::function<void()>> current_operations;
+        u8 current_flushes{};
         while (!stop_token.stop_requested()) {
             {
                 std::unique_lock lock(guard);
@@ -216,13 +219,15 @@ private:
                 }
                 current_fence = std::move(fences.front());
                 current_operations = std::move(pending_operations.front());
+                current_flushes = pending_flushes.front();
                 fences.pop();
                 pending_operations.pop_front();
+                pending_flushes.pop_front();
             }
             if (!current_fence->IsStubbed()) {
                 WaitFence(current_fence);
             }
-            PopAsyncFlushes();
+            PopAsyncFlushes(current_flushes);
             for (auto& operation : current_operations) {
                 operation();
             }
@@ -245,27 +250,51 @@ private:
                query_cache.HasUncommittedFlushes();
     }
 
-    void PopAsyncFlushes() {
-        {
-            std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
+    static constexpr u8 TextureFlushes = 1;
+    static constexpr u8 BufferFlushes = 2;
+
+    /// committed: what CommitAsyncFlushes returned for this fence.
+    void PopAsyncFlushes(u8 committed) {
+        if (committed & TextureFlushes) {
+            std::scoped_lock lock{texture_cache.mutex};
             texture_cache.PopAsyncFlushes();
+        }
+        if (committed & BufferFlushes) {
+            std::scoped_lock lock{buffer_cache.mutex};
             buffer_cache.PopAsyncFlushes();
         }
         query_cache.PopAsyncFlushes();
     }
 
-    void CommitAsyncFlushes() {
+    /// Returns which caches committed downloads for this fence (TextureFlushes, BufferFlushes).
+    /// Switch 2 titles signal a fence per compute dispatch (thousands a second), mostly with
+    /// nothing or only buffer data to download: the fencing thread then takes only the lock of
+    /// the cache with work, instead of holding both while it copies (the GPU thread's draws and
+    /// uploads waited for it).
+    u8 CommitAsyncFlushes() {
+        u8 committed = 0;
         {
-            std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
-            texture_cache.CommitAsyncFlushes();
-            buffer_cache.CommitAsyncFlushes();
+            std::scoped_lock lock{texture_cache.mutex};
+            if (texture_cache.HasAsyncFlushWork()) {
+                texture_cache.CommitAsyncFlushes();
+                committed |= TextureFlushes;
+            }
+        }
+        {
+            std::scoped_lock lock{buffer_cache.mutex};
+            if (buffer_cache.HasUncommittedFlushes()) {
+                buffer_cache.CommitAsyncFlushes();
+                committed |= BufferFlushes;
+            }
         }
         query_cache.CommitAsyncFlushes();
+        return committed;
     }
 
     std::queue<TFence> fences;
     std::deque<std::function<void()>> uncommitted_operations;
     std::deque<std::deque<std::function<void()>>> pending_operations;
+    std::deque<u8> pending_flushes; ///< Per fence: the caches that committed downloads
 
     std::mutex guard;
     std::mutex ring_guard;

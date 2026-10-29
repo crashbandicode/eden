@@ -10,6 +10,7 @@
 
 #include "common/common_types.h"
 #include "common/logging.h"
+#include "common/cpu_features.h"
 
 // EDEN_NX2_GPU_PROFILE: time where the GPU thread spends its time. Each zone counts its own
 // (exclusive) time, nested zones excluded; every 10 s the thread logs each zone's share.
@@ -61,10 +62,10 @@ inline bool Enabled() {
     return enabled;
 }
 
+// Nanoseconds; from the host's own counter where the wall clock reads it directly (the zones
+// run ~150,000 times a second, and QueryPerformanceCounter cost ~5% of the GPU thread).
 inline u64 Now() {
-    return static_cast<u64>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                std::chrono::steady_clock::now().time_since_epoch())
-                                .count());
+    return static_cast<u64>(Common::g_wall_clock.GetTimeNS().count());
 }
 
 struct ThreadData {

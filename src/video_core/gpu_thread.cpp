@@ -39,6 +39,8 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
 
         auto current_context = context.Acquire();
         CommandDataContainer next;
+        // When a pending channel last moved or a command arrived (see the polling below).
+        auto last_progress = std::chrono::steady_clock::now();
         namespace Profile = VideoCommon::Nx2Profile;
         while (!stop_token.stop_requested()) {
             Profile::Report();
@@ -49,8 +51,16 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
                     scheduler.ResumePending(system.GPU());
                 }
                 if (!state.queue.TryPop(next)) {
+                    // The CPU usually releases the semaphore soon after: poll for half a
+                    // millisecond before sleeping, or every wait also waits out a host sleep
+                    // (title 1 waits ~25 times a second).
                     Profile::Scope scope{Profile::Zone::PendingSleep};
-                    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+                    if (std::chrono::steady_clock::now() - last_progress <
+                        std::chrono::microseconds{500}) {
+                        std::this_thread::yield();
+                    } else {
+                        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+                    }
                     continue;
                 }
             } else {
@@ -60,6 +70,7 @@ void ThreadManager::StartThread(VideoCore::RendererBase& renderer, Core::Fronten
             if (stop_token.stop_requested()) {
                 break;
             }
+            last_progress = std::chrono::steady_clock::now();
             if (auto* submit_list = std::get_if<SubmitListCommand>(&next.data)) {
                 Profile::Scope scope{Profile::Zone::Push};
                 scheduler.Push(system.GPU(), submit_list->channel, std::move(submit_list->entries));

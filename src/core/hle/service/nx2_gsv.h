@@ -688,6 +688,11 @@ public:
             {11, &INx2Vi2Session::ReturnEvent, "Unknown11"},
             {31, &INx2Vi2Session::GetVsyncEvent, "GetVsyncEvent (guessed)"},
             {32, &INx2Vi2Session::GetVsyncEvent, "GetDisplayVsyncEvent (guessed)"},
+            // Title 1 calls these ~75 times a second with the display name "default"; the
+            // auto stub's empty success reply works, but logged two lines per call (a 50 MB log
+            // in an 18 minute session).
+            {104, &INx2Vi2Session::SucceedQuietly, "Unknown104 (display \"default\")"},
+            {105, &INx2Vi2Session::SucceedQuietly, "Unknown105 (display \"default\")"},
             {228, &INx2Vi2Session::CancelClientBuffer, "CancelClientBuffer"},
             {229, &INx2Vi2Session::PresentClientBuffer, "PresentClientBuffer"},
         });
@@ -989,6 +994,12 @@ private:
     void ReturnOne(HLERequestContext& ctx) {
         LOG_WARNING(Service, "(STUBBED) nx2:vi2 TIPC {}, returning 1", ctx.GetCommand());
         TipcReplyWords(ctx, {1});
+    }
+
+    // The same reply as the auto stub (success, no data), without its log lines.
+    void SucceedQuietly(HLERequestContext& ctx) {
+        IPC::ResponseBuilder rb{ctx, 2};
+        rb.Push(ResultSuccess);
     }
 
     // Must be < 8; nn::vi::detail::LayerHistory creates 7 timestamp recorders per layer.

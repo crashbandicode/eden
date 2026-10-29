@@ -1365,11 +1365,18 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         native_interpreter.active_dram = &maxwell3d.GetNativeDataRam();
         // EDEN_NX2_MME_RECORD=<file>: write the first 200000 calls (u32 start, u32 count, the
         // parameters) and then the macro code to <file>.code, to check interpreter changes
-        // offline against the previous interpreter.
+        // offline against the previous interpreter. EDEN_NX2_MME_RECORD_SKIP=<n>: skip the first
+        // n calls (title 1 makes ~1,000,000 a second in 3D scenes).
         if (static const char* const record_path = std::getenv("EDEN_NX2_MME_RECORD"); record_path != nullptr) {
             static std::ofstream record{record_path, std::ios::binary};
             static u32 recorded{};
-            if (recorded < 200000) {
+            static u64 to_skip = [] {
+                const char* value = std::getenv("EDEN_NX2_MME_RECORD_SKIP");
+                return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
+            }();
+            if (to_skip > 0) {
+                --to_skip;
+            } else if (recorded < 200000) {
                 const u32 count = static_cast<u32>(parameters.size());
                 record.write(reinterpret_cast<const char*>(&method), sizeof(method));
                 record.write(reinterpret_cast<const char*>(&count), sizeof(count));
@@ -1382,9 +1389,9 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                 }
             }
         }
-        const auto result = native_interpreter.Execute(native_code, method, fifo,
-            [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },
-            [&](u32 address, u32 value) {
+        // A method write of the macro (also what a remembered call replays).
+        bool read_memory = false;
+        const auto emit = [&](u32 address, u32 value) {
                 if (address >= 0xe00) return false;
                 if (address == 0x556) {
                     // SET_RENDER_ENABLE_OVERRIDE: 0 use the render-enable condition, 1 always,
@@ -1404,6 +1411,7 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                 constexpr u32 MemAddressA = 0x154, MemAddressB = 0x155, DataRamAddress = 0x156;
                 constexpr u32 DmaRead = 0x157, DmaReadFifoed = 0x158;
                 if (address == DmaRead || address == DmaReadFifoed) {
+                    read_memory = true;
                     const GPUVAddr source = (GPUVAddr{maxwell3d.GetRegisterValue(MemAddressA) & 0x1ffffff} << 32) |
                                             maxwell3d.GetRegisterValue(MemAddressB);
                     auto& memory = maxwell3d.GetMemoryManager();
@@ -1442,7 +1450,43 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
                     }
                 }
                 return true;
+            };
+        // EDEN_NX2_MME_MEMO=0: interpret every call (see macro_memo.h).
+        static const bool use_memo = [] {
+            const char* value = std::getenv("EDEN_NX2_MME_MEMO");
+            return value == nullptr || value[0] != '0';
+        }();
+        if (use_memo) {
+            native_memo.Synchronize(native_code_generation);
+            if (decltype(native_memo)::Effects effects;
+                native_memo.Find(method, parameters, *native_interpreter.active_dram, effects)) {
+                auto& data_ram = *native_interpreter.active_dram;
+                for (size_t i = 0; i < effects.data_ram_writes.size(); i += 2) {
+                    data_ram[effects.data_ram_writes[i]] = effects.data_ram_writes[i + 1];
+                }
+                for (size_t i = 0; i < effects.writes.size(); i += 2) {
+                    emit(effects.writes[i], effects.writes[i + 1]);
+                }
+                return;
+            }
+            native_writes.clear();
+        }
+        const u64 code_generation = native_code_generation;
+        const auto result = native_interpreter.Execute(native_code, method, fifo,
+            [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },
+            [&](u32 address, u32 value) {
+                if (use_memo) {
+                    native_writes.emplace_back(address, value);
+                }
+                return emit(address, value);
             });
+        // Remember the call if its effects depend only on its parameters and the data RAM words
+        // it read (and the macro code did not change under it).
+        if (use_memo && result.success && !read_memory && !native_interpreter.read_registers &&
+            !native_interpreter.reread_data_ram && code_generation == native_code_generation) {
+            native_memo.Store(method, parameters, native_interpreter.data_ram_reads,
+                              native_interpreter.data_ram_writes, native_writes);
+        }
         if (!result.success) {
             native_execution_failed = true;
             if (static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;

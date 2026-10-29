@@ -87,6 +87,10 @@ public:
         std::string_view error;
         const auto fail = [&](std::string_view message) { if (error.empty()) error = message; };
         if (decoded.size() < code.size() / 3) decoded.resize(code.size() / 3);
+        read_registers = false;
+        reread_data_ram = false;
+        data_ram_reads.clear();
+        data_ram_writes.clear();
         for (Word steps = 0; steps < 1000000; ++steps) {
             if (static_cast<std::size_t>(pc) * 3 + 2 >= code.size()) {
                 fail("instruction outside uploaded RAM");
@@ -178,7 +182,7 @@ public:
                 }
                 case 17: case 18: case 19: case 20: case 21:
                     value = condition(d.op[lane]) ? ~0U : 0; break;
-                case 22: value = read((x + y) & 0xffff); break;
+                case 22: value = read((x + y) & 0xffff); read_registers = true; break;
                 case 23:
                     if (loop_count || imm < 2) { fail("invalid loop"); break; }
                     // The native SDK emits zero-count loops around FIFO reads.
@@ -201,10 +205,17 @@ public:
                     break;
                 case 30:
                     if (x >= active_dram->size()) { fail("data RAM read out of bounds"); break; }
-                    value = (*active_dram)[x]; break;
+                    value = (*active_dram)[x];
+                    if (std::ranges::find(data_ram_writes, x, &DataRamAccess::first) != data_ram_writes.end()) {
+                        reread_data_ram = true;
+                    }
+                    data_ram_reads.emplace_back(x, value);
+                    break;
                 case 31:
                     if (x >= active_dram->size()) { fail("data RAM write out of bounds"); break; }
-                    (*active_dram)[x] = y; break;
+                    (*active_dram)[x] = y;
+                    data_ram_writes.emplace_back(x, y);
+                    break;
                 }
                 alu[lane] = value;
                 if (d.dst[lane] < 24) { regs[d.dst[lane]] = value; initialized |= 1U << d.dst[lane]; }
@@ -250,6 +261,14 @@ public:
     DataRam* active_dram{&dram};
     // Decoded instructions by PC, re-decoded whenever their words differ.
     std::vector<Decoded> decoded;
+    // What the last Execute read besides its parameters, for the macro memo: whether it read a
+    // register (MME_READ), the data RAM words it read and wrote (address, value) in order, and
+    // whether it read a word it had written itself.
+    using DataRamAccess = std::pair<Word, Word>;
+    bool read_registers{};
+    bool reread_data_ram{};
+    std::vector<DataRamAccess> data_ram_reads;
+    std::vector<DataRamAccess> data_ram_writes;
 };
 
 } // namespace Tegra

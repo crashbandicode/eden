@@ -7,6 +7,7 @@
 #pragma once
 
 #include <memory>
+#include "video_core/macro_memo.h"
 #include "video_core/macro_turing.h"
 #include <span>
 #include <variant>
@@ -226,6 +227,7 @@ struct MacroEngine {
     inline void AddCode(u32 method, u32 data) noexcept {
         if (native_turing) {
             if (native_write_offset < native_code.size()) native_code[native_write_offset++] = data;
+            ++native_code_generation;
             return;
         }
         uploaded_macro_code[method].push_back(data);
@@ -252,6 +254,10 @@ struct MacroEngine {
     std::array<u32, 0x3000> native_code{};
     TuringMacroInterpreter native_interpreter;
     std::vector<u32> native_fifo;
+    // Calls replayed instead of interpreted (macro_memo.h), and what the current call wrote.
+    u64 native_code_generation{};
+    BasicMacroMemo<::Common::unordered_map<u64, u32>> native_memo;
+    MacroMemoPairs native_writes;
 
 };
 

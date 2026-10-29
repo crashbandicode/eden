@@ -103,6 +103,26 @@ public:
     explicit INx2NvsrvSession(Core::System& system_) : ServiceFramework{system_, "nx2:nvsrv"} {}
 };
 
+// Placeholder for the Switch 2 video decoder (nn::codec::video::detail::ipc), handed out by gsv
+// 902 and 1002 (two sessions; `name` tells them apart in logs). TIPC 1 is
+// CreateVideoDecoderService (ipc::CreateVideoDecoderService): handle at word 3, result at word
+// 4, a session the decoders then talk to. Everything else is auto-stubbed through the nx2: prefix.
+class INx2VideoSession final : public ServiceFramework<INx2VideoSession> {
+public:
+    explicit INx2VideoSession(Core::System& system_, const char* name)
+        : ServiceFramework{system_, name} {
+        RegisterHandlersTipc({
+            {1, &INx2VideoSession::CreateDecoderService, "CreateVideoDecoderService"},
+        });
+    }
+
+private:
+    void CreateDecoderService(HLERequestContext& ctx) {
+        LOG_WARNING(Service, "(STUBBED) {} TIPC 1, returning a video decoder service session", GetServiceName());
+        ReturnRawSession(system, ctx, std::make_shared<INx2VideoSession>(system, "nx2:vdecsvc"));
+    }
+};
+
 // Placeholder for the Switch 2 syncpoint server (nn::syncpt), handed out by gsv 202. TIPC 1
 // returns a u32 the SDK requires to be < 0x400 and then passes min(value, 63) to TIPC 21.
 // Everything else is auto-stubbed through the nx2: prefix.
@@ -672,6 +692,7 @@ private:
         // game prepares frame N+1 while the GPU thread runs frame N (the console keeps several
         // frames in flight). Experimental.
         static const bool frames_ahead = std::getenv("EDEN_NX2_FRAMES_AHEAD") != nullptr;
+        const auto entered = std::chrono::steady_clock::now();
         if (frames_ahead) {
             WaitForFrame(m_previous_fence_id, m_previous_fence_value);
             m_previous_fence_id = ~w[22];
@@ -679,8 +700,33 @@ private:
         } else {
             WaitForFrame(~w[22], w[24]);
         }
+        const auto waited = std::chrono::steady_clock::now();
         Composite(w[5], ~w[22], w[24]);
+        const auto composited = std::chrono::steady_clock::now();
         PaceToVblank();
+        const auto paced = std::chrono::steady_clock::now();
+        // Where each frame's time goes on the present thread, averaged per 600 presents: the
+        // game is blocked here while Eden's GPU thread catches up (fence) and composites.
+        {
+            using us = std::chrono::microseconds;
+            const auto to_us = [](auto d) { return std::chrono::duration_cast<us>(d).count(); };
+            m_stats.fence_us += to_us(waited - entered);
+            m_stats.composite_us += to_us(composited - waited);
+            m_stats.pace_us += to_us(paced - composited);
+            m_stats.max_fence_us = (std::max)(m_stats.max_fence_us, to_us(waited - entered));
+            if (m_stats.last_present != std::chrono::steady_clock::time_point{}) {
+                m_stats.frame_us += to_us(entered - m_stats.last_present);
+            }
+            m_stats.last_present = entered;
+            if (++m_stats.presents == 600) {
+                LOG_INFO(Service,
+                         "nx2:vi2 last 600 presents: frame {} us, blocked on the GPU fence {} us "
+                         "(max {}), composite {} us, vblank pacing {} us",
+                         m_stats.frame_us / 599, m_stats.fence_us / 600, m_stats.max_fence_us,
+                         m_stats.composite_us / 600, m_stats.pace_us / 600);
+                m_stats = {.last_present = entered};
+            }
+        }
         constexpr u64 AvailableSlots = 0x7fff;
         TipcReplyWords(ctx, {static_cast<u32>(AvailableSlots),
                              static_cast<u32>(AvailableSlots >> 32), 0, 0, 0, 0});
@@ -692,6 +738,11 @@ private:
     // Eden's GPU thread has processed the frame. Otherwise the game laps the GPU thread and
     // rewrites command memory it hasn't read yet.
     u32 m_wait_timeouts{};
+    struct PresentStats {
+        long long frame_us{}, fence_us{}, composite_us{}, pace_us{}, max_fence_us{};
+        u32 presents{};
+        std::chrono::steady_clock::time_point last_present{};
+    } m_stats{};
     u32 m_previous_fence_id{~0U}; // none yet (WaitForFrame ignores ids >= 192)
     u32 m_previous_fence_value{};
 
@@ -724,9 +775,28 @@ private:
         // Long enough to cover shader/pipeline compile stalls: a game that gets more than a few
         // command buffers ahead misses the equal-value gates its other channels acquire.
         const auto deadline = start + std::chrono::milliseconds{4000};
-        while (!syncpoints.IsReadyGuest(fence_id, fence_value) &&
-               std::chrono::steady_clock::now() < deadline && system.IsPoweredOn()) {
-            std::this_thread::sleep_for(std::chrono::microseconds{200});
+        if (!syncpoints.IsReadyGuest(fence_id, fence_value)) {
+            // Woken by the GPU thread as it reaches the fence. Polling with 200 us sleeps slept
+            // about 1 ms per check on Windows, added to every frame. An action left registered
+            // after a timeout fires later on a state nobody waits on.
+            struct Wake {
+                std::mutex mutex;
+                std::condition_variable cv;
+                bool done{};
+            };
+            auto wake = std::make_shared<Wake>();
+            syncpoints.RegisterGuestAction(fence_id, fence_value, [wake] {
+                {
+                    std::scoped_lock lk{wake->mutex};
+                    wake->done = true;
+                }
+                wake->cv.notify_all();
+            });
+            std::unique_lock lk{wake->mutex};
+            while (!wake->done && system.IsPoweredOn() &&
+                   std::chrono::steady_clock::now() < deadline) {
+                wake->cv.wait_for(lk, std::chrono::milliseconds{50});
+            }
         }
         if (!syncpoints.IsReadyGuest(fence_id, fence_value) && m_wait_timeouts++ < 64) {
             LOG_WARNING(Service, "nx2:vi2 present #{} fence ({}, {}) not reached in 4 s (now {})",
@@ -964,6 +1034,10 @@ public:
             {1510, &INx2GraphicsSystemSession::CalculateRequirements, "CalculateRequirements"},
             {991, &INx2GraphicsSystemSession::CalculateDecoderImagePoolBuffer,
              "CalculateDecoderImagePoolBuffer"},
+            {901, &INx2GraphicsSystemSession::Stub, "VideoInitialize (guessed)"},
+            {902, &INx2GraphicsSystemSession::OpenVideoSession, "OpenVideoDecoderSession (guessed)"},
+            {1001, &INx2GraphicsSystemSession::Stub, "VideoInitialize2 (guessed)"},
+            {1002, &INx2GraphicsSystemSession::OpenVideoSession, "OpenVideoDecoderSession2 (guessed)"},
         });
     }
 
@@ -995,6 +1069,17 @@ private:
                     ctx.GetCommand(), cmd_buf[2], cmd_buf[3], cmd_buf[4], cmd_buf[5]);
         IPC::ResponseBuilder rb{ctx, 2};
         rb.Push(ResultSuccess);
+    }
+
+    // nn::codec::video::detail::ipc::Initialize sends 901, 902, 1001, 1002. 902 and 1002 return
+    // a session handle at word 3 and the result at word 4; left to the auto stub, the handle was 0
+    // and InitializeVp9Decoder failed with 2001-0114 (title 1 aborts when a movie starts).
+    void OpenVideoSession(HLERequestContext& ctx) {
+        const bool second = ctx.GetCommand() == 1002;
+        LOG_WARNING(Service, "(STUBBED) nx2:gsv TIPC {}, returning a video decoder session",
+                    ctx.GetCommand());
+        ReturnRawSession(system, ctx,
+                         std::make_shared<INx2VideoSession>(system, second ? "nx2:vdec2" : "nx2:vdec"));
     }
 
     void OpenSyncptSession(HLERequestContext& ctx) {

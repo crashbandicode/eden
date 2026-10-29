@@ -929,6 +929,35 @@ boost::container::small_vector<BufferImageCopy, 16> UnswizzleImage(Tegra::Memory
     return copies;
 }
 
+void ConvertedLayout(const ImageInfo& info, std::span<BufferImageCopy> copies) {
+    // Same offsets and sizes as ConvertImage below.
+    const auto recompression = Settings::values.astc_recompression.GetValue();
+    const bool astc = IsPixelFormatASTC(info.format);
+    u64 output_offset = 0;
+    for (BufferImageCopy& copy : copies) {
+        const Extent3D mip_size = AdjustMipSize(info.size, copy.image_subresource.base_level);
+        const u64 layers = static_cast<u64>(copy.image_subresource.num_layers) * copy.image_extent.depth;
+        u64 size;
+        if (astc && recompression == Settings::AstcRecompression::Uncompressed) {
+            size = u64{copy.image_extent.width} * copy.image_extent.height * layers *
+                   BytesPerBlock(PixelFormat::A8B8G8R8_UNORM);
+        } else if (astc) {
+            const u64 bpp_div =
+                recompression == Settings::AstcRecompression::Bc1 || info.astc_opaque ? 2 : 1;
+            size = u64{Common::AlignUp(copy.image_extent.width, 4U)} *
+                   Common::AlignUp(copy.image_extent.height, 4U) * layers / bpp_div;
+        } else {
+            size = u64{copy.image_extent.width} * copy.image_extent.height * layers *
+                   ConvertedBytesPerBlock(info.format);
+        }
+        copy.buffer_offset = output_offset;
+        copy.buffer_size = size;
+        copy.buffer_row_length = mip_size.width;
+        copy.buffer_image_height = mip_size.height;
+        output_offset += size;
+    }
+}
+
 void ConvertImage(std::span<const u8> input, const ImageInfo& info, std::span<u8> output,
                   std::span<BufferImageCopy> copies) {
     u32 output_offset = 0;

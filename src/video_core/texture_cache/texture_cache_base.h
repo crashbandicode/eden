@@ -126,6 +126,10 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
     u64 gc_costly_deletes{};
     u64 async_decodes_queued{};
     u64 images_created{};
+    bool native_thresholds_applied{};
+    u64 native_critical_memory{};
+    u64 native_expected_memory{};
+    u64 budget_check_frames{};
     u64 astc_opaque_images{};
     u64 astc_alpha_images{};
     std::vector<u8> astc_scan_buffer;
@@ -461,6 +465,9 @@ private:
     ::Common::unordered_map<ImageId, boost::container::small_vector<ImageViewId, 16>> sparse_views;
 
     DAddr virtual_invalid_space{};
+
+    /// Applies EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB and logs the thresholds.
+    void ApplyThresholdOverrides();
 
     /// The CPU address an image at gpu_addr is keyed by: its backing, or a fixed stand-in.
     [[nodiscard]] std::optional<DAddr> ImageCpuAddress(GPUVAddr gpu_addr, size_t size) const;

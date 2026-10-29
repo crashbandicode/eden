@@ -206,10 +206,12 @@ MemoryAllocator::MemoryAllocator(const Device &device_)
 
 MemoryAllocator::~MemoryAllocator() = default;
 
-vk::Image MemoryAllocator::CreateImage(const VkImageCreateInfo &ci) const
+vk::Image MemoryAllocator::CreateImage(const VkImageCreateInfo &ci, bool dedicated) const
 {
     const VmaAllocationCreateInfo alloc_ci = {
-            .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
+            .flags = static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT) |
+                     (dedicated ? VmaAllocationCreateFlags{VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT}
+                               : VmaAllocationCreateFlags{0}),
             .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             .requiredFlags = 0,
             .preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,

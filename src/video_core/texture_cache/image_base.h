@@ -49,6 +49,7 @@ enum class ImageFlagBits : u32 {
     /// The host image keeps only mip levels >= host_level_offset (its decoded copy would not fit
     /// in VRAM); uploads skip the rest, downloads are never done.
     TrimmedLevels = 1 << 19,
+    ZeroFilled = 1 << 20, ///< Cleared to zero blocks before its first asynchronous decode.
 };
 DECLARE_ENUM_FLAG_OPERATORS(ImageFlagBits)
 

@@ -80,15 +80,7 @@ TextureCache<P>::TextureCache(Runtime& runtime_, Tegra::MaxwellDeviceMemoryManag
         critical_memory = DEFAULT_CRITICAL_MEMORY + 1_GiB;
         minimum_memory = 0;
     }
-    // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds.
-    for (const auto& [name, target] : {std::pair{"EDEN_NX2_TC_EXPECTED_MIB", &expected_memory},
-                                       std::pair{"EDEN_NX2_TC_CRITICAL_MIB", &critical_memory}}) {
-        if (const char* value = std::getenv(name)) {
-            *target = std::strtoull(value, nullptr, 10) << 20;
-        }
-    }
-    LOG_INFO(HW_GPU, "Texture cache thresholds: expected {} MiB, critical {} MiB, minimum {} MiB",
-             expected_memory >> 20, critical_memory >> 20, minimum_memory >> 20);
+    ApplyThresholdOverrides();
 
     const bool gpu_unswizzle_enabled = Settings::values.gpu_unswizzle_enabled.GetValue();
 
@@ -182,7 +174,46 @@ void TextureCache<P>::RunGarbageCollector() {
 }
 
 template <class P>
+void TextureCache<P>::ApplyThresholdOverrides() {
+    // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds.
+    for (const auto& [name, target] : {std::pair{"EDEN_NX2_TC_EXPECTED_MIB", &expected_memory},
+                                       std::pair{"EDEN_NX2_TC_CRITICAL_MIB", &critical_memory}}) {
+        if (const char* value = std::getenv(name)) {
+            *target = std::strtoull(value, nullptr, 10) << 20;
+        }
+    }
+    LOG_INFO(HW_GPU, "Texture cache thresholds: expected {} MiB, critical {} MiB, minimum {} MiB",
+             expected_memory >> 20, critical_memory >> 20, minimum_memory >> 20);
+}
+
+template <class P>
 void TextureCache<P>::TickFrame() {
+    if constexpr (HAS_DEVICE_MEMORY_INFO) {
+        // Switch 2 titles (native tiling) stream far more texture data than Eden's thresholds
+        // were tuned for: title 1's attract loop alone keeps ~5.3 GB resident, so the collector
+        // sat in aggressive mode evicting decoded ASTC (and decoding it again). Total use is
+        // measured from the driver, so collect only near the device budget instead.
+        if (!native_thresholds_applied && gpu_memory != nullptr && gpu_memory->UsesNativeTiling()) {
+            native_thresholds_applied = true;
+            const u64 device_local = runtime.GetDeviceLocalMemory();
+            critical_memory = (std::max)(critical_memory, device_local - 256_MiB);
+            expected_memory = (std::max)(expected_memory, device_local - 1280_MiB);
+            ApplyThresholdOverrides();
+            native_critical_memory = critical_memory;
+            native_expected_memory = expected_memory;
+        }
+        // The budget shrinks when other programs use VRAM (another game: 7.0 -> 6.4 GB), and
+        // collecting only past it means the driver pages textures out. Re-read it now and then.
+        if constexpr (requires { runtime.GetDeviceMemoryBudget(); }) {
+            if (native_thresholds_applied && ++budget_check_frames % 60 == 0) {
+                const u64 budget = runtime.GetDeviceMemoryBudget();
+                if (budget > 2_GiB) {
+                    critical_memory = (std::min)(native_critical_memory, budget - 512_MiB);
+                    expected_memory = (std::min)(native_expected_memory, budget - 1280_MiB);
+                }
+            }
+        }
+    }
     // If we can obtain the memory info, use it instead of the estimate.
     if (runtime.CanReportMemoryUsage()) {
         total_used_memory = runtime.GetDeviceMemoryUsage();
@@ -1492,6 +1523,18 @@ void TextureCache<P>::QueueAsyncDecode(Image& image, ImageId image_id) {
     Tegra::Memory::GpuGuestMemory<u8, Tegra::Memory::GuestMemoryFlags::UnsafeRead> swizzle_data(*gpu_memory, image.gpu_addr, image.guest_size_bytes, &swizzle_data_buffer);
     auto copies = UnswizzleImage(*gpu_memory, image.gpu_addr, image.info, swizzle_data, local_unswizzle_data_buffer);
     const size_t out_size = MapSizeBytes(image);
+    if (False(image.flags & ImageFlagBits::ZeroFilled)) {
+        // Until the decode lands (a second or more while title 1 streams ~40 textures a second)
+        // a new image showed whatever its memory last held, often other textures. Zero blocks
+        // read as opaque black (BC1) or transparent (BC3) instead.
+        image.flags |= ImageFlagBits::ZeroFilled;
+        auto zero_copies = copies;
+        ConvertedLayout(image.info, zero_copies);
+        auto staging = runtime.UploadStagingBuffer(out_size);
+        std::memset(staging.mapped_span.data(), 0, out_size);
+        image.UploadMemory(staging, zero_copies);
+        runtime.InsertUploadMemoryBarrier();
+    }
 
     auto func = [out_size, copies, info = image.info,
                  input = std::move(local_unswizzle_data_buffer),

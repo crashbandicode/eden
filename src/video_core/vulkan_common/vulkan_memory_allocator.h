@@ -103,7 +103,9 @@ namespace Vulkan {
 
         MemoryAllocator(const MemoryAllocator &) = delete;
 
-        vk::Image CreateImage(const VkImageCreateInfo &ci) const;
+        /// `dedicated`: own device memory, returned to the driver on destruction (short-lived
+        /// images would otherwise leave holes in the shared blocks).
+        vk::Image CreateImage(const VkImageCreateInfo &ci, bool dedicated = false) const;
 
         vk::Buffer CreateBuffer(const VkBufferCreateInfo &ci, MemoryUsage usage) const;
 

@@ -253,17 +253,26 @@ private:
     void CancelSlotEvent(HLERequestContext& ctx) {
         const u32 slot = ctx.CommandBuffer()[2];
         LOG_INFO(Service, "nx2:syncpt TIPC 202 slot={:#x}", slot);
-        if (auto it = m_requests.find(slot); it != m_requests.end()) {
-            Cancel(it->second);
+        if (auto it = m_requests.find(slot); it != m_requests.end() && Cancel(it->second)) {
+            // The client waits on the slot's event after a cancel (NvOsEventPool, after its
+            // ~100 ms wait times out), so a cancel must signal it like a completion; it rechecks
+            // the counter (TIPC 103) itself. Title 1 hung forever there when the GPU thread ran
+            // a frame behind (EDEN_NX2_FRAMES_AHEAD) and a mid-frame wait outlasted 100 ms.
+            if (const auto event = m_events.find(slot); event != m_events.end()) {
+                event->second->Signal(system.Kernel());
+            }
         }
         TipcReplyWords(ctx, {});
     }
 
-    void Cancel(SlotRequest& request) {
+    /// Returns true if the request was still pending.
+    bool Cancel(SlotRequest& request) {
         if (request.pending.exchange(false)) {
             system.Host1x().GetSyncpointManager().DeregisterGuestAction(request.syncpoint,
                                                                         request.handle);
+            return true;
         }
+        return false;
     }
 
     static constexpr u32 HostSyncpoints = 192; // Tegra::Host1x::SyncpointManager
@@ -688,12 +697,19 @@ private:
             LOG_INFO(Service, "nx2:vi2 229 present #{} token={:#x} slot={} image={}", m_presents,
                      u64{w[2]} | (u64{w[3]} << 32), w[4], w[5]);
         }
-        // EDEN_NX2_FRAMES_AHEAD=1: wait for the previous frame's fence instead of this one, so the
-        // game prepares frame N+1 while the GPU thread runs frame N (the console keeps several
-        // frames in flight). Experimental.
-        static const bool frames_ahead = std::getenv("EDEN_NX2_FRAMES_AHEAD") != nullptr;
+        // Wait for the previous frame's fence instead of this one, so the game prepares frame N+1
+        // while the GPU thread runs frame N (the console keeps several frames in flight). Waiting
+        // for this frame serialized the two: 8-56 ms of every 34-105 ms frame on title 1.
+        // EDEN_NX2_FRAMES_AHEAD=0 restores the wait for the current frame.
+        static const bool frames_ahead = [] {
+            const char* value = std::getenv("EDEN_NX2_FRAMES_AHEAD");
+            return value == nullptr || value[0] != '0';
+        }();
         const auto entered = std::chrono::steady_clock::now();
         if (frames_ahead) {
+            LOG_DEBUG(Service, "nx2:vi2 present #{} fence ({}, {:#x}), waiting for ({}, {:#x}); now {:#x}",
+                      m_presents, ~w[22], w[24], m_previous_fence_id, m_previous_fence_value,
+                      ~w[22] < 192 ? system.Host1x().GetSyncpointManager().GetGuestSyncpointValue(~w[22]) : 0U);
             WaitForFrame(m_previous_fence_id, m_previous_fence_value);
             m_previous_fence_id = ~w[22];
             m_previous_fence_value = w[24];
@@ -984,7 +1000,13 @@ private:
                     }
                     return std::nullopt;
                 });
-            constexpr std::chrono::nanoseconds VblankInterval{16'666'667};
+            // EDEN_NX2_VSYNC_HZ=<rate> (experiment): the game starts frames on this event, so a
+            // frame that misses a 60 Hz tick idles until the next one.
+            static const std::chrono::nanoseconds VblankInterval{[] {
+                const char* text = std::getenv("EDEN_NX2_VSYNC_HZ");
+                const long long hz = text ? (std::max)(std::strtoll(text, nullptr, 10), 1LL) : 60LL;
+                return 1'000'000'000LL / hz;
+            }()};
             system.CoreTiming().ScheduleLoopingEvent(VblankInterval, VblankInterval, m_vsync_timer);
         }
         IPC::ResponseBuilder rb{ctx, 2, 1, 0};

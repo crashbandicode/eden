@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -43,38 +44,64 @@ public:
         std::uint64_t hits{}, misses{}, guard_failures{}, stores{}, overwrites{}, clears{};
     };
 
+    BasicMacroMemo() {
+        last_by_start.fill({0, NoRecord});
+    }
+
     /// An earlier call with this start and these parameters whose data RAM reads still hold.
     bool Find(std::uint32_t start, std::span<const std::uint32_t> parameters,
               std::span<const std::uint32_t> data_ram, Effects& effects) {
+        // Nearly half the calls repeat the previous call of the same macro: try its record before
+        // hashing (no probe, and the record is still in the cache).
+        auto& last = last_by_start[start % last_by_start.size()];
+        if (last.first == start && last.second != NoRecord &&
+            Match(last.second, start, parameters, data_ram, effects)) {
+            ++statistics.hits;
+            return true;
+        }
         const auto it = entries.find(Hash(start, parameters));
         if (it == entries.end()) {
             ++statistics.misses;
             return false;
         }
+        if (!Match(it->second, start, parameters, data_ram, effects)) {
+            ++statistics.guard_failures; // or another call with the same hash
+            return false;
+        }
+        last = {start, it->second};
+        ++statistics.hits;
+        return true;
+    }
+
+private:
+    static constexpr std::uint32_t NoRecord = ~0U;
+
+    /// Whether the record at `offset` is this call with its data RAM reads holding; fills
+    /// `effects` if so.
+    bool Match(std::uint32_t offset, std::uint32_t start, std::span<const std::uint32_t> parameters,
+               std::span<const std::uint32_t> data_ram, Effects& effects) {
         // Record: start, parameter count, read count, data RAM write count, write count, then
         // the parameters and the (address, value) pairs.
-        const std::uint32_t* record = arena.data() + it->second;
+        const std::uint32_t* record = arena.data() + offset;
         const std::uint32_t num_parameters = record[1], num_reads = record[2];
         const std::uint32_t num_data_ram_writes = record[3], num_writes = record[4];
         if (record[0] != start || num_parameters != parameters.size() ||
             !std::equal(parameters.begin(), parameters.end(), record + HeaderWords)) {
-            ++statistics.misses;
-            return false; // another call with the same hash
+            return false; // another call
         }
         const std::uint32_t* reads = record + HeaderWords + num_parameters;
         for (std::uint32_t i = 0; i < num_reads; ++i) {
             if (data_ram[reads[i * 2]] != reads[i * 2 + 1]) {
-                ++statistics.guard_failures;
                 return false;
             }
         }
-        ++statistics.hits;
         const std::uint32_t* data_ram_writes = reads + num_reads * 2;
         effects.data_ram_writes = {data_ram_writes, num_data_ram_writes * 2};
         effects.writes = {data_ram_writes + num_data_ram_writes * 2, num_writes * 2};
         return true;
     }
 
+public:
     void Store(std::uint32_t start, std::span<const std::uint32_t> parameters,
                const MacroMemoPairs& data_ram_reads, const MacroMemoPairs& data_ram_writes,
                const MacroMemoPairs& writes) {
@@ -100,8 +127,7 @@ public:
             }
         }
         if (arena.size() >= MaxArenaWords) {
-            arena.clear();
-            entries.clear();
+            Clear();
             ++statistics.clears;
         }
         const auto offset = static_cast<std::uint32_t>(arena.size());
@@ -118,6 +144,7 @@ public:
             }
         }
         entries.insert_or_assign(hash, offset);
+        last_by_start[start % last_by_start.size()] = {start, offset};
     }
 
     const Statistics& GetStatistics() const {
@@ -136,8 +163,7 @@ public:
     void Synchronize(std::uint64_t code_generation) {
         if (code_generation != generation) {
             generation = code_generation;
-            arena.clear();
-            entries.clear();
+            Clear();
         }
     }
 
@@ -154,8 +180,16 @@ private:
         return hash;
     }
 
+    void Clear() {
+        arena.clear();
+        entries.clear();
+        last_by_start.fill({0, NoRecord});
+    }
+
     Map entries;
     std::vector<std::uint32_t> arena;
+    /// The last record found or stored per macro start (direct mapped).
+    std::array<std::pair<std::uint32_t, std::uint32_t>, 256> last_by_start{};
     std::uint64_t generation{};
     Statistics statistics;
 };

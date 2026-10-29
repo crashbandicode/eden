@@ -1359,9 +1359,9 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
             LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
         }
-        // Reused between calls (a macro never calls another: methods >= 0xe00 are refused below).
+        // Reused between calls (a macro never calls another: methods >= 0xe00 are refused below);
+        // filled only for calls that are interpreted.
         auto& fifo = native_fifo;
-        fifo.assign(parameters.begin(), parameters.end());
         native_interpreter.active_dram = &maxwell3d.GetNativeDataRam();
         // EDEN_NX2_MME_RECORD=<file>: write the first 200000 calls (u32 start, u32 count, the
         // parameters) and then the macro code to <file>.code, to check interpreter changes
@@ -1482,6 +1482,7 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             }
             native_writes.clear();
         }
+        fifo.assign(parameters.begin(), parameters.end());
         const u64 code_generation = native_code_generation;
         const auto result = native_interpreter.Execute(native_code, method, fifo,
             [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },

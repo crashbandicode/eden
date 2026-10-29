@@ -1363,6 +1363,25 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         auto& fifo = native_fifo;
         fifo.assign(parameters.begin(), parameters.end());
         native_interpreter.active_dram = &maxwell3d.GetNativeDataRam();
+        // EDEN_NX2_MME_RECORD=<file>: write the first 200000 calls (u32 start, u32 count, the
+        // parameters) and then the macro code to <file>.code, to check interpreter changes
+        // offline against the previous interpreter.
+        if (static const char* const record_path = std::getenv("EDEN_NX2_MME_RECORD"); record_path != nullptr) {
+            static std::ofstream record{record_path, std::ios::binary};
+            static u32 recorded{};
+            if (recorded < 200000) {
+                const u32 count = static_cast<u32>(parameters.size());
+                record.write(reinterpret_cast<const char*>(&method), sizeof(method));
+                record.write(reinterpret_cast<const char*>(&count), sizeof(count));
+                record.write(reinterpret_cast<const char*>(parameters.data()), parameters.size_bytes());
+                if (++recorded == 200000) {
+                    record.flush();
+                    std::ofstream code{std::string{record_path} + ".code", std::ios::binary};
+                    code.write(reinterpret_cast<const char*>(native_code.data()), sizeof(native_code));
+                    LOG_INFO(HW_GPU, "Recorded 200000 macro calls to {}", record_path);
+                }
+            }
+        }
         const auto result = native_interpreter.Execute(native_code, method, fifo,
             [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },
             [&](u32 address, u32 value) {

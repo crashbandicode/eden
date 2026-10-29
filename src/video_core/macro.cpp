@@ -1354,7 +1354,9 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
         }
         LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
         LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
-        std::vector<u32> fifo(parameters.begin(), parameters.end());
+        // Reused between calls (a macro never calls another: methods >= 0xe00 are refused below).
+        auto& fifo = native_fifo;
+        fifo.assign(parameters.begin(), parameters.end());
         native_interpreter.active_dram = &maxwell3d.GetNativeDataRam();
         const auto result = native_interpreter.Execute(native_code, method, fifo,
             [&](u32 address) { return address < Maxwell3D::Regs::NUM_REGS ? maxwell3d.GetRegisterValue(address) : 0U; },

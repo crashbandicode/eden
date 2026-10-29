@@ -251,6 +251,7 @@ struct MacroEngine {
     u32 native_write_offset{};
     std::array<u32, 0x3000> native_code{};
     TuringMacroInterpreter native_interpreter;
+    std::vector<u32> native_fifo;
 
 };
 

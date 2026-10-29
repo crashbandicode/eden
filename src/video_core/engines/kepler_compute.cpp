@@ -147,18 +147,57 @@ bool KeplerCompute::ProcessNativeMethod(Core::System& system, u32 method, u32 ar
         }
         if (native_data_ram) native_macro->native_interpreter.active_dram = native_data_ram;
         const u32 dram0_before = (*native_macro->native_interpreter.active_dram)[0x27];
+        const u32 start = native_macro_positions[entry];
+        const auto emit = [&](u32 address, u32 value) {
+            static u32 diagnostic_writes{};
+            static const bool log_emits = std::getenv("EDEN_NX2_SEM_WATCH_EMITS") != nullptr;
+            if (watched && log_emits) LOG_INFO(HW_GPU, "Semaphore watch: compute macro emit {:#x} = {:#x}", address, value);
+            if (diagnostic_writes++ < 4096) LOG_DEBUG(HW_GPU, "Native compute MME emit method={:#x}, value={:#x}", address, value);
+            if (address >= 0xe00) return false;
+            CallMethod(system, address, value, true);
+            return true;
+        };
+        // Repeated calls replay their writes, as for 3D macros (macro_memo.h).
+        static const bool use_memo = [] {
+            const char* value = std::getenv("EDEN_NX2_MME_MEMO");
+            return value == nullptr || value[0] != '0';
+        }();
+        auto& memo = native_macro->native_memo;
+        if (use_memo && !watched) {
+            memo.Synchronize(native_macro->native_code_generation);
+            if (std::remove_reference_t<decltype(memo)>::Effects effects;
+                memo.Find(start, native_parameters, *native_macro->native_interpreter.active_dram,
+                          effects)) {
+                auto& data_ram = *native_macro->native_interpreter.active_dram;
+                for (size_t i = 0; i < effects.data_ram_writes.size(); i += 2) {
+                    data_ram[effects.data_ram_writes[i]] = effects.data_ram_writes[i + 1];
+                }
+                for (size_t i = 0; i < effects.writes.size(); i += 2) {
+                    emit(effects.writes[i], effects.writes[i + 1]);
+                }
+                native_parameters.clear();
+                return true;
+            }
+            native_macro->native_writes.clear();
+        }
+        // The interpreter consumes native_parameters as its FIFO: keep the call's own parameters.
+        native_memo_parameters.assign(native_parameters.begin(), native_parameters.end());
+        const u64 code_generation = native_macro->native_code_generation;
         const auto result = native_macro->native_interpreter.Execute(native_macro->native_code,
-            native_macro_positions[entry], native_parameters,
+            start, native_parameters,
             [&](u32 address) { return address < native_registers.size() ? native_registers[address] : 0U; },
             [&](u32 address, u32 value) {
-                static u32 diagnostic_writes{};
-                static const bool log_emits = std::getenv("EDEN_NX2_SEM_WATCH_EMITS") != nullptr;
-                if (watched && log_emits) LOG_INFO(HW_GPU, "Semaphore watch: compute macro emit {:#x} = {:#x}", address, value);
-                if (diagnostic_writes++ < 4096) LOG_DEBUG(HW_GPU, "Native compute MME emit method={:#x}, value={:#x}", address, value);
-                if (address >= 0xe00) return false;
-                CallMethod(system, address, value, true);
-                return true;
+                if (use_memo) {
+                    native_macro->native_writes.emplace_back(address, value);
+                }
+                return emit(address, value);
             });
+        const auto& interpreter = native_macro->native_interpreter;
+        if (use_memo && !watched && result.success && !interpreter.read_registers &&
+            !interpreter.reread_data_ram && code_generation == native_macro->native_code_generation) {
+            memo.Store(start, native_memo_parameters, interpreter.data_ram_reads,
+                       interpreter.data_ram_writes, native_macro->native_writes);
+        }
         if (static const bool mme_dump = std::getenv("EDEN_NX2_MME_DUMP") != nullptr;
             mme_dump && (*native_macro->native_interpreter.active_dram)[0x27] != dram0_before) {
             LOG_INFO(HW_GPU, "MME data RAM[0x27] {:#x} -> {:#x} by engine {} macro start={:#x}",

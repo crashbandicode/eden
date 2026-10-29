@@ -254,6 +254,7 @@ private:
     std::array<u32, 0x1000> native_registers{};
     std::span<u32> native_macro_positions;
     std::vector<u32> native_parameters;
+    std::vector<u32> native_memo_parameters; ///< The current call's parameters, for the memo
     std::optional<u32> native_executing_macro;
     u32 native_bind_pointer{};
 

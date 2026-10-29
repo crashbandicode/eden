@@ -1251,13 +1251,11 @@ void RasterizerVulkan::AccelerateInlineToMemory(GPUVAddr address, size_t copy_si
     }
     gpu_memory->WriteBlockUnsafe(address, memory.data(), copy_size);
     {
-        std::unique_lock<std::recursive_mutex> lock{buffer_cache.mutex};
+        // Both caches under one lock (title 1 makes thousands of inline uploads a second).
+        std::scoped_lock lock{buffer_cache.mutex, texture_cache.mutex};
         if (!buffer_cache.InlineMemory(*cpu_addr, copy_size, memory)) {
             buffer_cache.WriteMemory(*cpu_addr, copy_size);
         }
-    }
-    {
-        std::scoped_lock lock_texture{texture_cache.mutex};
         texture_cache.WriteMemory(*cpu_addr, copy_size);
     }
     pipeline_cache.InvalidateRegion(*cpu_addr, copy_size);

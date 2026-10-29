@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -165,6 +166,9 @@ private:
     /// first error instead of lowering again; dropped when guest memory there is written.
     std::mutex rejected_mutex;
     ::Common::unordered_map<u64, std::exception_ptr> rejected_native;
+    /// Bounds of every address ever rejected (never shrinks): a quick test for invalidations.
+    std::atomic<VAddr> rejected_lowest{~VAddr{}};
+    std::atomic<VAddr> rejected_highest{};
 };
 
 } // namespace VideoCommon

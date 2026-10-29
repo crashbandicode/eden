@@ -180,6 +180,10 @@ bool ShaderCache::IsRejected(VAddr addr) {
 void ShaderCache::RememberRejection(VAddr addr) {
     std::scoped_lock lock{rejected_mutex};
     rejected_native.emplace(addr, std::current_exception());
+    rejected_lowest.store((std::min)(rejected_lowest.load(std::memory_order_relaxed), addr),
+                          std::memory_order_relaxed);
+    rejected_highest.store((std::max)(rejected_highest.load(std::memory_order_relaxed), addr),
+                           std::memory_order_relaxed);
 }
 
 void ShaderCache::GetGraphicsEnvironments(GraphicsEnvironments& result,
@@ -232,7 +236,10 @@ void ShaderCache::Register(std::unique_ptr<ShaderInfo> data, VAddr addr, size_t 
 
 void ShaderCache::InvalidatePagesInRegion(VAddr addr, size_t size) {
     const VAddr addr_end = addr + size;
-    {
+    // Rejected programs are few and in a few places: look at them only for writes that can
+    // reach them (this runs for every inline upload and pre-draw invalidation).
+    if (addr_end > rejected_lowest.load(std::memory_order_relaxed) &&
+        addr <= rejected_highest.load(std::memory_order_relaxed)) {
         std::scoped_lock lock{rejected_mutex};
         boost::unordered::erase_if(rejected_native, [&](const auto& rejected) {
             return rejected.first >= addr && rejected.first < addr_end;

@@ -299,19 +299,26 @@ void DmaPusher::SetState(const CommandHeader& command_header) {
 
 // EDEN_NX2_SEM_WATCH=<gpu address>: log every method whose argument is the low word of an
 // address in the 16 bytes there (finds the engine and method that release a semaphore).
+static const u32 g_semaphore_watch = [] {
+    const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
+    return value ? static_cast<u32>(std::strtoull(value, nullptr, 16)) : 0U;
+}();
+
+// EDEN_NX2_PB_CHECK also keeps the last parsed entries, for DumpCurrentEntry.
+static const bool g_record_parsed_entries = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
+
 void DmaPusher::WatchArgument(u32 method, u32 argument) const {
-    static const u32 watch = [] {
-        const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
-        return value ? static_cast<u32>(std::strtoull(value, nullptr, 16)) : 0U;
-    }();
-    if (watch != 0 && (argument & ~0xfU) == watch) {
+    const u32 watch = g_semaphore_watch;
+    if ((argument & ~0xfU) == watch) {
         LOG_INFO(HW_GPU, "Semaphore watch: channel {} subchannel {} method {:#x} argument {:#x}",
                  channel_state.bind_id, dma_state.subchannel, method, argument);
     }
 }
 
 void DmaPusher::CallMethod(u32 argument) {
-    WatchArgument(dma_state.method, argument);
+    if (g_semaphore_watch != 0) [[unlikely]] {
+        WatchArgument(dma_state.method, argument);
+    }
     if (dma_state.method < non_puller_methods) {
         puller.CallPullerMethod(*this, Engines::Puller::MethodCall{
             dma_state.method,
@@ -336,8 +343,10 @@ void DmaPusher::CallMethod(u32 argument) {
 }
 
 void DmaPusher::CallMultiMethod(const u32* base_start, u32 num_methods) {
-    for (u32 i = 0; i < num_methods; ++i) {
-        WatchArgument(dma_state.method + (dma_state.non_incrementing ? 0 : i), base_start[i]);
+    if (g_semaphore_watch != 0) [[unlikely]] {
+        for (u32 i = 0; i < num_methods; ++i) {
+            WatchArgument(dma_state.method + (dma_state.non_incrementing ? 0 : i), base_start[i]);
+        }
     }
     if (dma_state.method < non_puller_methods) {
         puller.CallMultiMethod(*this, dma_state.method, dma_state.subchannel, base_start, num_methods, dma_state.method_count);
@@ -382,6 +391,9 @@ void DmaPusher::CheckSubmitHash(const CommandListHeader& header, u64 submit_hash
 
 void DmaPusher::RecordParsedEntry(const CommandListHeader& header,
                                   std::span<const CommandHeader> commands) {
+    if (!g_record_parsed_entries) {
+        return;
+    }
     u64 hash = 0xcbf29ce484222325ULL;
     for (const CommandHeader& command : commands) {
         hash = (hash ^ command.argument) * 0x100000001b3ULL;

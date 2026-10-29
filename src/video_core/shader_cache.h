@@ -146,6 +146,8 @@ private:
 
     /// Rethrows the error a native program at this address was rejected with, if any.
     void RethrowIfRejected(VAddr addr);
+    /// Whether a native program at this address was rejected.
+    bool IsRejected(VAddr addr);
     /// Remembers the exception being handled as this address's rejection.
     void RememberRejection(VAddr addr);
 

@@ -393,10 +393,11 @@ void Maxwell3D::CallMacroMethod(Core::System& system, u32 method, const std::vec
 }
 
 // EDEN_NX2_3D_METHODS: log the first write to each 3D register (finds methods Eden doesn't model).
+static const bool g_trace_first_method_writes = std::getenv("EDEN_NX2_3D_METHODS") != nullptr;
+
 void Maxwell3D::TraceFirstMethodWrite(u32 method, u32 argument) {
-    static const bool trace = std::getenv("EDEN_NX2_3D_METHODS") != nullptr;
     static std::array<bool, Regs::NUM_REGS> seen{};
-    if (trace && method < seen.size() && !seen[method]) {
+    if (method < seen.size() && !seen[method]) {
         seen[method] = true;
         LOG_INFO(HW_GPU, "3D method first write: {:#x} (byte {:#x}) = {:#x}", method, method * 4, argument);
     }
@@ -419,7 +420,9 @@ void Maxwell3D::CallMethod(Core::System& system, u32 method, u32 method_argument
         ProcessMacro(system, method, &method_argument, 1, is_last_call);
         return;
     }
-    TraceFirstMethodWrite(method, method_argument);
+    if (g_trace_first_method_writes) [[unlikely]] {
+        TraceFirstMethodWrite(method, method_argument);
+    }
 
     ASSERT(method < Regs::NUM_REGS && "Invalid Maxwell3D register, increase the size of the Regs structure");
     const u32 argument = ProcessShadowRam(method, method_argument);

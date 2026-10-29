@@ -36,6 +36,7 @@
 #include "common/bit_field.h"
 #include "common/logging.h"
 #include "video_core/engines/maxwell_3d.h"
+#include "video_core/nx2_profile.h"
 
 namespace Tegra {
 
@@ -1343,6 +1344,7 @@ static void Dump(u64 hash, std::span<const u32> code, bool decompiled = false) {
 
 void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u32 method,
                           std::span<const u32> parameters) {
+    VideoCommon::Nx2Profile::Scope profile_scope{VideoCommon::Nx2Profile::Zone::Macro};
     if (native_turing) {
         maxwell3d.RefreshParameters();
         const auto context = reinterpret_cast<std::uintptr_t>(this);
@@ -1352,8 +1354,11 @@ void MacroEngine::Execute(Core::System& system, Engines::Maxwell3D& maxwell3d, u
             std::ofstream dump("native-graphics-mme-" + std::to_string(context) + ".bin", std::ios::binary);
             dump.write(reinterpret_cast<const char*>(native_code.data()), sizeof(native_code));
         }
-        LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
-        LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
+        // EDEN_NX2_MME_LOG: log every macro call (runs ~750,000 times a second in title 1).
+        if (static const bool log_calls = std::getenv("EDEN_NX2_MME_LOG") != nullptr; log_calls) {
+            LOG_DEBUG(HW_GPU, "Native MME context={:#x}", context);
+            LOG_DEBUG(HW_GPU, "Native MME start={:#x}, parameters={}, data={:08x}", method, parameters.size(), fmt::join(parameters, ","));
+        }
         // Reused between calls (a macro never calls another: methods >= 0xe00 are refused below).
         auto& fifo = native_fifo;
         fifo.assign(parameters.begin(), parameters.end());

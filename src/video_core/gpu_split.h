@@ -35,26 +35,26 @@ class GpuSplit {
 public:
     // A single atomic snapshot for control/frontends; Active() and FrontMacros()
     // below remain GPU-front-thread-only to avoid adding atomics to the hot path.
-    enum class Status : u32 {
+    enum class ExecutionState : u32 {
         NotStarted, Disabled, InvalidMode, NotAmpere, AccurateGpu, SafeDma,
         NotVulkan, ActiveBackMacros, ActiveFrontMacros, Stopped,
     };
-    [[nodiscard]] Status GetStatus() const {
+    [[nodiscard]] ExecutionState GetStatus() const {
         return reported_status.load(std::memory_order_relaxed);
     }
     [[nodiscard]] static char RequestedMode();
-    [[nodiscard]] static const char* StatusName(Status value) {
+    [[nodiscard]] static const char* StatusName(ExecutionState value) {
         switch (value) {
-        case Status::NotStarted: return "not_started";
-        case Status::Disabled: return "disabled";
-        case Status::InvalidMode: return "invalid_mode";
-        case Status::NotAmpere: return "not_ampere";
-        case Status::AccurateGpu: return "accurate_gpu";
-        case Status::SafeDma: return "safe_dma";
-        case Status::NotVulkan: return "not_vulkan";
-        case Status::ActiveBackMacros: return "active_back_macros";
-        case Status::ActiveFrontMacros: return "active_front_macros";
-        case Status::Stopped: return "stopped";
+        case ExecutionState::NotStarted: return "not_started";
+        case ExecutionState::Disabled: return "disabled";
+        case ExecutionState::InvalidMode: return "invalid_mode";
+        case ExecutionState::NotAmpere: return "not_ampere";
+        case ExecutionState::AccurateGpu: return "accurate_gpu";
+        case ExecutionState::SafeDma: return "safe_dma";
+        case ExecutionState::NotVulkan: return "not_vulkan";
+        case ExecutionState::ActiveBackMacros: return "active_back_macros";
+        case ExecutionState::ActiveFrontMacros: return "active_front_macros";
+        case ExecutionState::Stopped: return "stopped";
         }
         return "unknown";
     }
@@ -126,14 +126,14 @@ public:
     void Drain();
 
 private:
-    void ReportStatus(Status next) {
+    void ReportStatus(ExecutionState next) {
         if (next != last_status) {
             last_status = next;
             reported_status.store(next, std::memory_order_relaxed);
         }
     }
-    Status last_status{Status::NotStarted}; // GPU-front owner; Stop after drain/join.
-    std::atomic<Status> reported_status{Status::NotStarted};
+    ExecutionState last_status{ExecutionState::NotStarted}; // GPU-front owner; Stop after drain/join.
+    std::atomic<ExecutionState> reported_status{ExecutionState::NotStarted};
     enum class Kind : u64 {
         Wrap,   ///< The rest of the ring is unused: continue at its start
         Engine, ///< The engine the next methods go to: word 1

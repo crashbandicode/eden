@@ -97,11 +97,11 @@ void GpuSplit::MaybeStart(Core::System& system_) {
         return;
     }
     if (!wanted) {
-        ReportStatus(mode == '0' ? Status::Disabled : Status::InvalidMode);
+        ReportStatus(mode == '0' ? ExecutionState::Disabled : ExecutionState::InvalidMode);
         return;
     }
     if (!Tegra::g_nx2_ampere.load(std::memory_order_relaxed)) {
-        ReportStatus(Status::NotAmpere);
+        ReportStatus(ExecutionState::NotAmpere);
         return;
     }
     // The front reads command lists straight from guest memory; a read that flushes the caches
@@ -109,15 +109,15 @@ void GpuSplit::MaybeStart(Core::System& system_) {
     const bool safe_reads = Settings::IsDMALevelDefault() ? Settings::IsGPULevelHigh()
                                                           : Settings::IsDMALevelSafe();
     if (Settings::IsGPULevelHigh()) {
-        ReportStatus(Status::AccurateGpu);
+        ReportStatus(ExecutionState::AccurateGpu);
         return;
     }
     if (safe_reads) {
-        ReportStatus(Status::SafeDma);
+        ReportStatus(ExecutionState::SafeDma);
         return;
     }
     if (Settings::values.renderer_backend.GetValue() != Settings::RendererBackend::Vulkan) {
-        ReportStatus(Status::NotVulkan);
+        ReportStatus(ExecutionState::NotVulkan);
         return;
     }
     system = &system_;
@@ -130,14 +130,14 @@ void GpuSplit::MaybeStart(Core::System& system_) {
     const char* jit = std::getenv("EDEN_NX2_MME_JIT");
     front_macros = mode == '2' && (jit == nullptr || jit[0] != '0');
 #endif
-    ReportStatus(front_macros ? Status::ActiveFrontMacros : Status::ActiveBackMacros);
+    ReportStatus(front_macros ? ExecutionState::ActiveFrontMacros : ExecutionState::ActiveBackMacros);
     LOG_INFO(HW_GPU, "GPU thread split: engine methods run on a second thread{}",
              front_macros ? ", macros on the first" : "");
 }
 
 void GpuSplit::Stop() {
     if (!back_thread.joinable()) {
-        ReportStatus(Status::Stopped);
+        ReportStatus(ExecutionState::Stopped);
         return;
     }
     back_thread.request_stop();
@@ -145,7 +145,7 @@ void GpuSplit::Stop() {
     wake.notify_one();
     back_thread.join();
     active = false;
-    ReportStatus(Status::Stopped);
+    ReportStatus(ExecutionState::Stopped);
 }
 
 u64* GpuSplit::ReserveSlow(size_t words) {

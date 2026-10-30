@@ -270,8 +270,12 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
   target/sample counts, and failure reasons. `completed` means both reports were
   closed successfully; cancellation or failure during reporting may leave partial
   files. Invalid startup requests abort before game initialization. Enabled
-  requests on non-Windows platforms fail explicitly; Qt does not start this
-  sampler. There is no SDL `edenctl` attachment or live restart command. Use a
+  requests on builds other than Windows x64 MSVC (including Linux, Windows ARM64,
+  and MinGW) explicitly abort SDL startup; Qt does not start this sampler.
+  DbgHelp honors an operator-configured `_NT_SYMBOL_PATH`; a symbol-server path
+  can fetch symbols over the network. For local-only sampling, set that variable
+  to the directory containing the matching executable and PDB, and clear
+  `_NT_ALT_SYMBOL_PATH`. There is no SDL `edenctl` attachment or live restart command. Use a
   new bounded SDL process for another sample, inspect its logs and artifacts,
   and quit that process to cancel. `CRASH_DUMP=<directory>` is likewise registered
   only by the Windows SDL frontend and writes a dump on an unhandled exception.

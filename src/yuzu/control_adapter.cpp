@@ -274,8 +274,8 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
         const QJsonObject split{
             {QStringLiteral("requested_mode"), split_mode >= '0' && split_mode <= '2' ? split_mode - '0' : -1},
             {QStringLiteral("state"), QString::fromLatin1(Split::StatusName(split_state))},
-            {QStringLiteral("active"), split_state == Split::Status::ActiveBackMacros || split_state == Split::Status::ActiveFrontMacros},
-            {QStringLiteral("front_macros"), split_state == Split::Status::ActiveFrontMacros},
+            {QStringLiteral("active"), split_state == Split::ExecutionState::ActiveBackMacros || split_state == Split::ExecutionState::ActiveFrontMacros},
+            {QStringLiteral("front_macros"), split_state == Split::ExecutionState::ActiveFrontMacros},
         };
         const QJsonObject emulation{
             {QStringLiteral("generation"), process ? (switch2 ? QStringLiteral("switch2") : QStringLiteral("switch")) : QStringLiteral("none")},

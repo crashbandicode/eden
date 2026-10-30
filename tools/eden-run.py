@@ -20,6 +20,7 @@ import time
 import uuid
 
 from edenctl import Client, ControlError
+from nx2_environment import systemd_nx2_environment
 
 
 def bounded(command, timeout=5):
@@ -148,6 +149,8 @@ def main(argv=None):
                      "VK_ICD_FILENAMES", "VK_DRIVER_FILES", "EDEN_LOG_FILTER"):
             if name in os.environ:
                 invocation.append("--setenv=" + name + "=" + os.environ[name])
+        nx2_arguments, nx2_environment = systemd_nx2_environment(os.environ)
+        invocation.extend(nx2_arguments)
         child_command = [*command, "--control-socket", str(socket_path),
                          "--control-log", str(directory / "control.jsonl"), "--control-verbose"]
         if args.background:
@@ -166,6 +169,7 @@ def main(argv=None):
                  "runtime_seconds": args.runtime, "startup_timeout": args.startup_timeout,
                  "hang_timeout": args.hang_timeout, "started_at": time.time(), "state": "starting"}
         state["debugger"] = args.debugger
+        state["nx2_environment"] = nx2_environment
         save(directory / "run.json", state)
         log = logging.getLogger(unit)
         log.setLevel(logging.INFO)

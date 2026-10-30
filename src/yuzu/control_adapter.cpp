@@ -13,6 +13,8 @@
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/debugger/guest_tracepoint.h"
+#include "core/hardware_properties.h"
+#include "core/hle/kernel/k_process.h"
 #include "core/hle/service/am/applet_manager.h"
 #include "core/perf_stats.h"
 #include "qt_common/config/uisettings.h"
@@ -261,8 +263,22 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
     }
     if (method == QStringLiteral("status")) {
         const bool powered = QtCommon::system->IsPoweredOn();
+        const auto* process = powered ? QtCommon::system->ApplicationProcess() : nullptr;
+        const bool switch2 = process && process->IsSwitch2();
+        const auto& memory_layout = Settings::values.memory_layout_mode;
+        const QJsonObject emulation{
+            {QStringLiteral("generation"), process ? (switch2 ? QStringLiteral("switch2") : QStringLiteral("switch")) : QStringLiteral("none")},
+            {QStringLiteral("compiled_cpu_cores"), static_cast<int>(Core::Hardware::NUM_CPU_CORES)},
+            {QStringLiteral("multicore"), Settings::values.use_multi_core.GetValue()},
+            {QStringLiteral("memory_layout"), QString::fromStdString(memory_layout.Canonicalize())},
+            {QStringLiteral("memory_layout_value"), static_cast<int>(memory_layout.GetValue())},
+            {QStringLiteral("global_memory_layout_value"), static_cast<int>(memory_layout.GetValue(true))},
+            {QStringLiteral("memory_layout_automatic"), powered && QtCommon::system->WasMemoryLayoutAutoSelected()},
+            {QStringLiteral("generation_forces_auto_stub"), switch2},
+        };
         return CS::Success(QJsonObject{
             {QStringLiteral("ready"), true},
+            {QStringLiteral("emulation"), emulation},
             {QStringLiteral("game_operation_pending"), game_job_pending},
             {QStringLiteral("powered_on"), powered},
             {QStringLiteral("running"), QtCommon::emu_thread && QtCommon::emu_thread->IsRunning()},

@@ -223,6 +223,9 @@ public:
      */
     [[nodiscard]] bool IsPoweredOn() const;
 
+    /// Whether the most recent Load selected a layout from detected program metadata.
+    [[nodiscard]] bool WasMemoryLayoutAutoSelected() const;
+
     /// Prepare the core emulation for a reschedule
     void PrepareReschedule(u32 core_index);
 

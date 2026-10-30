@@ -33,6 +33,24 @@ log.filter, input.* and optional renderer screenshot. Handler returns error unkn
 when unsupported. Core/settings commands are unavailable until MainWindow is constructed;
 generic Qt server starts before construction for startup dialogs.
 
+On the experimental `ns2` branch, `status.result.emulation` reports:
+
+- `generation`: `none`, `switch`, or `switch2`, from the loaded application's metadata.
+- `compiled_cpu_cores`: the build's core capacity; this is not a runtime core-count setter.
+- `multicore`: the current multicore setting.
+- `memory_layout`, `memory_layout_value`, and `global_memory_layout_value`: the
+  effective canonical layout and effective/global enum values.
+- `memory_layout_automatic`: true only while powered on when this load selected
+  the 12 GiB layout automatically. A manually selected 12 GiB layout is not automatic.
+- `generation_forces_auto_stub`: a Switch 2 caller receives upstream's automatic
+  stub policy even when the generic auto-stub setting is false. Other settings,
+  service-specific policies, and startup environment overrides can also enable stubs.
+
+Use `settings.list/get/set` for existing core settings. Stop the game before
+changing startup-only memory or multicore options. These fields expose execution
+state; they do not establish game compatibility. See [NX2 usage](docs/user/NX2.md)
+for startup diagnostics and frontend/platform limitations.
+
 CLI implemented at tools/edenctl.py with generic call and JSON-line attach. Convenience
 input.button params: player 0..9, button name, state press/release/tap, duration_ms;
 input.stick: player, stick left/right, x/y; input.motion (left/right/both);

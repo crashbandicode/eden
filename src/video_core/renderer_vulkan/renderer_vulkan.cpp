@@ -297,7 +297,7 @@ vk::Buffer RendererVulkan::RenderToBuffer(std::span<const Tegra::FramebufferConf
 }
 
 void RendererVulkan::RenderScreenshot(std::span<const Tegra::FramebufferConfig> framebuffers) {
-    if (!renderer_settings.screenshot_requested) {
+    if (!renderer_settings.screenshot_request.Pending()) {
         return;
     }
 
@@ -311,7 +311,7 @@ void RendererVulkan::RenderScreenshot(std::span<const Tegra::FramebufferConfig> 
     std::memcpy(renderer_settings.screenshot_bits, dst_buffer.Mapped().data(),
                 dst_buffer.Mapped().size());
     renderer_settings.screenshot_complete_callback(false);
-    renderer_settings.screenshot_requested = false;
+    renderer_settings.screenshot_request.Complete();
 }
 
 std::vector<u8> RendererVulkan::GetAppletCaptureBuffer() {

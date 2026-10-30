@@ -32,25 +32,22 @@ void RendererBase::UpdateCurrentFramebufferLayout() {
 }
 
 bool RendererBase::IsScreenshotPending() const {
-    return renderer_settings.screenshot_requested;
+    return renderer_settings.screenshot_request.Pending();
 }
 
-void RendererBase::RequestScreenshot(void* data, std::function<void(bool)> callback,
+bool RendererBase::RequestScreenshot(void* data, std::function<void(bool)> callback,
                                      const Layout::FramebufferLayout& layout,
                                      Service::Nvnflinger::LayerStackId layer_stack) {
-    if (renderer_settings.screenshot_requested) {
-        LOG_ERROR(Render, "A screenshot is already requested or in progress, ignoring the request");
-        return;
-    }
-    auto async_callback{[callback_ = std::move(callback)](bool invert_y) {
-        std::thread t{callback_, invert_y};
-        t.detach();
-    }};
-    renderer_settings.screenshot_bits = data;
-    renderer_settings.screenshot_complete_callback = async_callback;
-    renderer_settings.screenshot_framebuffer_layout = layout;
-    renderer_settings.screenshot_layer_stack = layer_stack;
-    renderer_settings.screenshot_requested = true;
+    return renderer_settings.screenshot_request.TryRequest([&] {
+        auto async_callback{[callback_ = std::move(callback)](bool invert_y) {
+            std::thread t{callback_, invert_y};
+            t.detach();
+        }};
+        renderer_settings.screenshot_bits = data;
+        renderer_settings.screenshot_complete_callback = std::move(async_callback);
+        renderer_settings.screenshot_framebuffer_layout = layout;
+        renderer_settings.screenshot_layer_stack = layer_stack;
+    });
 }
 
 } // namespace VideoCore

@@ -316,12 +316,14 @@ struct System::Impl {
 
         // Switch 2 titles size their heap from the total memory and need the 12 GiB layout. Set it
         // as a per-game value, so RestoreGlobalState brings back the configured layout afterwards.
+        memory_layout_auto_selected = false;
         if (virtual_filesystem != nullptr &&
             Settings::values.memory_layout_mode.GetValue() != Settings::MemoryLayout::Memory_12Gb &&
             IsSwitch2Program(GetGameFileFromPath(virtual_filesystem, filepath))) {
             LOG_INFO(Core, "Switch 2 program: using the 12 GiB memory layout");
             Settings::values.memory_layout_mode.SetGlobal(false);
             Settings::values.memory_layout_mode.SetValue(Settings::MemoryLayout::Memory_12Gb);
+            memory_layout_auto_selected = true;
         }
 
         InitializeKernel(system);
@@ -541,6 +543,7 @@ struct System::Impl {
     std::atomic_bool is_paused{};
     std::atomic_bool is_shutting_down{};
     std::atomic_bool is_powered_on{};
+    std::atomic_bool memory_layout_auto_selected{};
     bool is_multicore : 1 = false;
     bool extended_memory_layout : 1 = false;
     bool exit_locked : 1 = false;
@@ -628,6 +631,10 @@ SystemResultStatus System::Load(Frontend::EmuWindow& emu_window, const std::stri
 
 bool System::IsPoweredOn() const {
     return impl->is_powered_on.load(std::memory_order::relaxed);
+}
+
+bool System::WasMemoryLayoutAutoSelected() const {
+    return impl->memory_layout_auto_selected.load(std::memory_order_relaxed);
 }
 
 void System::PrepareReschedule(const u32 core_index) {

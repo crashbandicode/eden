@@ -135,7 +135,7 @@ void GifRecorder::Capture() {
     const QPointer<GifRecorder> target(this);
     // The callback owns its pixel buffer even if recording stops or this QObject is destroyed.
     // QPointer is inspected only on the GUI thread, through the application context.
-    renderer.RequestScreenshot(image->bits(), [target, image, token](bool inverted) {
+    const bool accepted = renderer.RequestScreenshot(image->bits(), [target, image, token](bool inverted) {
         QMetaObject::invokeMethod(qApp, [target, image, token, inverted] {
             if (!target || !target->IsRecording() || target->generation != token) return;
             auto* self = target.data();
@@ -161,6 +161,10 @@ void GifRecorder::Capture() {
             }, Qt::QueuedConnection);
         }, Qt::QueuedConnection);
     }, Layout::DefaultFrameLayout(static_cast<u32>(width), static_cast<u32>(height)));
+    if (!accepted) {
+        busy = false;
+        ++dropped;
+    }
 }
 
 void GifRecorder::Stop() {

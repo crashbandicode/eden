@@ -121,6 +121,7 @@ add_library(video_core STATIC
     rasterizer_interface.h
     renderer_base.cpp
     renderer_base.h
+    screenshot_request.h
 
     # Null
     renderer_null/null_rasterizer.cpp

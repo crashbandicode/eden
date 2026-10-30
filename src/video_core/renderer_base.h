@@ -15,6 +15,7 @@
 #include "core/frontend/framebuffer_layout.h"
 #include "video_core/gpu.h"
 #include "video_core/rasterizer_interface.h"
+#include "video_core/screenshot_request.h"
 
 namespace Core::Frontend {
 class EmuWindow;
@@ -25,7 +26,7 @@ namespace VideoCore {
 
 struct RendererSettings {
     // Screenshot
-    std::atomic<bool> screenshot_requested{false};
+    ScreenshotRequest screenshot_request;
     void* screenshot_bits{};
     std::function<void(bool)> screenshot_complete_callback;
     Layout::FramebufferLayout screenshot_framebuffer_layout;
@@ -92,8 +93,8 @@ public:
     /// Returns true if a screenshot is being processed
     bool IsScreenshotPending() const;
 
-    /// Request a screenshot of the next frame.
-    void RequestScreenshot(void* data, std::function<void(bool)> callback,
+    /// Request a screenshot of the next frame. False means busy: callback will not run.
+    bool RequestScreenshot(void* data, std::function<void(bool)> callback,
                            const Layout::FramebufferLayout& layout,
                            Service::Nvnflinger::LayerStackId layer_stack =
                                Service::Nvnflinger::LayerStackId::Default);

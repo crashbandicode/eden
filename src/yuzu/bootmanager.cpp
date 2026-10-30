@@ -822,7 +822,7 @@ void GRenderWindow::CaptureScreenshot(const QString& screenshot_path) {
     }()};
 
     screenshot_image = QImage(QSize(layout.width, layout.height), QImage::Format_RGB32);
-    renderer.RequestScreenshot(
+    const bool accepted = renderer.RequestScreenshot(
         screenshot_image.bits(),
         [=, this](bool invert_y) {
             const std::string std_screenshot_path = screenshot_path.toStdString();
@@ -838,6 +838,9 @@ void GRenderWindow::CaptureScreenshot(const QString& screenshot_path) {
             }
         },
         layout);
+    if (!accepted) {
+        LOG_WARNING(Render, "Screenshot skipped: another capture acquired the renderer");
+    }
 }
 
 bool GRenderWindow::IsLoadingComplete() const {

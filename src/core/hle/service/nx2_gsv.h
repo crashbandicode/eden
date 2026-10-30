@@ -1005,7 +1005,7 @@ private:
         const std::string path =
             fmt::format("{}/nx2-frame-{:05}.tga", directory, m_presents);
         auto pending = m_capture_pending; // the screenshot callback can outlive the session
-        system.GPU().Renderer().RequestScreenshot(
+        const bool accepted = system.GPU().Renderer().RequestScreenshot(
             pixels->data(),
             [pixels, layout, path, pending](bool invert_y) {
                 std::array<u8, 18> header{};
@@ -1018,13 +1018,23 @@ private:
                 // Descriptor bit 5: rows top to bottom. invert_y means the data is bottom-up.
                 header[17] = invert_y ? 0x08 : 0x28;
                 if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-                    std::fwrite(header.data(), 1, header.size(), file);
-                    std::fwrite(pixels->data(), 1, pixels->size(), file);
-                    std::fclose(file);
+                    const bool header_ok = std::fwrite(header.data(), 1, header.size(), file) == header.size();
+                    const bool pixels_ok = std::fwrite(pixels->data(), 1, pixels->size(), file) == pixels->size();
+                    const bool closed = std::fclose(file) == 0;
+                    if (!header_ok || !pixels_ok || !closed) {
+                        LOG_ERROR(Service, "nx2: failed to write frame capture {}", path);
+                    }
+                } else {
+                    LOG_ERROR(Service, "nx2: could not open frame capture {}", path);
                 }
                 pending->store(false);
             },
             layout);
+        if (!accepted) {
+            // Another producer (for example GIF recording) owns the next frame. Retry
+            // on a later capture interval instead of waiting for a callback that cannot run.
+            pending->store(false);
+        }
     }
 
     // EDEN_NX2_DUMP=<present>:<hex address>:<hex size>[,<hex address>:<hex size>...]: at that

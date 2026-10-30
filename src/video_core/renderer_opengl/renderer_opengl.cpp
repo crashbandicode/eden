@@ -195,7 +195,7 @@ void RendererOpenGL::RenderToBuffer(std::span<const Tegra::FramebufferConfig> fr
 }
 
 void RendererOpenGL::RenderScreenshot(std::span<const Tegra::FramebufferConfig> framebuffers) {
-    if (!renderer_settings.screenshot_requested) {
+    if (!renderer_settings.screenshot_request.Pending()) {
         return;
     }
 
@@ -206,7 +206,7 @@ void RendererOpenGL::RenderScreenshot(std::span<const Tegra::FramebufferConfig> 
                    renderer_settings.screenshot_bits);
 
     renderer_settings.screenshot_complete_callback(true);
-    renderer_settings.screenshot_requested = false;
+    renderer_settings.screenshot_request.Complete();
 }
 
 void RendererOpenGL::RenderAppletCaptureLayer(

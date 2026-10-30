@@ -76,7 +76,7 @@ void IScreenShotApplicationService::CaptureAndSaveScreenshot(AlbumReportOption r
     Capture::ScreenShotAttribute attribute{};
     attribute.orientation = Capture::AlbumImageOrientation::None;
 
-    renderer.RequestScreenshot(
+    const bool accepted = renderer.RequestScreenshot(
         image_data.data(),
         [attribute, report_option, this](bool invert_y) {
             // Convert from BGRA to RGBA
@@ -92,6 +92,9 @@ void IScreenShotApplicationService::CaptureAndSaveScreenshot(AlbumReportOption r
         },
         layout,
         Nvnflinger::LayerStackId::Screenshot);
+    if (!accepted) {
+        LOG_WARNING(Service_Capture, "Screenshot skipped: another capture owns the renderer");
+    }
 }
 
 } // namespace Service::Capture

@@ -83,6 +83,14 @@ layout. `settings.save` persists settings when desired; it is not required to
 apply a value for the current process. Other renderer/ASTC/accuracy options use
 the same generic interface, not new NX2-specific setters.
 
+`edenctl status` reports an `emulation` object with `generation` (`none`, `switch`
+or `switch2`), `compiled_cpu_cores`, `multicore`, the effective `memory_layout`
+name and `memory_layout_value`, and `global_memory_layout_value`.
+`memory_layout_automatic` identifies a temporary NX2 memory override;
+`generation_forces_auto_stub` identifies the imported Switch 2 caller policy.
+These fields describe the running process and effective configuration. They do
+not certify that a game renders correctly or that a stubbed service is implemented.
+
 For direct SDL startup, the corresponding INI entries are:
 
 ```ini

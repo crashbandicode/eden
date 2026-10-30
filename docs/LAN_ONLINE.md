@@ -39,6 +39,69 @@ Do not reuse an active agent's profile, control socket, display or runtime direc
 
 For an unpackaged development build only, `EDEN_LAN_RUNTIME` can name the runtime executable and `EDEN_LAN_ASSETS` can name the private support directory. These overrides are not required for a complete package. Do not print private reply contents, account tokens or keys into reports. Do not turn the explicit legacy fixture on at the same time.
 
+### Persistent ratings and Elite testing
+
+The earlier acceptance report predates the rating-store update. This update
+requires the matching protocol-v4 companion on every peer.
+This launcher supplies a stable private storage directory beneath
+`<Eden data directory>/lan-online/<selected account UUID>/<16-hex title ID>`.
+Each local companion owns that profile's `ratings.json` and holds an exclusive
+`ratings.lock`. Two concurrent instances must use separate writable profiles or
+accounts. Changing the selected account after LAN Online starts requires an
+Eden restart.
+
+Complete packages select that path automatically. The development override
+below exists for isolated testing with older launchers.
+
+The game computes its ratings. The companion saves DataStore82 reports and
+returns them on DataStore84, separately for each profile and fighter. Network
+player IDs can change between launches without losing the local records. The
+coordinator routes each request back to that profile's own companion, so
+coordinator replacement does not require copying a rating database.
+
+For an isolated test using an older Linux launcher, `EDEN_LAN_PROFILE_DIR` can
+select an absolute, user-private storage directory. The new launcher's explicit
+`--profile-dir` argument overrides that variable. Without either, a development
+runtime retains legacy process-local storage and does not persist ratings.
+
+The deliberate test hook `EDEN_LAN_FIGHTER_SEEDS=slot:rating` (comma-separated)
+sets the paired first and third rating fields of existing fighter reports on
+startup. First play to obtain a genuine report; stop the owned process before
+seeding its next launch. Invalid values, duplicate slots and missing reports
+fail startup. Remove the variable from subsequent launches, or every restart
+reapplies the seed. Do not edit a live store. The number is an internal rating,
+not displayed GSP; obtain the fighter slot and boundary from the configuration
+under test. The game still decides whether the next match crosses the boundary.
+
+Linux companion validation on 2026-10-30 observed saved reports after a fresh
+process and new leased player ID; genuine played matches producing the native
+Elite entry notice and the cancellation notice followed by ordinary Solo;
+and a complete Elite/ordinary pair of matches through direct rematch. The
+seed-crossing trials used runtime v7; v8 adds the host-route handover correction
+and passed the mixed direct rematch. These runs used no active NROs.
+
+With v8, one survivor stayed waiting after the host declined, accepted the same
+remote profile relaunched with a new leased identity five minutes later, and
+completed another match. That joining peer then declined and the survivor
+continued waiting without an error. A later mixed-tier run also observed the
+opposite physical peer decline while the Elite survivor remained waiting.
+This covers both departure roles and both physical peers as decliner, not every
+ordering permutation or a different saved profile. Earlier v7 departure
+failures remain excluded. A forced-popup NRO or a passing server
+test alone does not establish these live behaviors.
+
+For the private support configuration used in those trials, fighter slot 43
+(Lucario) seeded at 1641 entered Elite after a win; 1643 started in Elite and
+left after a loss. These are internal rating values, not displayed GSP, and
+are examples for that configuration. Verify the active configuration before
+reusing them. No threshold-calculation service was added.
+
+The coordinator is trusted to request profile reads and writes. Optional TLS
+protects the member link but does not protect against a malicious coordinator.
+Writes are validated and bounded; profile paths are never sent over the LAN.
+Persistence tests cover process restarts, not power loss. A network timeout can
+occur after a write committed and does not guarantee rollback.
+
 Required Linux gates are same-PC Unix gameplay, cross-PC gameplay, late joining after sustained unmatched waiting, cancellation/rejoin, singles results/rematch, background matchmaking, Co-op doubles, arena create/browse/join/play/leave/close, coordinator loss, and normal disabled-mode regression. Every major milestone also requires an independent Opus 5.5 audit for obvious network-security issues. Retain raw evidence and mark untested paths as unverified. Windows implementation may proceed in parallel; each platform still needs its own acceptance before installation.
 
 Keep both peers receiving varied valid gameplay input throughout live tests. Inactivity and excessive self-destructs cause the game to disconnect; retain the displayed reason before attributing a failure to networking. Result/rematch prompts are timed. Capture the actual prompt, confirm the intended answer within its countdown, then verify a second playable match on both peers. Controller RPC acceptance alone does not prove that the game consumed it. On cleanup, wait for each Eden process and its owned runtime to terminate before stopping that instance's private display.

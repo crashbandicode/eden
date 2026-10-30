@@ -20,9 +20,13 @@
 #include <unistd.h>
 #endif
 
+#include "common/fs/path_util.h"
 #include "common/settings.h"
+#include "common/uuid.h"
+#include "core/hle/service/acc/profile_manager.h"
 #include "core/internal_network/nso_lan.h"
 #include "qt_common/config/uisettings.h"
+#include "qt_common/qt_common.h"
 
 namespace LanOnline {
 namespace {
@@ -51,6 +55,7 @@ public:
     bool starting = false;
     bool control_tls = false;
     u64 title = 0;
+    Common::UUID profile_uuid{};
 };
 
 QPointer<Runtime> runtime;
@@ -96,6 +101,12 @@ QPointer<Runtime> runtime;
             if (code == QStringLiteral("runtime_dir_invalid")) {
                 return QObject::tr("LAN Online could not use its private runtime directory.");
             }
+            if (code == QStringLiteral("profile_store_invalid")) {
+                return QObject::tr("LAN Online rating profile storage is not accessible.");
+            }
+            if (code == QStringLiteral("profile_in_use")) {
+                return QObject::tr("A LAN Online rating profile for this game is already in use. Close other sessions first.");
+            }
             if (code == QStringLiteral("unsupported_title")) {
                 return QObject::tr("This runtime package does not support the selected game.");
             }
@@ -129,6 +140,12 @@ QString Prepare(QWidget*, u64 title_id) {
     if (qEnvironmentVariableIsSet("EDEN_NSO_LAN_CONFIG")) {
         return QObject::tr("An explicit online test configuration is active. Remove it before using automatic LAN Online.");
     }
+    const auto uuid_opt = QtCommon::system->GetProfileManager().GetUser(
+        static_cast<std::size_t>(Settings::values.current_user.GetValue()));
+    if (!uuid_opt.has_value()) {
+        return QObject::tr("No emulated user account is selected. Select a user in System settings.");
+    }
+    const Common::UUID uuid = *uuid_opt;
     if (!runtime) {
         runtime = new Runtime(qApp);
     }
@@ -141,6 +158,9 @@ QString Prepare(QWidget*, u64 title_id) {
         }
         if (runtime->title != title_id) {
             return QObject::tr("Restart Eden before using LAN Online with a different game.");
+        }
+        if (runtime->profile_uuid != uuid) {
+            return QObject::tr("Restart Eden to use LAN Online with a different user account.");
         }
         return runtime->process.state() == QProcess::Running
                    ? QString{}
@@ -160,6 +180,17 @@ QString Prepare(QWidget*, u64 title_id) {
         const QFileInfo file{assets + QLatin1Char('/') + reply};
         if (!file.isFile() || !file.isReadable()) {
             return QObject::tr("LAN Online game support files are missing. Install the complete private LAN Online package.");
+        }
+    }
+    const auto& eden_dir = Common::FS::GetEdenPath(Common::FS::EdenPath::EdenDir);
+    const std::filesystem::path profile_dir =
+        eden_dir / "lan-online" / uuid.FormattedString() /
+        QString::number(title_id, 16).rightJustified(16, QLatin1Char('0')).toStdString();
+    {
+        std::error_code dir_ec;
+        std::filesystem::create_directories(profile_dir.parent_path(), dir_ec);
+        if (dir_ec) {
+            return QObject::tr("Eden could not create the LAN Online rating profile directory.");
         }
     }
     const auto base = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -187,7 +218,9 @@ QString Prepare(QWidget*, u64 title_id) {
                           QString::number(QCoreApplication::applicationPid()),
                           QStringLiteral("--runtime-dir"), instance_dir,
                           QStringLiteral("--assets"), assets, QStringLiteral("--title-id"),
-                          QString::number(title_id, 16).rightJustified(16, QLatin1Char('0'))};
+                          QString::number(title_id, 16).rightJustified(16, QLatin1Char('0')),
+                          QStringLiteral("--profile-dir"),
+                          QString::fromStdString(profile_dir.string())};
     const auto interface = Settings::values.network_interface.GetValue();
     runtime->control_tls = UISettings::values.lan_online_tls.GetValue();
     if (runtime->control_tls) {
@@ -216,6 +249,7 @@ QString Prepare(QWidget*, u64 title_id) {
                     instance_dir.toStdString())) {
                 runtime->published = true;
                 runtime->title = title_id;
+                runtime->profile_uuid = uuid;
                 runtime->starting = false;
                 return {};
             }

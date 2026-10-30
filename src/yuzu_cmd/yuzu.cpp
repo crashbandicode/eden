@@ -414,7 +414,6 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 }
 // EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,..." (or "@<file>"): press (code) or release (-code) keyboard
 // keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
-double Nx2KeyClockSeconds(); // emu_window_sdl3.cpp
 
 static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
     struct KeyEvent {

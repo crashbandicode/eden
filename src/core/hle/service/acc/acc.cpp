@@ -1501,7 +1501,7 @@ public:
         // configuration is published once per process before the guest starts.
         if (Network::NsoLan::GetConfiguration()) {
             // clang-format off
-            static const FunctionInfo fixture_functions[] = {
+            static const FunctionInfoTyped<ACC_U0> fixture_functions[] = {
                 {103, &ACC_U0::CheckFixtureNetworkServiceAvailabilityAsync, "CheckNetworkServiceAvailabilityAsync"}, // 4.0.0+
             };
             // clang-format on

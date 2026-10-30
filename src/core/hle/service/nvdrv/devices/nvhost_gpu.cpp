@@ -420,10 +420,12 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
     const auto bind_id = channel_state->bind_id;
 
     if (g_nx2_driver) {
+#ifdef _DEBUG
         for (const auto& entry : entries.command_lists) {
             LOG_TRACE(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
                      entry.addr.Value(), entry.size.Value());
         }
+#endif
         static const bool check = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
         if (check) {
             std::vector<u32> words;

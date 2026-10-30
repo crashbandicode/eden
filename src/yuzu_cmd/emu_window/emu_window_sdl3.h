@@ -25,6 +25,9 @@ class InputSubsystem;
 enum class MouseButton;
 } // namespace InputCommon
 
+// Shared clock for the SDL key script and key recording.
+double Nx2KeyClockSeconds();
+
 // EDEN_NX2_HIDE_WINDOW=1 (anything but 0) creates the render window hidden and without focus, for unattended
 // test runs that must not cover or interrupt the desktop.
 inline SDL_WindowFlags Nx2HiddenWindowFlags() {

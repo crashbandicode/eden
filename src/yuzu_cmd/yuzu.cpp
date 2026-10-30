@@ -241,13 +241,36 @@ struct SdlState {
     std::unique_ptr<EmuWindow_SDL3> emu_window;
     // Script cursor and keys this script is holding. Independent of other keyboard input.
     Nx2KeyScript::Session key_script{};
+    Nx2Sampler::Session sampler{};
+    Nx2Sampler::State sampler_reported = Nx2Sampler::State::Disabled;
 };
+
+static void ReportSamplerStatus(SdlState& state) {
+    const auto status = state.sampler.GetStatus();
+    if (status.state == state.sampler_reported) {
+        return;
+    }
+    state.sampler_reported = status.state;
+    const auto name = [](Nx2Sampler::State value) {
+        switch (value) {
+        case Nx2Sampler::State::Disabled: return "disabled";
+        case Nx2Sampler::State::Waiting: return "waiting";
+        case Nx2Sampler::State::Sampling: return "sampling";
+        case Nx2Sampler::State::Reporting: return "reporting";
+        case Nx2Sampler::State::Completed: return "completed";
+        case Nx2Sampler::State::Cancelled: return "cancelled";
+        case Nx2Sampler::State::Failed: return "failed";
+        }
+        return "unknown";
+    };
+    LOG_INFO(Frontend, "NX2 sampler state={} targets={} samples={} error={}",
+             name(status.state), status.targets, status.samples, status.error);
+}
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 #ifdef _WIN32
     SetUnhandledExceptionFilter(WriteCrashDump);
 #endif
-    Nx2Sampler::StartFromEnvironment();
     // SDL calls SDL_AppIterate back to back by default, which kept a host core at 100% polling
     // input; 240 Hz is plenty for input and the key script.
     SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "240");
@@ -300,6 +323,13 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
             LOG_CRITICAL(Frontend, "EDEN_NX2_KEY_SCRIPT: {}", key_script_error);
             return SDL_APP_FAILURE;
         }
+    }
+
+    const auto sampler_status = state->sampler.StartFromEnvironment();
+    ReportSamplerStatus(*state);
+    if (sampler_status.state == Nx2Sampler::State::Failed) {
+        LOG_CRITICAL(Frontend, "EDEN_NX2_SAMPLE: {}", sampler_status.error);
+        return SDL_APP_FAILURE;
     }
 
     state->system.Initialize();
@@ -461,6 +491,7 @@ static void StopKeyScript(SdlState& state) {
 
 extern "C" SDL_AppResult SDL_AppIterate(void *appstate) {
     SdlState *state = (SdlState *)appstate;
+    ReportSamplerStatus(*state);
     RunKeyScript(*state);
     return state->emu_window && state->emu_window->IsOpen() ? SDL_APP_CONTINUE : SDL_APP_SUCCESS;
 }
@@ -472,6 +503,9 @@ extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 }
 extern "C" void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     SdlState *state = (SdlState *)appstate;
+    // No sampled worker may remain suspended while core shutdown joins it.
+    state->sampler.Stop();
+    ReportSamplerStatus(*state);
     // Keyboard shutdown happens when emu_window is destroyed below.
     StopKeyScript(*state);
     state->system.DetachDebugger();

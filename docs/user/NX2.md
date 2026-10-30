@@ -258,8 +258,22 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
 - `SAMPLE=<comma-separated thread names>` and its `SAMPLE_START` (60 seconds),
   `SAMPLE_SECONDS` (30 seconds), `SAMPLE_OUT` (`nx2_samples.txt`, plus `.folded`)
   companions are **Windows SDL-only** host sampling controls. A trailing `*`
-  matches a thread-name prefix. The non-Windows implementation is a no-op and Qt
-  does not start this sampler. `CRASH_DUMP=<directory>` is likewise registered
+  matches a thread-name prefix. The owning SDL thread is excluded even if its
+  name matches. Delay must be finite and within 0..600 seconds; duration must be
+  finite and within (0..120] seconds. Requests allow at most 32 patterns, 16
+  matching threads, and 262144 reserved samples. Excessive requests fail with an
+  actionable error; narrow the patterns or shorten the duration. The raw sample
+  buffer is at most about 82 MiB. The sampler is owned by this SDL process:
+  normal quit cancels waiting/collection and joins before core shutdown. A native
+  stack walk, symbol lookup or file operation already in progress must return
+  before the join can finish. Logs report `NX2 sampler state=...` transitions,
+  target/sample counts, and failure reasons. `completed` means both reports were
+  closed successfully; cancellation or failure during reporting may leave partial
+  files. Invalid startup requests abort before game initialization. Enabled
+  requests on non-Windows platforms fail explicitly; Qt does not start this
+  sampler. There is no SDL `edenctl` attachment or live restart command. Use a
+  new bounded SDL process for another sample, inspect its logs and artifacts,
+  and quit that process to cancel. `CRASH_DUMP=<directory>` is likewise registered
   only by the Windows SDL frontend and writes a dump on an unhandled exception.
   Forwarding these variables to Linux Qt does not add the missing functionality.
 - Core frame/video/memory dumps are startup diagnostics. Their environment hooks

@@ -1072,8 +1072,15 @@ private:
                     current += chunk;
                 }
                 if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
-                    std::fwrite(bytes.data(), 1, bytes.size(), file);
-                    std::fclose(file);
+                    const bool written = std::fwrite(bytes.data(), 1, bytes.size(), file) == bytes.size();
+                    const bool closed = std::fclose(file) == 0;
+                    if (!written || !closed) {
+                        LOG_ERROR(Service, "nx2: failed to write memory dump {}", path);
+                        return;
+                    }
+                } else {
+                    LOG_ERROR(Service, "nx2: could not open memory dump {}", path);
+                    return;
                 }
                 LOG_INFO(Service, "nx2: dumped {:#x} bytes at {:#x} to {}", size, address, path);
             }));
@@ -1611,7 +1618,15 @@ private:
                     std::fputc(bytes[y * 4 * layout.pitch + x * 4 * bpp], file);
                 }
             }
-            std::fclose(file);
+            const bool written = std::ferror(file) == 0;
+            const bool closed = std::fclose(file) == 0;
+            if (!written || !closed) {
+                LOG_ERROR(Service, "nx2: failed to write video sample {}", path);
+            } else {
+                LOG_INFO(Service, "nx2: wrote video sample {}", path);
+            }
+        } else {
+            LOG_ERROR(Service, "nx2: could not open video sample {}", path);
         }
     }
 

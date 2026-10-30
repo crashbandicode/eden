@@ -508,9 +508,13 @@ extern "C" void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     ReportSamplerStatus(*state);
     // Keyboard shutdown happens when emu_window is destroyed below.
     StopKeyScript(*state);
-    state->system.DetachDebugger();
-    void(state->system.Pause());
-    state->system.ShutdownMainProcess();
+    // SDL also calls this after startup validation fails. There is no initialized
+    // kernel to pause in that case; failed loads may already have shut it down.
+    if (state->system.IsPoweredOn()) {
+        state->system.DetachDebugger();
+        state->system.Pause();
+        state->system.ShutdownMainProcess();
+    }
     delete state;
 }
 

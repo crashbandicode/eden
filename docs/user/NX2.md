@@ -254,7 +254,9 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
   released. Other keys are left alone on that path. A negative entry still
   releases the scancode it names. `KEY_RECORD=<file>` records
   SDL key events with present indices. These files are not Qt controller macro
-  files; their timing clocks differ.
+  files; their timing clocks differ. Recording opens on the first SDL key event
+  and logs whether it armed or failed to open. A write/flush failure logs once
+  and disables further recording; game input continues.
 - `SAMPLE=<comma-separated thread names>` and its `SAMPLE_START` (60 seconds),
   `SAMPLE_SECONDS` (30 seconds), `SAMPLE_OUT` (`nx2_samples.txt`, plus `.folded`)
   companions are **Windows SDL-only** host sampling controls. A trailing `*`
@@ -281,8 +283,10 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
   only by the Windows SDL frontend and writes a dump on an unhandled exception.
   Forwarding these variables to Linux Qt does not add the missing functionality.
 - Core frame/video/memory dumps are startup diagnostics. Their environment hooks
-  do not provide a general managed start/stop/status protocol or reliable I/O
-  error acknowledgment. Inspect the artifacts and logs; `run.json` alone is not
+  do not provide a general managed start/stop/status protocol. Frame, video and
+  memory dump writes log open/write/close failures; successful video and memory
+  dumps log their output path. These are log observations, not control API jobs.
+  Inspect the artifacts and logs; `run.json` alone is not
   completion evidence. Stop the game through `game.stop` where supported, or end
   the bounded Qt run through its supervisor/runtime limit. SDL has its normal
   process/window lifetime; there is no promised SDL `edenctl` lifecycle parity.

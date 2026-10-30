@@ -9,8 +9,10 @@
 #include <array>
 #include <bitset>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <optional>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -33,6 +35,10 @@ class System;
 
 namespace Tegra {
 class MemoryManager;
+}
+
+namespace VideoCommon {
+class GpuSplit;
 }
 
 namespace VideoCore {
@@ -2605,6 +2611,12 @@ public:
             u32 stop_shader_mask;
         };
 
+        // Native C597/C797 use byte counts at 0x600 rather than legacy end addresses.
+        u64 NativeVertexStreamSize(std::size_t index) const {
+            const std::size_t method = 0x600 / sizeof(u32) + index * 2;
+            return (u64{reg_array[method] & 0xffU} << 32) | reg_array[method + 1];
+        }
+
         // clang-format off
         union {
             struct {
@@ -3129,11 +3141,39 @@ public:
     /// Reads a register value located at the input method address
     u32 GetRegisterValue(u32 method) const;
 
+    void TraceFirstMethodWrite(u32 method, u32 argument);
+
+    /// GPU memory, for Turing macros that read memory into their FIFO or data RAM.
+    MemoryManager& GetMemoryManager() {
+        return memory_manager;
+    }
+
+    void SetNativeTuringMacroMode(bool enabled) {
+        GetNativeMacroEngine().native_turing = enabled;
+        upload_state.SetNativePartialTransfers(enabled);
+    }
+    void SetNativeMacroContext(std::shared_ptr<NativeMacroContext> context) {
+        native_macro_context = std::move(context);
+    }
+    MacroEngine& GetNativeMacroEngine() { return native_macro_context ? native_macro_context->engine : macro_engine; }
+    /// This channel's MME data RAM (shared with its compute engine).
+    std::array<u32, 0xc00>& GetNativeDataRam() { return native_data_ram; }
+    std::span<u32> GetNativeMacroPositions() { return native_macro_context ? std::span<u32>{native_macro_context->positions} : std::span<u32>{macro_positions}; }
+
+
     /// Write the value to the register identified by method.
     void CallMethod(Core::System& system, u32 method, u32 method_argument, bool is_last_call) override;
 
     /// Write multiple values to the register identified by method.
     void CallMultiMethod(Core::System& system, u32 method, const u32* base_start, u32 amount, u32 methods_pending) override;
+
+    /// GPU thread split with macros on its front half (gpu_split.h, EDEN_NX2_SPLIT=2), called by
+    /// the front instead of CallMethod: runs macros and macro uploads against a copy of the
+    /// registers and sends the register writes to the back thread.
+    void FrontCallMethod(Core::System& system, VideoCommon::GpuSplit& split, u32 method,
+                         u32 argument, bool is_last_call);
+    void FrontCallMultiMethod(Core::System& system, VideoCommon::GpuSplit& split, u32 method,
+                              const u32* base_start, u32 amount, u32 methods_pending);
 
     bool ShouldExecute() const {
         return execute_on;
@@ -3221,7 +3261,16 @@ private:
      * @param method Method to call
      * @param parameters Arguments to the method call
      */
-    void CallMacroMethod(Core::System& system, u32 method, const std::vector<u32>& parameters);
+    void CallMacroMethod(Core::System& system, u32 method, std::span<const u32> parameters);
+
+    /// Whether state register writes that keep the register's value are dropped (CallMethod).
+    static bool SkipSameValueWrites() {
+        static const bool skip = [] {
+            const char* value = std::getenv("EDEN_NX2_SKIP_SAME");
+            return value == nullptr || value[0] != '0';
+        }();
+        return skip;
+    }
 
     /// Handles writes to the macro uploading register.
     void ProcessMacroUpload(u32 data);
@@ -3260,10 +3309,25 @@ private:
 
     /// Macro method that is currently being executed / being fed parameters.
     u32 executing_macro = 0;
+
+    struct RecentWrite {
+        u32 method;
+        u32 argument;
+        u32 amount;
+        u32 pending;
+    };
+    std::array<RecentWrite, 48> recent_writes{};
+    size_t recent_write_index = 0;
+    void RecordWrite(u32 method, u32 argument, u32 amount, u32 pending) {
+        recent_writes[recent_write_index++ % recent_writes.size()] = {method, argument, amount, pending};
+    }
+    void DumpRecentWrites(u32 method);
     /// Parameters that have been submitted to the macro call so far.
     std::vector<u32> macro_params;
 
     /// Interpreter for the macro codes uploaded to the GPU.
+    std::shared_ptr<NativeMacroContext> native_macro_context;
+    std::array<u32, 0xc00> native_data_ram{};
     MacroEngine macro_engine;
 
     Upload::State upload_state;
@@ -3272,6 +3336,28 @@ private:
 
     std::vector<std::pair<GPUVAddr, size_t>> macro_segments;
     bool current_macro_dirty{};
+
+    // Split GPU thread, macros on the front (FrontCallMethod): the front's state, and whether
+    // the front owns the macro code and bindings (the back thread then leaves them alone).
+    struct FrontState;
+    FrontState& Front(Core::System& system, VideoCommon::GpuSplit& split);
+    void FrontWrite(VideoCommon::GpuSplit& split, FrontState& state, u32 method, u32 argument,
+                    bool is_last_call, bool from_macro);
+    void FrontRunMacro(Core::System& system, VideoCommon::GpuSplit& split, FrontState& state);
+    void FrontDmaRead(VideoCommon::GpuSplit& split, FrontState& state, u32 method, u32 count);
+    void FrontVerify(VideoCommon::GpuSplit& split, FrontState& state);
+    void FinishFrontMacro(Core::System& system);
+    std::unique_ptr<FrontState> front;
+    bool front_macros{};
+    // EDEN_NX2_SPLIT_VERIFY: the last SET_SHADOW_RAM_CONTROL writes each side saw (argument,
+    // mode before, path), printed when the sides disagree.
+    struct ControlWrite {
+        u32 argument;
+        u32 before;
+        u32 path;
+    };
+    std::array<ControlWrite, 16> back_control_writes{};
+    u32 back_control_count{};
 };
 
 #define ASSERT_REG_POSITION(field_name, position)                                                  \

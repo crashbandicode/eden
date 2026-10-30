@@ -171,7 +171,7 @@ struct KernelCore::Impl {
             schedulers[core_id].reset();
         }
 
-        // Next host thead ID to use, 0-3 IDs represent core threads, >3 represent others
+        // Next host thead ID to use, IDs below NUM_CPU_CORES represent core threads, the rest others
         next_host_thread_id = Core::Hardware::NUM_CPU_CORES;
 
         // Close kernel objects that were not freed on shutdown

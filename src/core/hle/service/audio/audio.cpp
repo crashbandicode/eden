@@ -6,6 +6,7 @@
 
 #include "core/core.h"
 #include "core/hle/service/audio/audio.h"
+#include "core/hle/service/audio/nx2_audio_user_client.h"
 #include "core/hle/service/audio/audio_controller.h"
 #include "core/hle/service/audio/audio_in_manager.h"
 #include "core/hle/service/audio/audio_out_manager.h"
@@ -21,164 +22,164 @@ namespace Service::Audio {
 class IAudioOutManagerForApplet final : public ServiceFramework<IAudioOutManagerForApplet> {
 public:
     explicit IAudioOutManagerForApplet(Core::System& system_)
-        : ServiceFramework{system_, "audout:a"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"},
-            FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
-            FunctionInfo{3, nullptr, "SetProcessMasterVolume"},
-            FunctionInfo{4, nullptr, "GetProcessRecordVolume"},
-            FunctionInfo{5, nullptr, "SetProcessRecordVolume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audout:a"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+            {2, nullptr, "GetProcessMasterVolume"},
+            {3, nullptr, "SetProcessMasterVolume"},
+            {4, nullptr, "GetProcessRecordVolume"},
+            {5, nullptr, "SetProcessRecordVolume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioSnoopManager final : public ServiceFramework<IAudioSnoopManager> {
 public:
     explicit IAudioSnoopManager(Core::System& system_)
-        : ServiceFramework{system_, "auddev"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "GetDspStatistics"},
-            FunctionInfo{1, nullptr, "GetAppletStateSummaries"},
-            FunctionInfo{2, nullptr, "SetDspStatisticsParameter"},
-            FunctionInfo{3, nullptr, "GetDspStatisticsParameter"},
-            FunctionInfo{6, nullptr, "GetDspUsage"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "auddev"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "GetDspStatistics"},
+            {1, nullptr, "GetAppletStateSummaries"},
+            {2, nullptr, "SetDspStatisticsParameter"},
+            {3, nullptr, "GetDspStatisticsParameter"},
+            {6, nullptr, "GetDspUsage"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioInManagerForApplet final : public ServiceFramework<IAudioInManagerForApplet> {
 public:
     explicit IAudioInManagerForApplet(Core::System& system_)
-        : ServiceFramework{system_, "audin:a"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"},
-            FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
-            FunctionInfo{3, nullptr, "SetProcessMasterVolume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audin:a"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+            {2, nullptr, "GetProcessMasterVolume"},
+            {3, nullptr, "SetProcessMasterVolume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioRendererManagerForApplet final : public ServiceFramework<IAudioRendererManagerForApplet> {
 public:
     explicit IAudioRendererManagerForApplet(Core::System& system_)
-        : ServiceFramework{system_, "audren:a"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"},
-            FunctionInfo{2, nullptr, "GetProcessMasterVolume"},
-            FunctionInfo{3, nullptr, "SetProcessMasterVolume"},
-            FunctionInfo{4, nullptr, "RegisterAppletResourceUserId"},
-            FunctionInfo{5, nullptr, "UnregisterAppletResourceUserId"},
-            FunctionInfo{6, nullptr, "GetProcessRecordVolume"},
-            FunctionInfo{7, nullptr, "SetProcessRecordVolume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audren:a"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+            {2, nullptr, "GetProcessMasterVolume"},
+            {3, nullptr, "SetProcessMasterVolume"},
+            {4, nullptr, "RegisterAppletResourceUserId"},
+            {5, nullptr, "UnregisterAppletResourceUserId"},
+            {6, nullptr, "GetProcessRecordVolume"},
+            {7, nullptr, "SetProcessRecordVolume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioOutManagerForDebugger final : public ServiceFramework<IAudioOutManagerForDebugger> {
 public:
     explicit IAudioOutManagerForDebugger(Core::System& system_)
-        : ServiceFramework{system_, "audout:d"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audout:d"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioInManagerForDebugger final : public ServiceFramework<IAudioInManagerForDebugger> {
 public:
     explicit IAudioInManagerForDebugger(Core::System& system_)
-        : ServiceFramework{system_, "audin:d"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audin:d"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IFinalOutputRecorderManagerForDebugger final : public ServiceFramework<IFinalOutputRecorderManagerForDebugger> {
 public:
     explicit IFinalOutputRecorderManagerForDebugger(Core::System& system_)
-        : ServiceFramework{system_, "audrec:d"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audrec:d"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioRendererManagerForDebugger final : public ServiceFramework<IAudioRendererManagerForDebugger> {
 public:
     explicit IAudioRendererManagerForDebugger(Core::System& system_)
-        : ServiceFramework{system_, "audren:d"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspend"},
-            FunctionInfo{1, nullptr, "RequestResume"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "audren:d"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspend"},
+            {1, nullptr, "RequestResume"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioSystemManagerForApplet final : public ServiceFramework<IAudioSystemManagerForApplet> {
 public:
     explicit IAudioSystemManagerForApplet(Core::System& system_)
-        : ServiceFramework{system_, "aud:a"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RegisterAppletResourceUserId"},
-            FunctionInfo{1, nullptr, "UnregisterAppletResourceUserId"},
-            FunctionInfo{2, nullptr, "RequestSuspendAudio"},
-            FunctionInfo{3, nullptr, "RequestResumeAudio"},
-            FunctionInfo{4, nullptr, "GetAudioOutputProcessMasterVolume"},
-            FunctionInfo{5, nullptr, "SetAudioOutputProcessMasterVolume"},
-            FunctionInfo{6, nullptr, "GetAudioInputProcessMasterVolume"},
-            FunctionInfo{7, nullptr, "SetAudioInputProcessMasterVolume"},
-            FunctionInfo{8, nullptr, "GetAudioOutputProcessRecordVolume"},
-            FunctionInfo{9, nullptr, "SetAudioOutputProcessRecordVolume"},
-            FunctionInfo{10, nullptr, "GetAppletStateSummaries"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "aud:a"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RegisterAppletResourceUserId"},
+            {1, nullptr, "UnregisterAppletResourceUserId"},
+            {2, nullptr, "RequestSuspendAudio"},
+            {3, nullptr, "RequestResumeAudio"},
+            {4, nullptr, "GetAudioOutputProcessMasterVolume"},
+            {5, nullptr, "SetAudioOutputProcessMasterVolume"},
+            {6, nullptr, "GetAudioInputProcessMasterVolume"},
+            {7, nullptr, "SetAudioInputProcessMasterVolume"},
+            {8, nullptr, "GetAudioOutputProcessRecordVolume"},
+            {9, nullptr, "SetAudioOutputProcessRecordVolume"},
+            {10, nullptr, "GetAppletStateSummaries"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
 class IAudioSystemManagerForDebugger final : public ServiceFramework<IAudioSystemManagerForDebugger> {
 public:
     explicit IAudioSystemManagerForDebugger(Core::System& system_)
-        : ServiceFramework{system_, "aud:d"} {}
-
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{0, nullptr, "RequestSuspendAudioForDebug"},
-            FunctionInfo{1, nullptr, "RequestResumeAudioForDebug"}
-        });
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
+        : ServiceFramework{system_, "aud:d"} {
+        // clang-format off
+        static const FunctionInfo functions[] = {
+            {0, nullptr, "RequestSuspendAudioForDebug"},
+            {1, nullptr, "RequestResumeAudioForDebug"},
+        };
+        // clang-format on
+        RegisterHandlers(functions);
     }
 };
 
@@ -203,6 +204,8 @@ void LoopProcess(Core::System& system) {
     server_manager->RegisterNamedService("audrec:a", std::make_shared<IFinalOutputRecorderManagerForApplet>(system), 30);
     server_manager->RegisterNamedService("audrec:u", std::make_shared<IFinalOutputRecorderManager>(system), 30);
     server_manager->RegisterNamedService("audren:u", std::make_shared<IAudioRendererManager>(system), 30);
+    // Switch 2 audio entry point (nn::audio::CreateUserClientSessionByHipc).
+    server_manager->RegisterNamedService("aud:u", std::make_shared<INx2AudioUserClient>(system), 30);
     server_manager->RegisterNamedService("audren:a", std::make_shared<IAudioRendererManagerForApplet>(system), 30);
     server_manager->RegisterNamedService("hwopus", std::make_shared<IHardwareOpusDecoderManager>(system), 25);
     ServerManager::RunServer(std::move(server_manager));

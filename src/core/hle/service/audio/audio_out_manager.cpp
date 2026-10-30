@@ -13,20 +13,20 @@
 namespace Service::Audio {
 using namespace AudioCore::AudioOut;
 
-std::optional<ServiceFrameworkBase::FunctionInfoBase> IAudioOutManager::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, D<&IAudioOutManager::ListAudioOuts>, "ListAudioOuts"},
-        FunctionInfo{1, D<&IAudioOutManager::OpenAudioOut>, "OpenAudioOut"},
-        FunctionInfo{2, D<&IAudioOutManager::ListAudioOutsAuto>, "ListAudioOutsAuto"},
-        FunctionInfo{3, D<&IAudioOutManager::OpenAudioOutAuto>, "OpenAudioOutAuto"}
-    });
-    return HandlerTableGenerateWithFind(key, functions);
-}
-
 IAudioOutManager::IAudioOutManager(Core::System& system_)
     : ServiceFramework{system_, "audout:u"}
     , impl(system_)
 {
+    // clang-format off
+    static const FunctionInfo functions[] = {
+        {0, D<&IAudioOutManager::ListAudioOuts>, "ListAudioOuts"},
+        {1, D<&IAudioOutManager::OpenAudioOut>, "OpenAudioOut"},
+        {2, D<&IAudioOutManager::ListAudioOutsAuto>, "ListAudioOutsAuto"},
+        {3, D<&IAudioOutManager::OpenAudioOutAuto>, "OpenAudioOutAuto"},
+    };
+    // clang-format on
+
+    RegisterHandlers(functions);
 }
 
 IAudioOutManager::~IAudioOutManager() = default;

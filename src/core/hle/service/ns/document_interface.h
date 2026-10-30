@@ -20,15 +20,6 @@ public:
 private:
     Result ResolveApplicationContentPath(ContentPath content_path);
     Result GetRunningApplicationProgramId(Out<u64> out_program_id, u64 caller_program_id);
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{21, nullptr, "GetApplicationContentPath"},
-            FunctionInfo{23, D<&IDocumentInterface::ResolveApplicationContentPath>, "ResolveApplicationContentPath"},
-            FunctionInfo{92, D<&IDocumentInterface::GetRunningApplicationProgramId>, "GetRunningApplicationProgramId"}
-        });
-        return HandlerTableGenerateWithFind(key, functions);
-    }
 };
 
 } // namespace Service::NS

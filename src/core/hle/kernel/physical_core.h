@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <memory>
@@ -71,7 +72,7 @@ private:
     std::condition_variable m_on_interrupt;
     Core::ArmInterface* m_arm_interface{};
     KThread* m_current_thread{};
-    bool m_is_interrupted{};
+    std::atomic<bool> m_is_interrupted{};
     bool m_is_single_core{};
 };
 

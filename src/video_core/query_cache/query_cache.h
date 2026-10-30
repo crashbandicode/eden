@@ -7,6 +7,7 @@
 #pragma once
 
 #include <array>
+#include <cstdlib>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@
 #include "video_core/gpu.h"
 #include "video_core/host1x/gpu_device_memory_manager.h"
 #include "video_core/memory_manager.h"
+#include "video_core/nx2.h"
 #include "video_core/query_cache/bank_base.h"
 #include "video_core/query_cache/query_base.h"
 #include "video_core/query_cache/query_cache_base.h"
@@ -233,6 +235,16 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
                                            QueryPropertiesFlags flags, u32 payload, u32 subreport) {
     const bool has_timestamp = True(flags & QueryPropertiesFlags::HasTimeout);
     const bool is_fence = True(flags & QueryPropertiesFlags::IsAFence);
+    static const GPUVAddr watch = [] {
+        const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
+        return value ? GPUVAddr{std::strtoull(value, nullptr, 16)} : GPUVAddr{};
+    }();
+    if (static const bool trace = std::getenv("EDEN_NX2_QUERY_TRACE") != nullptr;
+        trace || (watch != 0 && (addr & ~GPUVAddr{0xf}) == watch)) {
+        LOG_INFO(HW_GPU, "nx2 report addr={:#x} type={} flags={:#x} payload={:#x} as={} device={:#x}", addr,
+                 static_cast<u32>(counter_type), static_cast<u32>(flags), payload, gpu_memory->GetID(),
+                 gpu_memory->GpuToCpuAddress(addr).value_or(0));
+    }
     size_t streamer_id = static_cast<size_t>(counter_type);
     auto* streamer = impl->streamers[streamer_id];
     if (streamer == nullptr) [[unlikely]] {
@@ -262,7 +274,7 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
     u8* pointer_timestamp = impl->device_memory.template GetPointer<u8>(cpu_addr + 8);
     bool is_synced = (Settings::IsGPUFenceBehaviorDefault() ? !Settings::IsGPULevelHigh() : !Settings::IsGPUFenceBehaviorBalanced() && !Settings::IsGPUFenceBehaviorAccurate()) && is_fence;
     std::function<void()> operation([this, is_synced, streamer, query_base = query, query_location,
-                                     pointer, pointer_timestamp] {
+                                     pointer, pointer_timestamp, cpu_addr] {
         if (True(query_base->flags & QueryFlagBits::IsInvalidated)) {
             if (!is_synced) [[likely]] {
                 impl->pending_unregister.push_back(query_location);
@@ -287,6 +299,7 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
             u32 value = static_cast<u32>(query_base->value);
             std::memcpy(pointer, &value, sizeof(value));
         }
+        Tegra::Nx2SemaphoreWaiters::Get().OnWrite(cpu_addr, static_cast<u32>(query_base->value));
         if (!is_synced) [[likely]] {
             impl->pending_unregister.push_back(query_location);
         }
@@ -303,6 +316,7 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
             } else {
                 std::memcpy(pointer, &payload, sizeof(payload));
             }
+            Tegra::Nx2SemaphoreWaiters::Get().OnWrite(cpu_addr, payload);
             streamer->Free(new_query_id);
             return;
         }
@@ -500,6 +514,16 @@ bool QueryCacheBase<Traits>::HasUncommittedFlushes() const {
     bool result = false;
     impl->ForEachStreamer([&result](StreamerInterface* streamer) {
         result |= streamer->HasUnsyncedQueries();
+        return result;
+    });
+    return result;
+}
+
+template <typename Traits>
+bool QueryCacheBase<Traits>::HasPendingFenceWork() const {
+    bool result = false;
+    impl->ForEachStreamer([&result](StreamerInterface* streamer) {
+        result |= streamer->HasUnsyncedQueries() || streamer->HasPendingSync();
         return result;
     });
     return result;

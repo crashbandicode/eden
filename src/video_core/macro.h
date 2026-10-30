@@ -7,6 +7,12 @@
 #pragma once
 
 #include <memory>
+#include "video_core/macro_memo.h"
+#include "video_core/macro_turing.h"
+
+namespace Tegra {
+class TuringMacroJit;
+}
 #include <span>
 #include <variant>
 #include <vector>
@@ -223,10 +229,16 @@ struct MacroEngine {
     MacroEngine(bool is_interpreted_) noexcept : is_interpreted{is_interpreted_} {}
     // Store the uploaded macro code to compile them when they're called.
     inline void AddCode(u32 method, u32 data) noexcept {
+        if (native_turing) {
+            if (native_write_offset < native_code.size()) native_code[native_write_offset++] = data;
+            ++native_code_generation;
+            return;
+        }
         uploaded_macro_code[method].push_back(data);
     }
     // Clear the code associated with a method.
     inline void ClearCode(u32 method) noexcept {
+        if (native_turing) { native_write_offset = method < 0x1000 ? method * 3 : static_cast<u32>(native_code.size()); return; }
         macro_cache.erase(method);
         uploaded_macro_code.erase(method);
     }
@@ -240,6 +252,27 @@ struct MacroEngine {
     ::Common::unordered_map<u32, CacheInfo> macro_cache;
     ::Common::unordered_map<u32, std::vector<u32>> uploaded_macro_code;
     bool is_interpreted;
+    bool native_turing{};
+    bool native_execution_failed{};
+    u32 native_write_offset{};
+    std::array<u32, 0x3000> native_code{};
+    TuringMacroInterpreter native_interpreter;
+    std::vector<u32> native_fifo;
+    // Calls replayed instead of interpreted (macro_memo.h), and what the current call wrote.
+    u64 native_code_generation{};
+    BasicMacroMemo<::Common::unordered_map<u64, u32, MacroMemoHash>> native_memo;
+    /// The macro code compiled to x86-64 (EDEN_NX2_MME_JIT=0 turns it off), created on first use.
+    std::shared_ptr<TuringMacroJit> native_jit;
+    MacroMemoPairs native_writes;
+    u64 native_calls{};
+
+};
+
+struct NativeMacroContext {
+    MacroEngine engine{true};
+    std::array<u32, 0x80> positions{};
+    MacroEngine compute_engine{true};
+    std::array<u32, 0x80> compute_positions{};
 };
 
 } // namespace Tegra

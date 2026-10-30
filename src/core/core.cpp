@@ -4,7 +4,6 @@
 #include <array>
 #include <atomic>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 
 #include "game_settings.h"
@@ -26,6 +25,7 @@
 #include "core/device_memory.h"
 #include "core/file_sys/fs_filesystem.h"
 #include "core/file_sys/patch_manager.h"
+#include "core/file_sys/program_metadata.h"
 #include "core/file_sys/registered_cache.h"
 #include "core/file_sys/romfs_factory.h"
 #include "core/file_sys/savedata_factory.h"
@@ -70,6 +70,8 @@
 
 namespace Core {
 
+std::atomic<u64> g_nx2_present_count{};
+
 FileSys::VirtualFile GetGameFileFromPath(const FileSys::VirtualFilesystem& vfs,
                                          const std::string& path) {
     // To account for split 00+01+etc files.
@@ -108,6 +110,19 @@ FileSys::VirtualFile GetGameFileFromPath(const FileSys::VirtualFilesystem& vfs,
 
     return vfs->OpenFile(path, FileSys::OpenMode::Read);
 }
+
+namespace {
+
+// Switch 2 titles boot as a loose ExeFS, with main.npdm next to main.
+bool IsSwitch2Program(const FileSys::VirtualFile& file) {
+    const auto dir = file != nullptr ? file->GetContainingDirectory() : nullptr;
+    const auto npdm = dir != nullptr ? dir->GetFile("main.npdm") : nullptr;
+    FileSys::ProgramMetadata metadata;
+    return npdm != nullptr && metadata.Load(npdm) == Loader::ResultStatus::Success &&
+           metadata.IsSwitch2();
+}
+
+} // namespace
 
 struct System::Impl {
     explicit Impl(System& system)
@@ -250,30 +265,12 @@ struct System::Impl {
         }
     }
 
-    void NotifyNVDECChannelOpen(u64 process_id) {
-        std::scoped_lock lock{nvdec_active_mutex};
-        ++nvdec_active_channels[process_id];
-    }
-
-    void NotifyNVDECChannelClose(u64 process_id) {
-        std::scoped_lock lock{nvdec_active_mutex};
-        const auto it = nvdec_active_channels.find(process_id);
-        if (it == nvdec_active_channels.end()) {
-            return;
-        }
-        if (--it->second == 0) {
-            nvdec_active_channels.erase(it);
-        }
+    void SetNVDECActive(bool is_nvdec_active) {
+        nvdec_active = is_nvdec_active;
     }
 
     bool GetNVDECActive() {
-        std::scoped_lock lock{nvdec_active_mutex};
-        return !nvdec_active_channels.empty();
-    }
-
-    bool IsNVDECActiveForProcess(u64 process_id) {
-        std::scoped_lock lock{nvdec_active_mutex};
-        return nvdec_active_channels.contains(process_id);
+        return nvdec_active;
     }
 
     void InitializeDebugger(System& system, u16 port) {
@@ -315,6 +312,16 @@ struct System::Impl {
     SystemResultStatus Load(System& system, Frontend::EmuWindow& emu_window, const std::string& filepath, Service::AM::FrontendAppletParameters& params) {
         if (params.launch_type == Service::AM::LaunchType::FrontendInitiated) {
             fs_controller.InitTempStorage();
+        }
+
+        // Switch 2 titles size their heap from the total memory and need the 12 GiB layout. Set it
+        // as a per-game value, so RestoreGlobalState brings back the configured layout afterwards.
+        if (virtual_filesystem != nullptr &&
+            Settings::values.memory_layout_mode.GetValue() != Settings::MemoryLayout::Memory_12Gb &&
+            IsSwitch2Program(GetGameFileFromPath(virtual_filesystem, filepath))) {
+            LOG_INFO(Core, "Switch 2 program: using the 12 GiB memory layout");
+            Settings::values.memory_layout_mode.SetGlobal(false);
+            Settings::values.memory_layout_mode.SetValue(Settings::MemoryLayout::Memory_12Gb);
         }
 
         InitializeKernel(system);
@@ -531,8 +538,6 @@ struct System::Impl {
 
     mutable std::mutex suspend_guard;
     std::mutex general_channel_mutex;
-    std::mutex nvdec_active_mutex;
-    std::unordered_map<u64, u32> nvdec_active_channels;
     std::atomic_bool is_paused{};
     std::atomic_bool is_shutting_down{};
     std::atomic_bool is_powered_on{};
@@ -540,6 +545,7 @@ struct System::Impl {
     bool extended_memory_layout : 1 = false;
     bool exit_locked : 1 = false;
     bool exit_requested : 1 = false;
+    bool nvdec_active : 1 = false;
 
     void EnsureGeneralChannelInitialized(System& system) {
         if (!general_channel_event) {
@@ -603,20 +609,12 @@ void System::UnstallApplication() {
     impl->UnstallApplication();
 }
 
-void System::NotifyNVDECChannelOpen(u64 process_id) {
-    impl->NotifyNVDECChannelOpen(process_id);
-}
-
-void System::NotifyNVDECChannelClose(u64 process_id) {
-    impl->NotifyNVDECChannelClose(process_id);
+void System::SetNVDECActive(bool is_nvdec_active) {
+    impl->SetNVDECActive(is_nvdec_active);
 }
 
 bool System::GetNVDECActive() {
     return impl->GetNVDECActive();
-}
-
-bool System::IsNVDECActiveForProcess(u64 process_id) {
-    return impl->IsNVDECActiveForProcess(process_id);
 }
 
 void System::InitializeDebugger() {

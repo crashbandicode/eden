@@ -12,6 +12,7 @@
 #include "core/file_sys/content_archive.h"
 #include "core/file_sys/control_metadata.h"
 #include "core/file_sys/patch_manager.h"
+#include "core/file_sys/romfs.h"
 #include "core/file_sys/romfs_factory.h"
 #include "core/hle/kernel/k_page_table.h"
 #include "core/hle/kernel/k_process.h"
@@ -71,6 +72,30 @@ struct PatchCollection {
     std::array<s32, 13> module_patcher_indices{};
 };
 
+namespace {
+
+// RomFS for a loose ExeFS: the first .romfs file next to main, else a romfs/ directory next to
+// the exefs/ directory (the usual layout of an extracted title).
+FileSys::VirtualFile FindLooseRomFS(const FileSys::VirtualDir& exefs_dir) {
+    if (exefs_dir == nullptr) {
+        return nullptr;
+    }
+    for (const auto& f : exefs_dir->GetFiles()) {
+        if (f->GetExtension() == "romfs") {
+            return f;
+        }
+    }
+    if (const auto parent = exefs_dir->GetParentDirectory()) {
+        if (const auto romfs_dir = parent->GetSubdirectory("romfs")) {
+            LOG_INFO(Loader, "Using RomFS directory next to the ExeFS");
+            return FileSys::CreateRomFS(romfs_dir);
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
 AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(FileSys::VirtualFile file_, bool override_update_)
     : AppLoader(std::move(file_))
     , override_update(override_update_)
@@ -122,6 +147,8 @@ AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(FileSys
         FileSys::NACP nacp(nacp_file);
         name = nacp.GetApplicationName();
     }
+
+    romfs = FindLooseRomFS(file_dir);
 }
 
 AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(
@@ -129,7 +156,9 @@ AppLoader_DeconstructedRomDirectory::AppLoader_DeconstructedRomDirectory(
     : AppLoader(directory->GetFile("main"))
     , dir(std::move(directory))
     , override_update(override_update_)
-{}
+{
+    romfs = FindLooseRomFS(dir);
+}
 
 FileType AppLoader_DeconstructedRomDirectory::IdentifyType(const FileSys::VirtualFile& dir_file) {
     if (FileSys::IsDirectoryExeFS(dir_file->GetContainingDirectory())) {
@@ -145,6 +174,9 @@ AppLoader_DeconstructedRomDirectory::LoadResult AppLoader_DeconstructedRomDirect
         return {ResultStatus::ErrorAlreadyLoaded, {}};
     }
 
+    // Loaded directly from a loose ExeFS (not wrapped by the NCA/NSP loaders, which register
+    // the process with the filesystem controller themselves).
+    const bool standalone = dir == nullptr;
     if (dir == nullptr) {
         if (file == nullptr) {
             return {ResultStatus::ErrorNullFile, {}};
@@ -264,6 +296,14 @@ AppLoader_DeconstructedRomDirectory::LoadResult AppLoader_DeconstructedRomDirect
         next_load_addr = *tentative_next_load_addr;
         modules.insert_or_assign(load_addr, module);
         LOG_DEBUG(Loader, "loaded module {} @ {:#x}", module, load_addr);
+    }
+
+    if (standalone) {
+        // Without this, fsp-srv SetCurrentProcess fails with ResultTargetNotFound.
+        system.GetFileSystemController().RegisterProcess(
+            process.GetProcessId(), metadata.GetTitleID(),
+            std::make_shared<FileSys::RomFSFactory>(*this, system.GetContentProvider(),
+                                                    system.GetFileSystemController()));
     }
 
     is_loaded = true;

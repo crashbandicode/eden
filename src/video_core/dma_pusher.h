@@ -8,6 +8,7 @@
 
 #include <array>
 #include <condition_variable>
+#include <optional>
 #include <span>
 #include <vector>
 #include <boost/container/small_vector.hpp>
@@ -114,7 +115,18 @@ struct CommandList final {
 
     boost::container::small_vector<CommandListHeader, 512> command_lists;
     boost::container::small_vector<CommandHeader, 512> prefetch_command_list;
+    /// EDEN_NX2_PB_CHECK: hash of each entry's words when it was submitted.
+    std::vector<u64> submit_hashes;
 };
+
+/// FNV-1a over pushbuffer words (EDEN_NX2_PB_CHECK).
+inline u64 HashPushbufferWords(std::span<const u32> words) {
+    u64 hash = 0xcbf29ce484222325ULL;
+    for (const u32 word : words) {
+        hash = (hash ^ word) * 0x100000001b3ULL;
+    }
+    return hash;
+}
 
 /// @brief The DmaPusher class implements DMA submission to FIFOs, providing an area of memory that the
 /// emulated app fills with commands and tells PFIFO to process. The pushbuffers are then assembled
@@ -132,6 +144,14 @@ public:
 
     void DispatchCalls();
 
+    /// Switch 2: true while the channel is suspended on a semaphore acquire.
+    [[nodiscard]] bool HasPendingAcquire() const {
+        return puller.HasPendingAcquire();
+    }
+    [[nodiscard]] bool CanResumeAcquire() {
+        return puller.CanResumeAcquire(*this);
+    }
+
     void BindSubchannel(Engines::EngineInterface* engine, u32 subchannel_id, Engines::EngineTypes engine_type) {
         subchannels[subchannel_id] = engine;
         subchannel_type[subchannel_id] = engine_type;
@@ -143,12 +163,27 @@ private:
     static constexpr u32 non_puller_methods = 0x40;
     static constexpr u32 max_subchannels = 8;
     bool Step();
-    void ProcessCommands(std::span<const CommandHeader> commands);
+    /// Returns how many words were processed: fewer than given when a semaphore acquire
+    /// suspended the channel.
+    size_t ProcessCommands(std::span<const CommandHeader> commands, size_t word_offset = 0);
+    size_t command_resume_offset{}; ///< Words of the current entry done before a suspension
 
     void SetState(const CommandHeader& command_header);
 
     void CallMethod(u32 argument);
     void CallMultiMethod(const u32* base_start, u32 num_methods);
+    [[nodiscard]] bool WantsSegment() const;
+    void ReportUnboundSubchannel();
+    void WatchArgument(u32 method, u32 argument) const;
+
+public:
+    /// Logs the GPFIFO entry being processed (and the one before it), read through the GPU MMU
+    /// and straight from guest memory, to find pushbuffer desyncs. Debug aid for Switch 2.
+    void DumpCurrentEntry(const char* reason);
+    void CheckSubmitHash(const CommandListHeader& header, u64 submit_hash);
+    void RecordParsedEntry(const CommandListHeader& header, std::span<const CommandHeader> commands);
+
+private:
 
 public:
     Common::ScratchBuffer<CommandHeader> command_headers; ///< Buffer for list of commands fetched at once
@@ -172,6 +207,31 @@ public:
     Control::ChannelState& channel_state;
 
     DmaState dma_state{};
+
+    // Switch 2: methods whose data continues in a later GPFIFO entry, set aside while other
+    // command buffers run (NVN interleaves several, so more than one can be pending).
+    struct ParkedMethod {
+        u32 method;
+        u32 subchannel;
+        u32 method_count;
+        bool non_incrementing;
+        bool increment_once;
+        GPUVAddr resume_address; ///< Where the entry that continues the method starts
+    };
+    void ResolveSplitMethod(GPUVAddr entry_address);
+    static constexpr size_t MaxParkedMethods = 16;
+
+    // Debug aid: hashes of the words of the last entries as they were parsed.
+    struct ParsedEntry {
+        GPUVAddr address;
+        u32 size;
+        u64 hash;
+    };
+    std::array<ParsedEntry, 64> parsed_entries{};
+    size_t parsed_entry_count{};
+    std::vector<ParkedMethod> parked_methods;
+    GPUVAddr split_method_end{}; ///< End of the last entry that ended inside a method
+
     std::array<Engines::EngineInterface*, max_subchannels> subchannels{};
     std::array<Engines::EngineTypes, max_subchannels> subchannel_type;
 

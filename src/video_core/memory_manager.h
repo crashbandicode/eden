@@ -43,6 +43,19 @@ public:
                            u64 big_page_bits_ = 16, u64 page_bits_ = 12);
     ~MemoryManager();
 
+    // Switch 2: GPU address of the read-only syncpoint shim (u32 per syncpoint); 0 = none.
+    void SetNativeSyncpointShim(GPUVAddr address);
+    static constexpr u32 NumShimSyncpoints = 192; // Tegra::Host1x::SyncpointManager
+
+    /// Switch 2 lays out block-linear surfaces with the console's GOB swizzle.
+    void EnableNativeTiling() {
+        native_tiling = true;
+    }
+    bool UsesNativeTiling() const {
+        return native_tiling;
+    }
+    bool IsShuttingDown() const;
+
     static constexpr bool HAS_FLUSH_INVALIDATION = true;
 
     inline size_t GetID() const noexcept {
@@ -152,6 +165,12 @@ public:
 
     void FlushCaching();
 
+    /// Leaves the caches' invalidation of a range already written for the next FlushCaching
+    /// (before every draw, dispatch, clear and copy), merged with neighbouring ranges.
+    void AccumulateInvalidation(GPUVAddr gpu_addr, std::size_t size) {
+        accumulator.Add(gpu_addr, size);
+    }
+
     const u8* GetSpan(const GPUVAddr src_addr, const std::size_t size) const;
     u8* GetSpan(const GPUVAddr src_addr, const std::size_t size);
 
@@ -178,6 +197,7 @@ private:
         GPUVAddr gpu_addr, std::size_t size,
         boost::container::small_vector<std::pair<std::conditional_t<is_gpu_address, GPUVAddr, DAddr>, std::size_t>, 32>& result) const;
 
+    std::atomic<GPUVAddr> native_syncpoint_shim{};
     Core::System& system;
     MaxwellDeviceMemoryManager& memory;
 
@@ -220,6 +240,7 @@ private:
     boost::container::small_vector<std::pair<DAddr, std::size_t>, 32> page_stash{};
     boost::container::small_vector<std::pair<DAddr, std::size_t>, 32> page_stash2{};
 
+    bool native_tiling{};
     mutable std::mutex guard;
 
     static constexpr size_t continuous_bits = 64;

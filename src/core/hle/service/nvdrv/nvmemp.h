@@ -22,14 +22,6 @@ public:
 private:
     void Open(HLERequestContext& ctx);
     void GetAruid(HLERequestContext& ctx);
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
-    }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, &NVMEMP::Open, "Open"},
-        FunctionInfo{1, &NVMEMP::GetAruid, "GetAruid"}
-    });
 };
 
 } // namespace Service::Nvidia

@@ -9,6 +9,7 @@
 #include <atomic>
 #include <deque>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <span>
 #include <type_traits>
@@ -22,12 +23,14 @@
 #include <queue>
 
 #include "common/common_types.h"
+#include "common/spin_recursive_mutex.h"
 #include "common/hash.h"
 #include "common/literals.h"
 #include "common/lru_cache.h"
 #include <ranges>
 #include "common/scratch_buffer.h"
 #include "common/slot_vector.h"
+#include "video_core/texture_cache/pending_download.h"
 #include "common/thread_worker.h"
 #include "video_core/compatible_formats.h"
 #include "video_core/control/channel_state_cache.h"
@@ -67,6 +70,7 @@ struct AsyncDecodeContext {
     boost::container::small_vector<BufferImageCopy, 16> copies;
     std::mutex mutex;
     std::atomic_bool complete;
+    bool cancelled{}; ///< The image was deleted meanwhile: drop the result (GPU thread only).
 };
 
 using TextureCacheGPUMap = ::Common::unordered_map<u64, std::vector<ImageId>, Common::IdentityHash<u64>>;
@@ -117,6 +121,22 @@ class TextureCache : public VideoCommon::ChannelSetupCaches<TextureCacheChannelI
 #else
     static constexpr s64 TARGET_THRESHOLD = 4_GiB;
 #endif
+
+    // Periodic statistics (TickFrame).
+    u64 gc_deletes{};
+    u64 gc_costly_deletes{};
+    u64 gc_download_deletes{}; ///< Evictions that downloaded the image first (a full GPU wait)
+    u64 async_decodes_queued{};
+    u64 images_created{};
+    bool native_thresholds_applied{};
+    u64 native_critical_memory{};
+    u64 native_expected_memory{};
+    u64 budget_check_frames{};
+    u64 astc_opaque_images{};
+    u64 astc_alpha_images{};
+    std::vector<u8> astc_scan_buffer;
+    u64 images_deleted{};
+    std::map<u64, std::pair<u32, GPUVAddr>> created_shapes;
 
     static constexpr s64 DEFAULT_EXPECTED_MEMORY = 1_GiB + 125_MiB;
     static constexpr s64 DEFAULT_CRITICAL_MEMORY = 1_GiB + 625_MiB;
@@ -226,6 +246,9 @@ public:
     /// Return true when there are uncommitted images to be downloaded
     [[nodiscard]] bool HasUncommittedFlushes() const noexcept;
 
+    /// Whether CommitAsyncFlushes would commit anything (downloads or their buffers).
+    [[nodiscard]] bool HasAsyncFlushWork() const noexcept;
+
     /// Return true when the caller should wait for async downloads
     [[nodiscard]] bool ShouldWaitAsyncFlushes() const noexcept;
 
@@ -258,7 +281,7 @@ public:
     /// Prepare an image to be used
     void PrepareImage(ImageId image_id, bool is_modification, bool invalidate);
 
-    std::recursive_mutex mutex;
+    Common::SpinRecursiveMutex mutex;
 
 private:
     /// Iterate over all page indices in a range
@@ -448,6 +471,12 @@ private:
 
     DAddr virtual_invalid_space{};
 
+    /// Applies EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB and logs the thresholds.
+    void ApplyThresholdOverrides(bool log = true);
+
+    /// The CPU address an image at gpu_addr is keyed by: its backing, or a fixed stand-in.
+    [[nodiscard]] std::optional<DAddr> ImageCpuAddress(GPUVAddr gpu_addr, size_t size) const;
+
     bool has_deleted_images = false;
     bool is_rescaling = false;
     u64 total_used_memory = 0;
@@ -463,11 +492,7 @@ private:
         size_t size;
     };
 
-    struct PendingDownload {
-        bool is_swizzle;
-        size_t async_buffer_id;
-        Common::SlotId object_id;
-    };
+    using PendingDownload = PendingImageDownload<Image>;
 
     Common::SlotVector<Image> slot_images;
     Common::SlotVector<ImageMapView> slot_map_views;

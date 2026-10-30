@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <deque>
 #include <functional>
@@ -115,6 +116,9 @@ class RenderdocAPI;
 
 namespace Core {
 
+/// Frames the guest has presented (Switch 2 vi2 present calls); input replay is locked to it.
+extern std::atomic<u64> g_nx2_present_count;
+
 class CpuManager;
 class Debugger;
 class GuestTracepoint;
@@ -192,10 +196,8 @@ public:
     std::unique_lock<std::mutex> StallApplication();
     void UnstallApplication();
 
-    void NotifyNVDECChannelOpen(u64 process_id);
-    void NotifyNVDECChannelClose(u64 process_id);
+    void SetNVDECActive(bool is_nvdec_active);
     [[nodiscard]] bool GetNVDECActive();
-    [[nodiscard]] bool IsNVDECActiveForProcess(u64 process_id);
 
     /**
      * Initialize the debugger.

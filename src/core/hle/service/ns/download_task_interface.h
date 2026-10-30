@@ -18,21 +18,6 @@ public:
 private:
     Result EnableAutoCommit();
     Result DisableAutoCommit();
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{701, nullptr, "ClearTaskStatusList"},
-            FunctionInfo{702, nullptr, "RequestDownloadTaskList"},
-            FunctionInfo{703, nullptr, "RequestEnsureDownloadTask"},
-            FunctionInfo{704, nullptr, "ListDownloadTaskStatus"},
-            FunctionInfo{705, nullptr, "RequestDownloadTaskListData"},
-            FunctionInfo{706, nullptr, "TryCommitCurrentApplicationDownloadTask"},
-            FunctionInfo{707, D<&IDownloadTaskInterface::EnableAutoCommit>, "EnableAutoCommit"},
-            FunctionInfo{708, D<&IDownloadTaskInterface::DisableAutoCommit>, "DisableAutoCommit"},
-            FunctionInfo{709, nullptr, "TriggerDynamicCommitEvent"}
-        });
-        return HandlerTableGenerateWithFind(key, functions);
-    }
 };
 
 } // namespace Service::NS

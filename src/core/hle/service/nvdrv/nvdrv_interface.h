@@ -23,6 +23,9 @@ public:
         return nvdrv;
     }
 
+    // For Switch 2 nvsrv sessions, which are set up through gsv instead of Initialize.
+    void InitializeForProcess(Kernel::KProcess* process);
+
 private:
     void Open(HLERequestContext& ctx);
     void Ioctl1(HLERequestContext& ctx);
@@ -38,27 +41,8 @@ private:
 
     void ServiceError(HLERequestContext& ctx, NvResult result);
 
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
-    }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, &NVDRV::Open, "Open"},
-        FunctionInfo{1, &NVDRV::Ioctl1, "Ioctl"},
-        FunctionInfo{2, &NVDRV::Close, "Close"},
-        FunctionInfo{3, &NVDRV::Initialize, "Initialize"},
-        FunctionInfo{4, &NVDRV::QueryEvent, "QueryEvent"},
-        FunctionInfo{5, nullptr, "MapSharedMem"},
-        FunctionInfo{6, &NVDRV::GetStatus, "GetStatus"},
-        FunctionInfo{7, nullptr, "SetAruidForTest"},
-        FunctionInfo{8, &NVDRV::SetAruid, "SetAruid"},
-        FunctionInfo{9, &NVDRV::DumpGraphicsMemoryInfo, "DumpGraphicsMemoryInfo"},
-        FunctionInfo{10, nullptr, "InitializeDevtools"},
-        FunctionInfo{11, &NVDRV::Ioctl2, "Ioctl2"},
-        FunctionInfo{12, &NVDRV::Ioctl3, "Ioctl3"},
-        FunctionInfo{13, &NVDRV::SetGraphicsFirmwareMemoryMarginEnabled,
-         "SetGraphicsFirmwareMemoryMarginEnabled"}
-    });
     std::shared_ptr<Module> nvdrv;
+
     u64 pid{};
     bool is_initialized{};
     NvCore::SessionId session_id{};

@@ -5,6 +5,7 @@
 // SPDX-FileCopyrightText: 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include <algorithm>
 #include <cstring>
 #include <mutex>
@@ -38,6 +39,11 @@
 namespace Core::Memory {
 
 namespace ReadTrace = Common::GpuWriteReadTrace;
+
+u32& UnmappedReadFlag() {
+    thread_local u32 flag{};
+    return flag;
+}
 
 static inline bool AddressSpaceContains(const Common::PageTable& table, const Common::ProcessAddress addr, const std::size_t size) {
     const Common::ProcessAddress max_addr = 1ULL << table.GetAddressSpaceBits();
@@ -664,7 +670,13 @@ struct Memory::Impl {
     inline T Read(Common::ProcessAddress vaddr) noexcept requires(std::is_trivially_copyable_v<T>) {
         const u64 addr = GetInteger(vaddr);
         if (auto const ptr = GetPointerImpl(addr, [addr]() {
-            LOG_ERROR(HW_Memory, "Unmapped Read{} @ {:#016x}", sizeof(T) * 8, addr);
+            // A guest spinning on a bad pointer reads unmapped memory tens of thousands of times
+            // a second: keep the first ones and then a sample.
+            static std::atomic<u64> unmapped_reads{};
+            if (const u64 count = unmapped_reads.fetch_add(1); count < 1000 || count % 100000 == 0) {
+                LOG_ERROR(HW_Memory, "Unmapped Read{} @ {:#016x} (#{})", sizeof(T) * 8, addr, count);
+            }
+            ++UnmappedReadFlag();
         }, [&]() {
             HandleRasterizerDownload(addr, sizeof(T));
         }); ptr) [[likely]] {

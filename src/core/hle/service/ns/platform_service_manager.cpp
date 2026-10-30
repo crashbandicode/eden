@@ -22,32 +22,12 @@
 #include "core/hle/kernel/k_shared_memory.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/service/cmif_serialization.h"
+#include "common/alignment.h"
 #include "core/hle/service/filesystem/filesystem.h"
+#include "core/hle/service/ipc_helpers.h"
 #include "core/hle/service/ns/platform_service_manager.h"
 
 namespace Service::NS {
-
-std::optional<ServiceFrameworkBase::FunctionInfoBase> IPlatformServiceManager::FindRequest(u32 key) {
-    static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, D<&IPlatformServiceManager::RequestLoad>, "RequestLoad"},
-        FunctionInfo{1, D<&IPlatformServiceManager::GetLoadState>, "GetLoadState"},
-        FunctionInfo{2, D<&IPlatformServiceManager::GetSize>, "GetSize"},
-        FunctionInfo{3, D<&IPlatformServiceManager::GetSharedMemoryAddressOffset>, "GetSharedMemoryAddressOffset"},
-        FunctionInfo{4, D<&IPlatformServiceManager::GetSharedMemoryNativeHandle>, "GetSharedMemoryNativeHandle"},
-        FunctionInfo{5, D<&IPlatformServiceManager::GetSharedFontInOrderOfPriority>, "GetSharedFontInOrderOfPriority"},
-        FunctionInfo{6, D<&IPlatformServiceManager::GetSharedFontInOrderOfPriority>, "GetSharedFontInOrderOfPriorityForSystem"},
-        FunctionInfo{100, nullptr, "RequestApplicationFunctionAuthorization"},
-        FunctionInfo{101, nullptr, "RequestApplicationFunctionAuthorizationByProcessId"},
-        FunctionInfo{102, nullptr, "RequestApplicationFunctionAuthorizationByApplicationId"},
-        FunctionInfo{103, nullptr, "RefreshApplicationFunctionBlackListDebugRecord"},
-        FunctionInfo{104, nullptr, "RequestApplicationFunctionAuthorizationByProgramId"},
-        FunctionInfo{105, nullptr, "GetFunctionBlackListSystemVersionToAuthorize"},
-        FunctionInfo{106, nullptr, "GetFunctionBlackListVersion"},
-        FunctionInfo{1000, nullptr, "LoadNgWordDataForPlatformRegionChina"},
-        FunctionInfo{1001, nullptr, "GetNgWordDataSizeForPlatformRegionChina"}
-    });
-    return HandlerTableGenerateWithFind(key, functions);
-}
 
 struct FontRegion {
     u32 offset;
@@ -105,17 +85,44 @@ struct IPlatformServiceManager::Impl {
     // Automatically populated based on shared_fonts dump or system archives.
     // 6 builtin fonts + extra 2 for whatever may come after
     boost::container::static_vector<FontRegion, 8> shared_font_regions;
+    /// Plain TTF copies of the same fonts (Switch 2 GetBuiltInFontData), after the BFTTF data.
+    boost::container::static_vector<FontRegion, 8> builtin_font_regions;
     /// Backing memory for the shared font data
     std::array<u8, SHARED_FONT_MEM_SIZE> shared_font;
 };
 
 IPlatformServiceManager::IPlatformServiceManager(Core::System& system_, const char* service_name_)
     : ServiceFramework{system_, service_name_}, impl{std::make_unique<Impl>()} {
+    // clang-format off
+    static const FunctionInfo functions[] = {
+        {0, D<&IPlatformServiceManager::RequestLoad>, "RequestLoad"},
+        {1, D<&IPlatformServiceManager::GetLoadState>, "GetLoadState"},
+        {2, D<&IPlatformServiceManager::GetSize>, "GetSize"},
+        {3, D<&IPlatformServiceManager::GetSharedMemoryAddressOffset>, "GetSharedMemoryAddressOffset"},
+        {4, D<&IPlatformServiceManager::GetSharedMemoryNativeHandle>, "GetSharedMemoryNativeHandle"},
+        {5, D<&IPlatformServiceManager::GetSharedFontInOrderOfPriority>, "GetSharedFontInOrderOfPriority"},
+        {6, D<&IPlatformServiceManager::GetSharedFontInOrderOfPriority>, "GetSharedFontInOrderOfPriorityForSystem"},
+        {100, nullptr, "RequestApplicationFunctionAuthorization"},
+        {101, nullptr, "RequestApplicationFunctionAuthorizationByProcessId"},
+        {102, nullptr, "RequestApplicationFunctionAuthorizationByApplicationId"},
+        {103, nullptr, "RefreshApplicationFunctionBlackListDebugRecord"},
+        {104, nullptr, "RequestApplicationFunctionAuthorizationByProgramId"},
+        {105, nullptr, "GetFunctionBlackListSystemVersionToAuthorize"},
+        {106, nullptr, "GetFunctionBlackListVersion"},
+        {1000, nullptr, "LoadNgWordDataForPlatformRegionChina"},
+        {1001, nullptr, "GetNgWordDataSizeForPlatformRegionChina"},
+        {2000, &IPlatformServiceManager::GetBuiltInFontSharedMemory, "GetBuiltInFontSharedMemory (Switch 2)"},
+        {2010, &IPlatformServiceManager::GetBuiltInFontData, "GetBuiltInFontData (Switch 2)"},
+    };
+    // clang-format on
+    RegisterHandlers(functions);
+
     auto& fsc = system.GetFileSystemController();
 
     // Attempt to load shared font data from disk
     const auto* nand = fsc.GetSystemNANDContents();
     std::size_t offset = 0;
+    std::vector<std::vector<u8>> plain_fonts;
     // Rebuild shared fonts from data ncas or synthesize
     for (auto& font : SHARED_FONTS) {
         FileSys::VirtualFile romfs;
@@ -151,9 +158,58 @@ IPlatformServiceManager::IPlatformServiceManager(Core::System& system_, const ch
                        Common::swap32);
         // Font offset and size do not account for the header
         const FontRegion region{u32(offset + 8), u32((font_data_u32.size() * sizeof(u32)) - 8)};
+        std::vector<u8> plain(region.size);
+        DecryptSharedFontToTTF(font_data_u32, plain);
+        plain_fonts.push_back(std::move(plain));
         DecryptSharedFont(font_data_u32, impl->shared_font, offset);
         impl->shared_font_regions.push_back(region);
     }
+
+    for (const auto& plain : plain_fonts) {
+        offset = Common::AlignUp(offset, 0x1000);
+        if (offset + plain.size() > SHARED_FONT_MEM_SIZE) {
+            LOG_WARNING(Service_NS, "No shared memory left for plain built-in font copies");
+            break;
+        }
+        std::memcpy(impl->shared_font.data() + offset, plain.data(), plain.size());
+        impl->builtin_font_regions.push_back({u32(offset), u32(plain.size())});
+        offset += plain.size();
+    }
+}
+
+// Switch 2: the shared memory GetBuiltInFontData offsets point into (copy handle, u32 size); the
+// SDK maps it read-only. Eden serves its font shared memory, which holds plain copies too.
+void IPlatformServiceManager::GetBuiltInFontSharedMemory(HLERequestContext& ctx) {
+    LOG_WARNING(Service_NS, "(STUBBED) Switch 2 GetBuiltInFontSharedMemory");
+    std::memcpy(kernel.GetFontSharedMem().GetPointer(), impl->shared_font.data(), impl->shared_font.size());
+    IPC::ResponseBuilder rb{ctx, 3, 1};
+    rb.Push(ResultSuccess);
+    rb.Push<u32>(static_cast<u32>(SHARED_FONT_MEM_SIZE));
+    rb.PushCopyObjects(ctx, kernel.GetFontSharedMem());
+}
+
+// nn::pl::GetBuiltInFontData(BuiltInFontDataOunce*, BuiltInFontTypeOunce, bool): returns a 16-byte
+// bool that says whether the font exists and a 16-byte descriptor (u8 flags, u8 flag bit, u16,
+// u32 offset into the font shared memory, u32 size, u32). The client expects plain TrueType/OpenType data
+// there. The type numbering is unknown, so types map onto Eden's shared fonts in order.
+void IPlatformServiceManager::GetBuiltInFontData(HLERequestContext& ctx) {
+    IPC::RequestParser rp{ctx};
+    const u32 type = rp.Pop<u32>();
+    const bool flag = rp.Pop<u8>() != 0;
+    const auto& regions = impl->builtin_font_regions;
+    const bool found = !regions.empty();
+    const FontRegion region = found ? regions[std::min<size_t>(type, regions.size() - 1)] : EMPTY_REGION;
+    LOG_WARNING(Service_NS, "(STUBBED) Switch 2 GetBuiltInFontData type={} flag={} -> offset={:#x} size={:#x}",
+                type, flag, region.offset, region.size);
+    // Raw reply: the bool at offset 0, the descriptor at offset 8.
+    IPC::ResponseBuilder rb{ctx, 2 + 6};
+    rb.Push(ResultSuccess);
+    rb.Push<u32>(found ? 1 : 0);
+    rb.Push<u32>(0);
+    rb.Push<u32>(0);
+    rb.Push<u32>(region.offset);
+    rb.Push<u32>(region.size);
+    rb.Push<u32>(0);
 }
 
 IPlatformServiceManager::~IPlatformServiceManager() = default;

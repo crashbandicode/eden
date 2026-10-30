@@ -4,6 +4,14 @@
 // SPDX-FileCopyrightText: 2014 Citra Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
+#include <iterator>
+#include <fstream>
+#include <vector>
+#include <cstdlib>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -33,6 +41,7 @@
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/loader/loader.h"
 #include "frontend_common/config.h"
+#include "input_common/drivers/keyboard.h"
 #include "input_common/main.h"
 #include "network/network.h"
 #include "sdl_config.h"
@@ -45,6 +54,7 @@
 #endif
 #include "yuzu_cmd/emu_window/emu_window_sdl3_null.h"
 #include "yuzu_cmd/emu_window/emu_window_sdl3_vk.h"
+#include "yuzu_cmd/nx2_sampler.h"
 
 #ifdef _WIN32
 // windows.h needs to be included before shellapi.h
@@ -59,6 +69,75 @@ extern "C" {
 // graphics
 __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
+// EDEN_NX2_CRASH_DUMP=<dir>: on an unhandled exception (a real crash; fastmem faults are handled
+// before this), write <dir>/eden-crash-<pid>.dmp. A debugger changes the timing enough to hide
+// some crashes, so this catches them at full speed. dbghelp.dll is loaded only then.
+// Prints a code address as module+offset (resolve with llvm-symbolizer and the module's PDB).
+static void PrintCodeAddress(const char* label, const void* address) {
+    HMODULE module{};
+    char name[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           static_cast<LPCSTR>(address), &module)) {
+        GetModuleFileNameA(module, name, sizeof(name));
+    }
+    const char* base_name = std::strrchr(name, '\\');
+    std::fprintf(stderr, "  %s %p %s+%#llx\n", label, address, base_name ? base_name + 1 : name,
+                 static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(address) -
+                                                 reinterpret_cast<uintptr_t>(module)));
+}
+
+static LONG WINAPI WriteCrashDump(EXCEPTION_POINTERS* exception) {
+    static std::atomic<bool> written{};
+    const char* directory = std::getenv("EDEN_NX2_CRASH_DUMP");
+    if (directory == nullptr || written.exchange(true)) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    // The faulting address and stack first: they survive even if the dump fails.
+    const EXCEPTION_RECORD& record = *exception->ExceptionRecord;
+    std::fprintf(stderr, "Unhandled exception %#lx on thread %lu, info %#llx %#llx\n",
+                 record.ExceptionCode, GetCurrentThreadId(),
+                 static_cast<unsigned long long>(record.NumberParameters > 0 ? record.ExceptionInformation[0] : 0),
+                 static_cast<unsigned long long>(record.NumberParameters > 1 ? record.ExceptionInformation[1] : 0));
+    PrintCodeAddress("at", record.ExceptionAddress);
+    void* frames[48];
+    const USHORT count = RtlCaptureStackBackTrace(0, 48, frames, nullptr);
+    for (USHORT i = 0; i < count; ++i) {
+        PrintCodeAddress("frame", frames[i]);
+    }
+    std::fflush(stderr);
+    struct ExceptionInformation {
+        DWORD thread_id;
+        EXCEPTION_POINTERS* exception_pointers;
+        BOOL client_pointers;
+    };
+    using MiniDumpWriteDumpFn = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, int, const ExceptionInformation*,
+                                              const void*, const void*);
+    const HMODULE dbghelp = LoadLibraryA("dbghelp.dll");
+    const auto write = dbghelp ? reinterpret_cast<MiniDumpWriteDumpFn>(
+                                     GetProcAddress(dbghelp, "MiniDumpWriteDump"))
+                               : nullptr;
+    if (write == nullptr) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    char path[MAX_PATH];
+    std::snprintf(path, sizeof(path), "%s\\eden-crash-%lu.dmp", directory, GetCurrentProcessId());
+    const HANDLE file = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        const ExceptionInformation information{GetCurrentThreadId(), exception, FALSE};
+        // MiniDumpWithThreadInfo; the larger MiniDumpWithIndirectlyReferencedMemory failed on
+        // Eden's address space and left an empty file.
+        const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, 0x1000,
+                              &information, nullptr, nullptr);
+        const DWORD error = ok ? 0 : GetLastError();
+        CloseHandle(file);
+        std::fprintf(stderr, ok ? "Crash dump written to %s\n" : "Crash dump to %s failed (%#lx)\n",
+                     path, error);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
 
@@ -159,17 +238,30 @@ static void OnStatusMessageReceived(const Network::StatusMessageEntry& msg) {
 
 struct SdlState {
     Core::System system{};
+    // Must outlive emu_window, which keeps a pointer to it.
+    InputCommon::InputSubsystem input_subsystem{};
     std::unique_ptr<EmuWindow_SDL3> emu_window;
 };
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(WriteCrashDump);
+#endif
+    Nx2Sampler::StartFromEnvironment();
+    // SDL calls SDL_AppIterate back to back by default, which kept a host core at 100% polling
+    // input; 240 Hz is plenty for input and the key script.
+    SDL_SetHint(SDL_HINT_MAIN_CALLBACK_RATE, "240");
     SdlState* state = new SdlState();
+    *appstate = state;
 
 #ifdef _WIN32
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
         freopen("CONOUT$", "wb", stdout);
         freopen("CONOUT$", "wb", stderr);
     }
+    // Raise the CRT's open-file limit like the Qt frontend: loose RomFS folders keep thousands of
+    // files open through the VFS cache.
+    _setmaxstdio(8192);
 #endif
 
     Common::Log::Initialize();
@@ -202,7 +294,6 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     state->system.Initialize();
 
-    InputCommon::InputSubsystem input_subsystem{};
 
     // Apply the command line arguments
     state->system.ApplySettings();
@@ -212,14 +303,14 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     case Settings::RendererBackend::OpenGL_GLSL:
     case Settings::RendererBackend::OpenGL_GLASM:
     case Settings::RendererBackend::OpenGL_SPIRV:
-        state->emu_window = std::make_unique<EmuWindow_SDL3_GL>(&input_subsystem, state->system, lp.fullscreen);
+        state->emu_window = std::make_unique<EmuWindow_SDL3_GL>(&state->input_subsystem, state->system, lp.fullscreen);
         break;
 #endif
     case Settings::RendererBackend::Vulkan:
-        state->emu_window = std::make_unique<EmuWindow_SDL3_VK>(&input_subsystem, state->system, lp.fullscreen);
+        state->emu_window = std::make_unique<EmuWindow_SDL3_VK>(&state->input_subsystem, state->system, lp.fullscreen);
         break;
     case Settings::RendererBackend::Null:
-        state->emu_window = std::make_unique<EmuWindow_SDL3_Null>(&input_subsystem, state->system, lp.fullscreen);
+        state->emu_window = std::make_unique<EmuWindow_SDL3_Null>(&state->input_subsystem, state->system, lp.fullscreen);
         break;
     default:
         LOG_CRITICAL(Frontend, "Invalid renderer backend");
@@ -319,16 +410,73 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     void(state->system.Run());
     if (state->system.DebuggerEnabled())
         state->system.InitializeDebugger();
-    return SDL_APP_SUCCESS;
+    return SDL_APP_CONTINUE;
 }
+// EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,..." (or "@<file>"): press (code) or release (-code) keyboard
+// keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
+double Nx2KeyClockSeconds(); // emu_window_sdl3.cpp
+
+static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
+    struct KeyEvent {
+        double seconds; // when frame is 0
+        u64 frame;      // "f<frame>:code": after that many presents
+        int code;
+    };
+    static const std::vector<KeyEvent> script = [] {
+        std::vector<KeyEvent> events;
+        if (const char* text = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
+            // "@<file>" reads the list from a file: long scripts in the environment slow down
+            // every getenv in the process.
+            std::string list{text};
+            if (!list.empty() && list[0] == '@') {
+                std::ifstream file{list.substr(1)};
+                list.assign(std::istreambuf_iterator<char>{file}, {});
+            }
+            size_t start = 0;
+            while (start < list.size()) {
+                const size_t end = (std::min)(list.find(',', start), list.size());
+                const std::string item = list.substr(start, end - start);
+                if (const size_t colon = item.find(':'); colon != std::string::npos) {
+                    const std::string when = item.substr(0, colon);
+                    const int code = std::stoi(item.substr(colon + 1));
+                    if (!when.empty() && when[0] == 'f') {
+                        events.push_back({0.0, std::stoull(when.substr(1)), code});
+                    } else {
+                        events.push_back({std::stod(when), 0, code});
+                    }
+                }
+                start = end + 1;
+            }
+        }
+        return events;
+    }();
+    static size_t next = 0;
+    const double elapsed = Nx2KeyClockSeconds();
+    const u64 frame = Core::g_nx2_present_count.load();
+    while (next < script.size() && (script[next].frame != 0 ? script[next].frame <= frame
+                                                            : script[next].seconds <= elapsed)) {
+        const int code = script[next].code;
+        LOG_INFO(Frontend, "Key script: {} key {} at {:.1f} s (frame {})",
+                 code < 0 ? "release" : "press", code < 0 ? -code : code, elapsed, frame);
+        if (code < 0) {
+            input_subsystem.GetKeyboard()->ReleaseKey(static_cast<std::size_t>(-code));
+        } else {
+            input_subsystem.GetKeyboard()->PressKey(static_cast<std::size_t>(code));
+        }
+        ++next;
+    }
+}
+
 extern "C" SDL_AppResult SDL_AppIterate(void *appstate) {
     SdlState *state = (SdlState *)appstate;
-    return state->emu_window->IsOpen() ? SDL_APP_CONTINUE : SDL_APP_SUCCESS;
+    RunKeyScript(state->input_subsystem);
+    return state->emu_window && state->emu_window->IsOpen() ? SDL_APP_CONTINUE : SDL_APP_SUCCESS;
 }
 extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     SdlState *state = (SdlState *)appstate;
-    state->emu_window->OnEvent(*event);
-    return SDL_APP_SUCCESS;
+    if (state->emu_window)
+        state->emu_window->OnEvent(*event);
+    return SDL_APP_CONTINUE;
 }
 extern "C" void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     SdlState *state = (SdlState *)appstate;

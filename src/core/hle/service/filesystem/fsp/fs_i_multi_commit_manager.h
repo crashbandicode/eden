@@ -20,13 +20,6 @@ private:
     Result Add(std::shared_ptr<IFileSystem> filesystem);
     Result Commit();
 
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-            FunctionInfo{1, D<&IMultiCommitManager::Add>, "Add"},
-            FunctionInfo{2, D<&IMultiCommitManager::Commit>, "Commit"}
-        });
-        return HandlerTableGenerateWithFind(key, functions);
-    }
     FileSys::VirtualFile backend;
 };
 

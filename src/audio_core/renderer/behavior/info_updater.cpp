@@ -588,7 +588,11 @@ Result InfoUpdater::UpdateBehaviorInfo(BehaviorInfo& behaviour_) {
         return Service::Audio::ResultInvalidUpdateInfo;
     }
 
-    if (in_params->revision != behaviour_.GetUserRevision()) {
+    // Compare revision numbers: Switch 2 opens the renderer with 'REV?' but tags its updates
+    // 'REv?' (lowercase v) for the same revision.
+    if (GetRevisionNum(in_params->revision) != GetRevisionNum(behaviour_.GetUserRevision())) {
+        LOG_ERROR(Service_Audio, "BehaviorInfo revision {:08X} does not match the renderer's {:08X}",
+                  in_params->revision, behaviour_.GetUserRevision());
         return Service::Audio::ResultInvalidUpdateInfo;
     }
 

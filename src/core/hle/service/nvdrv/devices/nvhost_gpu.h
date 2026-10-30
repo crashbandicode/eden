@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
 #include <vector>
 #include "common/bit_field.h"
@@ -225,6 +226,7 @@ private:
     Kernel::KEvent* sm_exception_breakpoint_int_report_event;
     Kernel::KEvent* sm_exception_breakpoint_pause_report_event;
     Kernel::KEvent* error_notifier_event;
+    std::map<u32, Kernel::KEvent*> nx2_events;
 };
 
 } // namespace Service::Nvidia::Devices

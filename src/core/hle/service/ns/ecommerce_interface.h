@@ -14,19 +14,6 @@ class IECommerceInterface final : public ServiceFramework<IECommerceInterface> {
 public:
     explicit IECommerceInterface(Core::System& system_);
     ~IECommerceInterface() override;
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
-    }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, nullptr, "RequestLinkDevice"},
-        FunctionInfo{1, nullptr, "RequestCleanupAllPreInstalledApplications"},
-        FunctionInfo{2, nullptr, "RequestCleanupPreInstalledApplication"},
-        FunctionInfo{3, nullptr, "RequestSyncRights"},
-        FunctionInfo{4, nullptr, "RequestUnlinkDevice"},
-        FunctionInfo{5, nullptr, "RequestRevokeAllELicense"},
-        FunctionInfo{6, nullptr, "RequestSyncRightsBasedOnAssignedELicenses"}
-    });
 };
 
 } // namespace Service::NS

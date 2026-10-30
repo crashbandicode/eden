@@ -7,12 +7,7 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <mutex>
-#include <tuple>
-#include <type_traits>
-#include "frozen/map.h"
-#include "core/hle/service/dispatch_table.h"
 #include "common/container/unordered_map.h"
 #include "common/common_types.h"
 #include "core/hle/service/hle_ipc.h"
@@ -82,43 +77,36 @@ protected:
     [[nodiscard]] virtual std::unique_lock<std::mutex> LockService() noexcept {
         return std::unique_lock{lock_service};
     }
-
-    static constexpr u32 MakeVersionGate(std::tuple<u32, u32, u32> since, std::tuple<u32, u32, u32> until = {0, 0, 0}) {
-        auto const [s_maj, s_min, s_pat] = since;
-        auto const [u_maj, u_min, u_pat] = until;
-        return (u_pat << 0) | (u_min << 4) | (u_maj << 8)
-            | (s_pat << 16) | (s_min << 20) | (s_maj << 24);
-    }
-
-    struct FunctionInfoBase {
-        HandlerFnP<ServiceFrameworkBase> handler_callback;
-        const char* name;
-        u32 version_gating;
-    };
-    static_assert(std::is_trivially_constructible_v<FunctionInfoBase>);
 private:
     template <typename T>
     friend class ServiceFramework;
 
-    using InvokerFn = void(ServiceFrameworkBase* object, HandlerFnP<ServiceFrameworkBase> member, HLERequestContext& ctx);
+    struct FunctionInfoBase {
+        u32 expected_header;
+        HandlerFnP<ServiceFrameworkBase> handler_callback;
+        const char* name;
+    };
 
-    explicit ServiceFrameworkBase(Core::System& system_, const char* service_name_, u32 max_sessions_, InvokerFn* handler_invoker_);
+    using InvokerFn = void(ServiceFrameworkBase* object, HandlerFnP<ServiceFrameworkBase> member,
+                           HLERequestContext& ctx);
+
+    explicit ServiceFrameworkBase(Core::System& system_, const char* service_name_,
+                                  u32 max_sessions_, InvokerFn* handler_invoker_);
     ~ServiceFrameworkBase() override;
 
-    virtual std::optional<FunctionInfoBase> FindRequest(u32 key) = 0;
-    virtual std::optional<FunctionInfoBase> FindRequestTipc(u32 key) = 0;
-
-    void ReportUnimplementedFunction(HLERequestContext& ctx, const FunctionInfoBase* info, bool gated);
+    void RegisterHandlersBase(const FunctionInfoBase* functions, std::size_t n);
+    void RegisterHandlersBaseTipc(const FunctionInfoBase* functions, std::size_t n);
+    void ReportUnimplementedFunction(HLERequestContext& ctx, const FunctionInfoBase* info);
 
 protected:
+    ::Common::unordered_map<u32, FunctionInfoBase> handlers;
+    ::Common::unordered_map<u32, FunctionInfoBase> handlers_tipc;
     /// Used to gain exclusive access to the service members, e.g. from CoreTiming thread.
     std::mutex lock_service;
     /// System context that the service operates under.
     Core::System& system;
     /// Identifier string used to connect to the service.
     const char* service_name;
-    /// Whether this is the IStorage service.
-    const bool is_i_storage;
     /// Function used to safely up-cast pointers to the derived class before invoking a handler.
     InvokerFn* handler_invoker;
     /// Maximum number of concurrent sessions that this service can handle.
@@ -131,7 +119,8 @@ protected:
 /**
  * Framework for implementing HLE services. Dispatches on the header id of incoming SyncRequests
  * based on a table mapping header ids to handler functions. Service implementations should inherit
- * from ServiceFramework using the CRTP (`class Foo : public ServiceFramework<Foo> { ... };`)
+ * from ServiceFramework using the CRTP (`class Foo : public ServiceFramework<Foo> { ... };`) and
+ * populate it with handlers by calling #RegisterHandlers.
  *
  * In order to avoid duplicating code in the binary and exposing too many implementation details in
  * the header, this class is split into a non-templated base (ServiceFrameworkBase) and a template
@@ -144,7 +133,7 @@ class ServiceFramework : public ServiceFrameworkBase {
 protected:
     /// Contains information about a request type which is handled by the service.
     template <typename T>
-    struct FunctionInfoTyped {
+    struct FunctionInfoTyped : FunctionInfoBase {
         // TODO(yuriks): This function could be constexpr, but clang is the only compiler that
         // doesn't emit an ICE or a wrong diagnostic because of the static_cast.
 
@@ -152,94 +141,50 @@ protected:
         /// @param expected_header_ request header in the command buffer which will trigger dispatch to this handler
         /// @param handler_callback_ member function in this service which will be called to handle the request
         /// @param name_ human-friendly name for the request. Used mostly for logging purposes.
-        explicit constexpr FunctionInfoTyped(u32 expected_header_, HandlerFnP<T> handler_callback_, const char* name_, u32 version_gating_ = 0)
-            : handler_callback{handler_callback_}
-            , name{name_}
-            , version_gating{version_gating_}
-            , expected_header{expected_header_}
-        {}
-        HandlerFnP<T> handler_callback;
-        const char* name;
-        u32 version_gating;
-        u32 expected_header;
+        FunctionInfoTyped(u32 expected_header_, HandlerFnP<T> handler_callback_, const char* name_)
+            : FunctionInfoBase{expected_header_, HandlerFnP<ServiceFrameworkBase>(handler_callback_), name_} {}
     };
     using FunctionInfo = FunctionInfoTyped<Self>;
 
-    // expected_header serves as a key to 'address' function handlers, thus only include the minimal
-    template <typename T>
-    struct FunctionValueInfo {
-        explicit constexpr FunctionValueInfo(HandlerFnP<T> handler_callback_, const char* name_, u32 version_gating_)
-            : handler_callback{handler_callback_}
-            , name{name_}
-            , version_gating{version_gating_}
-        {}
-        HandlerFnP<T> handler_callback;
-        const char* name;
-        u32 version_gating;
-    };
-
-    // Pass one array instead of a separate argument per record. MSVC 19.44 uses
-    // excessive compile resources and stack space for large variadic tables
-    // (the 240-entry HID initializer required 1.86 MB before main).
-    template <std::size_t N, std::size_t... I>
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, N>
-    CreateStaticMapFromArrayImpl(const FunctionInfo (&args)[N], std::index_sequence<I...>) {
-        return frozen::map<u32, FunctionValueInfo<Self>, N>{
-            {args[I].expected_header,
-             FunctionValueInfo<Self>{args[I].handler_callback, args[I].name,
-                                     args[I].version_gating}}...};
-    }
-
-    template <std::size_t N>
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<Self>, N>
-    CreateStaticMapFromArray(const FunctionInfo (&args)[N]) {
-        return CreateStaticMapFromArrayImpl(args, std::make_index_sequence<N>{});
-    }
-
-    // Used exclusively by NFC
-    template <typename T, std::size_t N, std::size_t... I>
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, N>
-    CreateStaticMapWithClassImpl(const FunctionInfoTyped<T> (&args)[N], std::index_sequence<I...>) {
-        return frozen::map<u32, FunctionValueInfo<T>, N>{
-            {args[I].expected_header,
-             FunctionValueInfo<T>{args[I].handler_callback, args[I].name,
-                                  args[I].version_gating}}...};
-    }
-
-    template <typename T, std::size_t N>
-    [[nodiscard]] static EDEN_SERVICE_MAP_EVAL frozen::map<u32, FunctionValueInfo<T>, N>
-    CreateStaticMapWithClass(const FunctionInfoTyped<T> (&args)[N]) {
-        return CreateStaticMapWithClassImpl(args, std::make_index_sequence<N>{});
-    }
-
-    template<typename T>
-    [[nodiscard]] static std::optional<FunctionInfoBase> HandlerTableGenerateWithFind(u32 key, T const& map) {
-        auto const it = map.find(key);
-        if (it != map.end()) {
-            auto const r = it->second;
-            return std::optional<FunctionInfoBase>{{
-                HandlerFnP<ServiceFrameworkBase>(r.handler_callback),
-                r.name,
-                r.version_gating
-            }};
-        }
-        return std::nullopt;
-    }
-
-    /// @brief Initializes the handler with no functions installed.
-    /// @param system_ The system context to construct this service under.
-    /// @param service_name_ Name of the service.
-    /// @param max_sessions_ Maximum number of sessions that can be connected to this service at the
-    /// same time.
+    /**
+     * Initializes the handler with no functions installed.
+     *
+     * @param system_ The system context to construct this service under.
+     * @param service_name_ Name of the service.
+     * @param max_sessions_ Maximum number of sessions that can be connected to this service at the
+     * same time.
+     */
     explicit ServiceFramework(Core::System& system_, const char* service_name_, u32 max_sessions_ = ServerSessionCountMax)
-        : ServiceFrameworkBase(system_, service_name_, max_sessions_, Invoker)
-    {}
+        : ServiceFrameworkBase(system_, service_name_, max_sessions_, Invoker) {}
 
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        UNREACHABLE();
+    /// Registers handlers in the service.
+    template <typename T = Self, std::size_t N>
+    void RegisterHandlers(const FunctionInfoTyped<T> (&functions)[N]) {
+        RegisterHandlers(functions, N);
     }
-    std::optional<FunctionInfoBase> FindRequestTipc(u32 key) override {
-        UNREACHABLE();
+
+    /**
+     * Registers handlers in the service. Usually prefer using the other RegisterHandlers
+     * overload in order to avoid needing to specify the array size.
+     */
+    template <typename T = Self>
+    void RegisterHandlers(const FunctionInfoTyped<T>* functions, std::size_t n) {
+        RegisterHandlersBase(functions, n);
+    }
+
+    /// Registers handlers in the service.
+    template <typename T = Self, std::size_t N>
+    void RegisterHandlersTipc(const FunctionInfoTyped<T> (&functions)[N]) {
+        RegisterHandlersTipc(functions, N);
+    }
+
+    /**
+     * Registers handlers in the service. Usually prefer using the other RegisterHandlers
+     * overload in order to avoid needing to specify the array size.
+     */
+    template <typename T = Self>
+    void RegisterHandlersTipc(const FunctionInfoTyped<T>* functions, std::size_t n) {
+        RegisterHandlersBaseTipc(functions, n);
     }
 
 protected:

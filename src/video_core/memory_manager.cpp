@@ -22,6 +22,10 @@
 #include "video_core/texture_cache/util.h"
 
 namespace Tegra {
+bool MemoryManager::IsShuttingDown() const {
+    return system.IsShuttingDown();
+}
+
 using Tegra::Memory::GuestMemoryFlags;
 
 std::atomic<size_t> MemoryManager::unique_identifier_generator{};
@@ -55,6 +59,10 @@ MemoryManager::MemoryManager(Core::System& system_, MaxwellDeviceMemoryManager& 
 MemoryManager::MemoryManager(Core::System& system_, u64 address_space_bits_, GPUVAddr split_address_, u64 big_page_bits_, u64 page_bits_)
     : MemoryManager(system_, system_.Host1x().MemoryManager(), address_space_bits_, split_address_, big_page_bits_, page_bits_)
 {}
+
+void MemoryManager::SetNativeSyncpointShim(GPUVAddr address) {
+    native_syncpoint_shim.store(address, std::memory_order_release);
+}
 
 MemoryManager::~MemoryManager() = default;
 
@@ -231,6 +239,15 @@ std::optional<DAddr> MemoryManager::GpuToCpuAddress(GPUVAddr addr, std::size_t s
 
 template <typename T>
 T MemoryManager::Read(GPUVAddr addr) const {
+    if constexpr (sizeof(T) == sizeof(u32)) {
+        const auto shim = native_syncpoint_shim.load(std::memory_order_acquire);
+        if (shim && addr >= shim && addr - shim < NumShimSyncpoints * sizeof(u32) &&
+            Common::IsAligned(addr - shim, sizeof(u32))) {
+            return static_cast<T>(system.Host1x().GetSyncpointManager().GetGuestSyncpointValue(
+                static_cast<u32>((addr - shim) / sizeof(u32))));
+        }
+    }
+
     if (auto page_pointer{GetPointer(addr)}; page_pointer) {
         // NOTE: Avoid adding any extra logic to this fast-path block
         T value;
@@ -238,7 +255,10 @@ T MemoryManager::Read(GPUVAddr addr) const {
         return value;
     }
 
-    ASSERT(false);
+    static std::atomic<u32> reported{};
+    if (reported.fetch_add(1) < 16) {
+        LOG_ERROR(HW_GPU, "Read{} of unmapped GPU address {:#x}", sizeof(T) * 8, addr);
+    }
 
     return {};
 }
@@ -390,6 +410,16 @@ void MemoryManager::ReadBlock(GPUVAddr gpu_src_addr, void* dest_buffer, std::siz
 }
 
 void MemoryManager::ReadBlockUnsafe(GPUVAddr gpu_src_addr, void* dest_buffer, const std::size_t size) const {
+    // Small reads within one 4 KiB page (texture and sampler descriptors, several per draw): one
+    // translation and a copy, as Read<T> does, instead of the page walk (~3% of the GPU thread
+    // in title 1). Anything else, unmapped or sparse pages included, takes the full path.
+    constexpr std::size_t SmallPage = 0x1000;
+    if (size <= SmallPage && (gpu_src_addr & (SmallPage - 1)) + size <= SmallPage) {
+        if (const u8* const pointer = GetPointer(gpu_src_addr)) {
+            std::memcpy(dest_buffer, pointer, size);
+            return;
+        }
+    }
     ReadBlockImpl(gpu_src_addr, dest_buffer, size, VideoCommon::CacheType::None, true);
 }
 

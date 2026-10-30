@@ -19,14 +19,6 @@ class IFinalOutputRecorderManagerForApplet final
 public:
     explicit IFinalOutputRecorderManagerForApplet(Core::System& system_);
     ~IFinalOutputRecorderManagerForApplet() override;
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override {
-        return HandlerTableGenerateWithFind(key, functions);
-    }
-    inline static EDEN_SERVICE_TABLE auto functions = CreateStaticMapFromArray({
-        FunctionInfo{0, nullptr, "RequestSuspend"},
-        FunctionInfo{1, nullptr, "RequestResume"}
-    });
 };
 
 } // namespace Service::Audio

@@ -20,6 +20,18 @@ constexpr bool IsValidVirtualCoreId(int32_t core_id) {
     return (0 <= core_id && core_id < static_cast<int32_t>(Core::Hardware::NUM_CPU_CORES));
 }
 
+// Switch 2 hardware has eight cores. Six are emulated (the most an application is given), so
+// fold any id past them back onto the low cores, both in core ids and in affinity masks.
+constexpr int32_t FoldExtraCoreId(int32_t core_id) {
+    constexpr auto num_cores = static_cast<int32_t>(Core::Hardware::NUM_CPU_CORES);
+    return core_id >= num_cores && core_id < 2 * num_cores ? core_id - num_cores : core_id;
+}
+
+constexpr u64 FoldExtraCoreMask(u64 mask) {
+    constexpr u64 low = (1ULL << Core::Hardware::NUM_CPU_CORES) - 1;
+    return (mask & low) | ((mask >> Core::Hardware::NUM_CPU_CORES) & low);
+}
+
 } // Anonymous namespace
 
 /// Creates a new thread
@@ -36,6 +48,7 @@ Result CreateThread(Core::System& system, Handle* out_handle, u64 entry_point, u
     if (core_id == IdealCoreUseProcessValue) {
         core_id = process.GetIdealCoreId();
     }
+    core_id = FoldExtraCoreId(core_id);
 
     // Validate arguments.
     R_UNLESS(IsValidVirtualCoreId(core_id), ResultInvalidCoreId);
@@ -260,6 +273,10 @@ Result SetThreadCoreMask(Core::System& system, Handle thread_handle, s32 core_id
         const u64 process_core_mask = GetCurrentProcess(system.Kernel()).GetCoreMask();
         R_UNLESS((affinity_mask | process_core_mask) == process_core_mask, ResultInvalidCoreId);
         R_UNLESS(affinity_mask != 0, ResultInvalidCombination);
+
+        // Validated against the real mask above; fold to the emulated cores from here on.
+        affinity_mask = FoldExtraCoreMask(affinity_mask);
+        core_id = FoldExtraCoreId(core_id);
 
         // Validate the core id.
         if (IsValidVirtualCoreId(core_id)) {

@@ -7,6 +7,8 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -143,6 +145,13 @@ private:
     /// @brief Create a new shader entry and register it
     const ShaderInfo* MakeShaderInfo(GenericEnvironment& env, VAddr cpu_addr);
 
+    /// Rethrows the error a native program at this address was rejected with, if any.
+    void RethrowIfRejected(VAddr addr);
+    /// Whether a native program at this address was rejected.
+    bool IsRejected(VAddr addr);
+    /// Remembers the exception being handled as this address's rejection.
+    void RememberRejection(VAddr addr);
+
     Tegra::MaxwellDeviceMemoryManager& device_memory;
 
     mutable std::mutex lookup_mutex;
@@ -152,6 +161,14 @@ private:
     ::Common::unordered_map<u64, std::vector<Entry*>> invalidation_cache;
     std::vector<std::unique_ptr<ShaderInfo>> storage;
     std::vector<Entry*> marked_for_removal;
+
+    /// Native programs the lowering rejected, by address, so each draw or dispatch rethrows the
+    /// first error instead of lowering again; dropped when guest memory there is written.
+    std::mutex rejected_mutex;
+    ::Common::unordered_map<u64, std::exception_ptr> rejected_native;
+    /// Bounds of every address ever rejected (never shrinks): a quick test for invalidations.
+    std::atomic<VAddr> rejected_lowest{~VAddr{}};
+    std::atomic<VAddr> rejected_highest{};
 };
 
 } // namespace VideoCommon

@@ -189,6 +189,9 @@ private:
     Result SendVibrationValueInBool(bool is_vibrating,
                                     Core::HID::VibrationDeviceHandle vibration_device_handle,
                                     ClientAppletResourceUserId aruid);
+    // Switch 2 sends vibration every frame with 214 (pointer buffers of device handles and
+    // values, like 206); Eden doesn't emulate vibration, so accept and drop it.
+    Result SendNx2VibrationValues();
     Result ActivateConsoleSixAxisSensor(ClientAppletResourceUserId aruid);
     Result StartConsoleSixAxisSensor(Core::HID::ConsoleSixAxisSensorHandle console_sixaxis_handle,
                                      ClientAppletResourceUserId aruid);
@@ -264,8 +267,6 @@ private:
                                                  s32 unknown, ClientAppletResourceUserId aruid);
     Result SetTouchScreenResolution(u32 width, u32 height, ClientAppletResourceUserId aruid);
     Result SetMouseLibraryVersion(ClientAppletResourceUserId aruid);
-
-    std::optional<FunctionInfoBase> FindRequest(u32 key) override;
 
     std::shared_ptr<ResourceManager> resource_manager;
     std::shared_ptr<HidFirmwareSettings> firmware_settings;

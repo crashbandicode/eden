@@ -29,6 +29,8 @@
 #include "yuzu/main_window.h"
 #include "yuzu/bootmanager.h"
 #include "video_core/shader_notify.h"
+#include "video_core/gpu_split.h"
+#include "video_core/nx2_profile.h"
 
 namespace {
 using CS = ControlServer;
@@ -266,6 +268,15 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
         const auto* process = powered ? QtCommon::system->ApplicationProcess() : nullptr;
         const bool switch2 = process && process->IsSwitch2();
         const auto& memory_layout = Settings::values.memory_layout_mode;
+        using Split = VideoCommon::GpuSplit;
+        const auto split_state = Split::Get().GetStatus();
+        const char split_mode = Split::RequestedMode();
+        const QJsonObject split{
+            {QStringLiteral("requested_mode"), split_mode >= '0' && split_mode <= '2' ? split_mode - '0' : -1},
+            {QStringLiteral("state"), QString::fromLatin1(Split::StatusName(split_state))},
+            {QStringLiteral("active"), split_state == Split::Status::ActiveBackMacros || split_state == Split::Status::ActiveFrontMacros},
+            {QStringLiteral("front_macros"), split_state == Split::Status::ActiveFrontMacros},
+        };
         const QJsonObject emulation{
             {QStringLiteral("generation"), process ? (switch2 ? QStringLiteral("switch2") : QStringLiteral("switch")) : QStringLiteral("none")},
             {QStringLiteral("compiled_cpu_cores"), static_cast<int>(Core::Hardware::NUM_CPU_CORES)},
@@ -275,6 +286,8 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
             {QStringLiteral("global_memory_layout_value"), static_cast<int>(memory_layout.GetValue(true))},
             {QStringLiteral("memory_layout_automatic"), powered && QtCommon::system->WasMemoryLayoutAutoSelected()},
             {QStringLiteral("generation_forces_auto_stub"), switch2},
+            {QStringLiteral("gpu_split"), split},
+            {QStringLiteral("gpu_profile_enabled"), VideoCommon::Nx2Profile::Enabled()},
         };
         return CS::Success(QJsonObject{
             {QStringLiteral("ready"), true},

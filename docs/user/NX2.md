@@ -88,6 +88,21 @@ or `switch2`), `compiled_cpu_cores`, `multicore`, the effective `memory_layout`
 name and `memory_layout_value`, and `global_memory_layout_value`.
 `memory_layout_automatic` identifies a temporary NX2 memory override;
 `generation_forces_auto_stub` identifies the imported Switch 2 caller policy.
+
+`emulation.gpu_split` reports the requested mode (`0`, `1`, `2`, or `-1` for an
+unrecognized value), the last GPU decision in `state`, and effective `active`
+and `front_macros` booleans. States are `not_started`, `disabled`, `invalid_mode`,
+`not_ampere`, `accurate_gpu`, `safe_dma`, `not_vulkan`, `active_back_macros`,
+`active_front_macros`, and `stopped`. Before GPU commands arrive it may still
+report `not_started`; shutdown reports `stopped`. This is a thread-safe snapshot,
+not a live setter or proof of compatibility. The imported first-character mode
+parsing and default mode `2` are unchanged. `emulation.gpu_profile_enabled`
+reports whether startup zone profiling was enabled; inspect the log for actual
+reports. An enabled flag does not establish that profiling output was produced.
+`not_ampere` can be provisional until the guest identifies its GPU; poll the
+latest state instead of treating an early sample as final ineligibility. During
+asynchronous shutdown `powered_on` may become false before split teardown;
+wait for `gpu_split.state == "stopped"` to observe that teardown.
 These fields describe the running process and effective configuration. They do
 not certify that a game renders correctly or that a stubbed service is implemented.
 
@@ -214,11 +229,32 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
 - SDL-only `HIDE_WINDOW` adds hidden/not-focusable flags when its value does not
   begin with `0`. It still creates an SDL window; it is not display-free rendering.
   Qt uses `--control-background` instead.
-- SDL-only `KEY_SCRIPT` accepts ordered `seconds:scancode` or
-  `f<present>:scancode` entries, separated by commas, or `@<file>`. Negative codes
-  release the SDL keyboard mapping. `KEY_RECORD=<file>` records SDL key events
-  with present indices. These files are not Qt controller macro files; their
-  timing clocks differ. There is no attachable SDL script status/cancel API.
+- SDL-only `KEY_SCRIPT` is read once at SDL frontend startup, before the
+  emulator and the game are initialized. Changing it later does nothing. Live
+  status, cancel, and `edenctl` attachment are unsupported; this is not an SDL
+  control server. The value is a comma-separated list, or `@<file>` (that file's
+  entire text is the list). A missing or unreadable file fails startup; an empty
+  file is an empty script. One trailing comma is allowed. Each entry is
+  `seconds:scancode` or `f<present>:scancode`, run in listed order: a later entry
+  waits even when its own clock is already due. Seconds are host time since the
+  SDL key clock starts and must be finite and at least 0. `f<present>` is the
+  process present count, and `f0` is due while that count is still 0. Scancodes
+  are SDL scancodes 0 through 511; a minus sign releases that scancode. The whole
+  script is checked before boot. Startup fails with an SDL failure result and an
+  `EDEN_NX2_KEY_SCRIPT` log line for a missing or unreadable file, an empty entry,
+  a missing colon, a negative or non-finite time, trailing characters after a
+  number, a present index or scancode that is not a finished integer, a scancode
+  outside 0..511, or an input over 1048576 bytes, 4096 events, or 64 characters
+  in one numeric token. Number parsing does not use throwing `stoi`, `stod`, or
+  `stoull`. Unlike the upstream permissive parser, malformed entries abort startup
+  instead of being skipped or partially parsed. Errors identify the entry and
+  problem without echoing script contents. A press stays down until a later
+  negative entry for that scancode or until the SDL process stops, including a
+  final unpaired press. On shutdown Eden releases only scancodes the script pressed and has not yet
+  released. Other keys are left alone on that path. A negative entry still
+  releases the scancode it names. `KEY_RECORD=<file>` records
+  SDL key events with present indices. These files are not Qt controller macro
+  files; their timing clocks differ.
 - `SAMPLE=<comma-separated thread names>` and its `SAMPLE_START` (60 seconds),
   `SAMPLE_SECONDS` (30 seconds), `SAMPLE_OUT` (`nx2_samples.txt`, plus `.folded`)
   companions are **Windows SDL-only** host sampling controls. A trailing `*`
@@ -237,5 +273,6 @@ Other main sources: `src/video_core/gpu_split.cpp:GpuSplit::MaybeStart`,
   this documentation do not establish full Switch 2 emulation on any platform.
 
 SDL sources: `src/yuzu_cmd/yuzu.cpp:SDL_AppInit` / `RunKeyScript`,
+`src/yuzu_cmd/nx2_key_script.cpp`,
 `src/yuzu_cmd/emu_window/emu_window_sdl3.{h,cpp}` and
 `src/yuzu_cmd/nx2_sampler.cpp:StartFromEnvironment`.

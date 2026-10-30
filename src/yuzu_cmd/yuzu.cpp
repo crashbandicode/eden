@@ -5,9 +5,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <atomic>
-#include <iterator>
-#include <fstream>
-#include <vector>
 #include <cstdlib>
 #include <chrono>
 #include <cstdio>
@@ -54,6 +51,7 @@
 #endif
 #include "yuzu_cmd/emu_window/emu_window_sdl3_null.h"
 #include "yuzu_cmd/emu_window/emu_window_sdl3_vk.h"
+#include "yuzu_cmd/nx2_key_script.h"
 #include "yuzu_cmd/nx2_sampler.h"
 
 #ifdef _WIN32
@@ -241,6 +239,8 @@ struct SdlState {
     // Must outlive emu_window, which keeps a pointer to it.
     InputCommon::InputSubsystem input_subsystem{};
     std::unique_ptr<EmuWindow_SDL3> emu_window;
+    // Script cursor and keys this script is holding. Independent of other keyboard input.
+    Nx2KeyScript::Session key_script{};
 };
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
@@ -290,6 +290,16 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     if (lp.filepath.empty()) {
         LOG_CRITICAL(Frontend, "Failed to load ROM: No ROM specified");
         return SDL_APP_FAILURE;
+    }
+
+    // Validate the whole key script before the emulator or the game starts. A bad
+    // script must not reach system.Initialize or ROM load.
+    if (const char* key_script = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
+        std::string key_script_error;
+        if (!Nx2KeyScript::Load(key_script, state->key_script, key_script_error)) {
+            LOG_CRITICAL(Frontend, "EDEN_NX2_KEY_SCRIPT: {}", key_script_error);
+            return SDL_APP_FAILURE;
+        }
     }
 
     state->system.Initialize();
@@ -412,63 +422,46 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         state->system.InitializeDebugger();
     return SDL_APP_CONTINUE;
 }
-// EDEN_NX2_KEY_SCRIPT="seconds:code,seconds:-code,..." (or "@<file>"): press (code) or release (-code) keyboard
-// keys, by SDL scancode, that many seconds after start. Lets hidden test runs drive menus.
-
-static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
-    struct KeyEvent {
-        double seconds; // when frame is 0
-        u64 frame;      // "f<frame>:code": after that many presents
-        int code;
+static Nx2KeyScript::Callbacks KeyScriptCallbacks(InputCommon::Keyboard* keyboard, double elapsed,
+                                                   u64 frame) {
+    Nx2KeyScript::Callbacks callbacks;
+    if (keyboard == nullptr) {
+        return callbacks;
+    }
+    callbacks.press = [keyboard, elapsed, frame](int scancode) {
+        LOG_INFO(Frontend, "Key script: press key {} at {:.1f} s (frame {})", scancode, elapsed,
+                 frame);
+        keyboard->PressKey(scancode);
     };
-    static const std::vector<KeyEvent> script = [] {
-        std::vector<KeyEvent> events;
-        if (const char* text = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
-            // "@<file>" reads the list from a file: long scripts in the environment slow down
-            // every getenv in the process.
-            std::string list{text};
-            if (!list.empty() && list[0] == '@') {
-                std::ifstream file{list.substr(1)};
-                list.assign(std::istreambuf_iterator<char>{file}, {});
-            }
-            size_t start = 0;
-            while (start < list.size()) {
-                const size_t end = (std::min)(list.find(',', start), list.size());
-                const std::string item = list.substr(start, end - start);
-                if (const size_t colon = item.find(':'); colon != std::string::npos) {
-                    const std::string when = item.substr(0, colon);
-                    const int code = std::stoi(item.substr(colon + 1));
-                    if (!when.empty() && when[0] == 'f') {
-                        events.push_back({0.0, std::stoull(when.substr(1)), code});
-                    } else {
-                        events.push_back({std::stod(when), 0, code});
-                    }
-                }
-                start = end + 1;
-            }
-        }
-        return events;
-    }();
-    static size_t next = 0;
+    callbacks.release = [keyboard, elapsed, frame](int scancode) {
+        LOG_INFO(Frontend, "Key script: release key {} at {:.1f} s (frame {})", scancode, elapsed,
+                 frame);
+        keyboard->ReleaseKey(scancode);
+    };
+    return callbacks;
+}
+
+static void RunKeyScript(SdlState& state) {
+    auto* const keyboard = state.input_subsystem.GetKeyboard();
+    if (keyboard == nullptr) {
+        return;
+    }
     const double elapsed = Nx2KeyClockSeconds();
     const u64 frame = Core::g_nx2_present_count.load();
-    while (next < script.size() && (script[next].frame != 0 ? script[next].frame <= frame
-                                                            : script[next].seconds <= elapsed)) {
-        const int code = script[next].code;
-        LOG_INFO(Frontend, "Key script: {} key {} at {:.1f} s (frame {})",
-                 code < 0 ? "release" : "press", code < 0 ? -code : code, elapsed, frame);
-        if (code < 0) {
-            input_subsystem.GetKeyboard()->ReleaseKey(static_cast<std::size_t>(-code));
-        } else {
-            input_subsystem.GetKeyboard()->PressKey(static_cast<std::size_t>(code));
-        }
-        ++next;
-    }
+    Nx2KeyScript::Advance(state.key_script, elapsed, frame,
+                          KeyScriptCallbacks(keyboard, elapsed, frame));
+}
+
+static void StopKeyScript(SdlState& state) {
+    auto* const keyboard = state.input_subsystem.GetKeyboard();
+    const double elapsed = Nx2KeyClockSeconds();
+    const u64 frame = Core::g_nx2_present_count.load();
+    Nx2KeyScript::Stop(state.key_script, KeyScriptCallbacks(keyboard, elapsed, frame));
 }
 
 extern "C" SDL_AppResult SDL_AppIterate(void *appstate) {
     SdlState *state = (SdlState *)appstate;
-    RunKeyScript(state->input_subsystem);
+    RunKeyScript(*state);
     return state->emu_window && state->emu_window->IsOpen() ? SDL_APP_CONTINUE : SDL_APP_SUCCESS;
 }
 extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
@@ -479,6 +472,8 @@ extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 }
 extern "C" void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     SdlState *state = (SdlState *)appstate;
+    // Keyboard shutdown happens when emu_window is destroyed below.
+    StopKeyScript(*state);
     state->system.DetachDebugger();
     void(state->system.Pause());
     state->system.ShutdownMainProcess();

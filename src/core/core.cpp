@@ -46,6 +46,7 @@
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/hle/service/glue/glue_manager.h"
 #include "core/hle/service/glue/time/static.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
 #include "core/hle/service/psc/time/static.h"
 #include "core/hle/service/psc/time/steady_clock.h"
 #include "core/hle/service/psc/time/system_clock.h"
@@ -65,6 +66,7 @@
 #include "hid_core/hid_core.h"
 #include "network/network.h"
 #include "video_core/host1x/host1x.h"
+#include "video_core/nx2.h"
 #include "video_core/renderer_base.h"
 #include "video_core/video_core.h"
 
@@ -454,6 +456,12 @@ struct System::Impl {
         cpu_manager.Shutdown();
         debugger.reset();
         kernel.Shutdown();
+        // Guest driver identification belongs to the stopped session. Reset only
+        // after GPU workers, services and CPU cores are gone: changing the mode
+        // while the GPU drains would reinterpret pending Ampere commands.
+        Service::Nvidia::Devices::g_nx2_driver.store(false);
+        Tegra::g_nx2_ampere.store(false);
+        g_nx2_present_count.store(0);
         stop_event = {};
         Network::RestartSocketOperations();
 

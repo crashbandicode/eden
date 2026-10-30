@@ -647,7 +647,11 @@ inline LoweredProgram LowerToMaxwell(std::span<const Instruction> code) {
             if (insn.Bits(84, 3) != 7 || insn.Bits(67, 1) || insn.Bits(16, 8) || insn.words[1])
                 return fail(index, "native uniform predicate LUT mode");
             if (target == 7) break;
-            const auto slot = [](u32 operand) { return (operand & 7) == 7 ? operand : (operand & 8) | (6 - (operand & 7)); };
+            const auto slot = [](u32 source_predicate) {
+                return (source_predicate & 7) == 7
+                           ? source_predicate
+                           : (source_predicate & 8) | (6 - (source_predicate & 7));
+            };
             predicate = u64{slot(native_predicate)} << 16; // a UPn guard is loaded as well
             emit(0x38e8000000070000ULL | 254 | (u64{255} << 8) | (u64{0x7f} << 20));
             emit(0x38f0000000070000ULL | (u64{239} << 8) | (u64{0x7f} << 20));

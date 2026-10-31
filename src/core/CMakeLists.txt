@@ -1181,6 +1181,17 @@ add_library(core STATIC
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(core PRIVATE internal_network/nso_lan_socket.cpp internal_network/nso_lan_socket.h)
     target_compile_definitions(core PRIVATE EDEN_LAN_ONLINE_SOCKET)
+elseif (WIN32)
+    # Windows: shared ELN1 codec plus the AF_UNIX stream transport and the private-directory
+    # (protected DACL) helpers that the frontend also uses.
+    target_sources(core PRIVATE
+        internal_network/nso_lan_socket.cpp
+        internal_network/nso_lan_socket.h
+        internal_network/nso_lan_socket_win.cpp
+        internal_network/nso_lan_platform.h
+        internal_network/nso_lan_platform_win.cpp)
+    target_compile_definitions(core PRIVATE EDEN_LAN_ONLINE_SOCKET)
+    target_link_libraries(core PRIVATE ws2_32 advapi32)
 endif()
 
 if (ENABLE_WIFI_SCAN)

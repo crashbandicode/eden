@@ -26,7 +26,10 @@ class MemoryManager;
 namespace Tegra::Engines {
 class Nv01Timer final : public EngineInterface {
 public:
-    explicit Nv01Timer(MemoryManager& memory_manager) noexcept {}
+    explicit Nv01Timer(MemoryManager& memory_manager) noexcept {
+        // This engine has no deferred register state; dispatch its no-op methods immediately.
+        execution_mask.set();
+    }
     ~Nv01Timer() noexcept override {}
 
     /// Write the value to the register identified by method.
@@ -42,7 +45,5 @@ public:
     struct Regs {
         INSERT_PADDING_BYTES_NOINIT(0x48);
     } regs{};
-private:
-    void ConsumeSinkImpl(Core::System& system) override {}
 };
 }

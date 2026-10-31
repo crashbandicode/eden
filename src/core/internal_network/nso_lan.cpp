@@ -212,9 +212,17 @@ bool InstallAutomaticConfiguration(std::string_view text, std::string_view expec
         return false;
     }
     auto config = ParseConfiguration(text);
-    if (!config || !config->automatic_transport || expected_directory.empty() ||
-        std::filesystem::path{config->automatic_transport->control_socket}.parent_path() !=
-            std::filesystem::path{expected_directory}) {
+    if (!config || !config->automatic_transport || expected_directory.empty()) {
+        return false;
+    }
+    // The runtime writes native paths; the launcher may hand over the same directory with the
+    // other separator (Qt on Windows). Compare the normalized preferred forms.
+    const auto published_directory = std::filesystem::path{config->automatic_transport->control_socket}
+                                         .parent_path()
+                                         .lexically_normal()
+                                         .make_preferred();
+    const auto expected = std::filesystem::path{expected_directory}.lexically_normal().make_preferred();
+    if (published_directory != expected) {
         return false;
     }
     auto& automatic = GetAutomaticState();

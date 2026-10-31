@@ -1,0 +1,28 @@
+{
+  "port_redirects": [
+    {
+      "from": 443,
+      "address": "192.168.10.20",
+      "to": 8443
+    },
+    {
+      "from": 443,
+      "address": "192.168.10.21",
+      "to": 8444
+    }
+  ],
+  "dns": {
+    "nncs1-lp1.n.n.srv.nintendo.net": "192.168.10.20",
+    "api-lp1.znc.srv.nintendo.net": "192.168.10.21",
+    "g23380901-lp1.s.n.srv.nintendo.net": "192.168.10.20",
+    "nncs2-lp1.n.n.srv.nintendo.net": "192.168.10.21"
+  },
+  "account_id": 49153,
+  "allowed_ips": [
+    "127.0.0.1",
+    "192.168.10.20",
+    "192.168.10.21",
+    "192.168.10.30",
+    "192.168.10.31"
+  ]
+}

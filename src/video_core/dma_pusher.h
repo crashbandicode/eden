@@ -160,6 +160,8 @@ public:
     void BindRasterizer(VideoCore::RasterizerInterface* rasterizer);
 
 private:
+    // Exercise prefetched command submission without booting a GPU in regression tests.
+    friend struct DmaPusherTestAccess;
     static constexpr u32 non_puller_methods = 0x40;
     static constexpr u32 max_subchannels = 8;
     bool Step();

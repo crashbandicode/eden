@@ -20,6 +20,7 @@ add_executable(tests
     core/internal_network/network.cpp
     video_core/gpu_shutdown_sync.cpp
     video_core/memory_tracker.cpp
+    video_core/nv01_timer.cpp
     input_common/calibration_configuration_job.cpp
     input/virtual_gamepad.cpp
 )

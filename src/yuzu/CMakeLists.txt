@@ -32,6 +32,7 @@ add_executable(yuzu
     applets/qt_profile_select.cpp
     applets/qt_profile_select.h
     applets/qt_software_keyboard.cpp
+    applets/inline_keyboard_text.h
     applets/qt_software_keyboard.h
     applets/qt_software_keyboard.ui
     applets/qt_web_browser.cpp

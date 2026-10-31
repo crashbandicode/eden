@@ -8,14 +8,15 @@
 #include <array>
 #include <atomic>
 #include <memory>
-#include <thread>
 
 #include <QDialog>
+#include <QTimer>
 #include <QValidator>
 
 #include "core/frontend/applets/software_keyboard.h"
 
 class InputInterpreter;
+class InlineKeyboardText;
 
 namespace Core {
 class System;
@@ -117,6 +118,8 @@ private:
     /// Changes whether the backspace or/and ok buttons should be enabled or disabled.
     void SetBackspaceOkEnabled();
 
+    void UpdateInlineTextDisplay();
+
     /**
      * Validates the input text sent in based on the parameters in initialize_parameters.
      *
@@ -181,8 +184,9 @@ private:
      */
     void MoveTextCursorDirection(Direction direction);
 
-    void StartInputThread();
-    void StopInputThread();
+    void StartInputPolling();
+    void StopInputPolling();
+    void PollInput();
 
     std::unique_ptr<Ui::QtSoftwareKeyboardDialog> ui;
 
@@ -194,9 +198,10 @@ private:
     // Common software keyboard initialize parameters.
     Core::Frontend::KeyboardInitializeParameters initialize_parameters;
 
-    // Used only by the inline software keyboard since the QLineEdit or QTextEdit is hidden.
+    // Authoritative inline state; the passive display never sends guest replies.
     std::u16string current_text;
     s32 cursor_position{0};
+    InlineKeyboardText* inline_text_display{};
 
     static constexpr std::size_t NUM_ROWS_NORMAL = 5;
     static constexpr std::size_t NUM_COLUMNS_NORMAL = 12;
@@ -219,7 +224,7 @@ private:
     std::atomic<bool> caps_lock_enabled{false};
 
     std::unique_ptr<InputInterpreter> input_interpreter;
-    std::jthread input_thread;
+    QTimer input_timer;
 };
 
 class QtSoftwareKeyboard final : public QObject, public Core::Frontend::SoftwareKeyboardApplet {

@@ -13,6 +13,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <memory>
 #include <cerrno>
 #ifdef __linux__
@@ -25,11 +26,48 @@
 #include "common/uuid.h"
 #include "core/hle/service/acc/profile_manager.h"
 #include "core/internal_network/nso_lan.h"
+#ifdef _WIN32
+#include "core/internal_network/nso_lan_platform.h"
+#endif
 #include "qt_common/config/uisettings.h"
 #include "qt_common/qt_common.h"
 
 namespace LanOnline {
 namespace {
+#ifdef _WIN32
+// QTemporaryDir supplies its own POSIX-style ACL, including group/world entries, instead of
+// preserving the private parent ACL. Create each new Windows instance with our native DACL.
+class InstanceDirectory final {
+public:
+    explicit InstanceDirectory(const QString& root) {
+        for (int attempt = 0; attempt < 32; ++attempt) {
+            const auto candidate = root + QStringLiteral("/i-") +
+                                   QUuid::createUuid().toString(QUuid::Id128).left(6);
+            if (Network::NsoLan::CreatePrivateDirectory(
+                    QDir::toNativeSeparators(candidate).toStdString())) {
+                owned_path = candidate;
+                return;
+            }
+            if (!QFileInfo::exists(candidate)) {
+                return;
+            }
+        }
+    }
+    ~InstanceDirectory() {
+        if (isValid()) {
+            QDir{owned_path}.removeRecursively();
+        }
+    }
+    bool isValid() const { return !owned_path.isEmpty(); }
+    QString path() const { return owned_path; }
+
+private:
+    QString owned_path;
+};
+#else
+using InstanceDirectory = QTemporaryDir;
+#endif
+
 class Runtime final : public QObject {
 public:
     explicit Runtime(QObject* parent) : QObject{parent} {
@@ -41,6 +79,16 @@ public:
 
     void Stop() {
         if (process.state() != QProcess::NotRunning) {
+#ifdef _WIN32
+            // QProcess::terminate cannot signal a console-less child on Windows; the runtime
+            // polls for this marker in its private directory and stops cleanly within 250 ms.
+            if (directory && directory->isValid()) {
+                QFile marker{directory->path() + QStringLiteral("/stop")};
+                if (marker.open(QIODevice::WriteOnly)) {
+                    marker.close();
+                }
+            }
+#endif
             process.terminate();
             if (!process.waitForFinished(2000)) {
                 process.kill();
@@ -50,7 +98,7 @@ public:
     }
 
     QProcess process;
-    std::unique_ptr<QTemporaryDir> directory;
+    std::unique_ptr<InstanceDirectory> directory;
     bool published = false;
     bool starting = false;
     bool control_tls = false;
@@ -67,8 +115,13 @@ QPointer<Runtime> runtime;
         return override;
     }
     const auto application = QCoreApplication::applicationDirPath();
-    for (const auto& candidate : {application + QStringLiteral("/eden-lan-runtime"),
-                                  application + QStringLiteral("/../libexec/eden-lan-runtime")}) {
+#ifdef _WIN32
+    const QStringList candidates{application + QStringLiteral("/eden-lan-runtime.exe")};
+#else
+    const QStringList candidates{application + QStringLiteral("/eden-lan-runtime"),
+                                 application + QStringLiteral("/../libexec/eden-lan-runtime")};
+#endif
+    for (const auto& candidate : candidates) {
         if (QFileInfo(candidate).isExecutable()) {
             return candidate;
         }
@@ -78,9 +131,14 @@ QPointer<Runtime> runtime;
 
 [[maybe_unused]] QString LocateAssets() {
     const auto override = qEnvironmentVariable("EDEN_LAN_ASSETS");
-    return override.isEmpty()
-               ? QCoreApplication::applicationDirPath() + QStringLiteral("/../share/eden/lan-online/init")
-               : override;
+    if (!override.isEmpty()) {
+        return override;
+    }
+#ifdef _WIN32
+    return QCoreApplication::applicationDirPath() + QStringLiteral("/lan-online/init");
+#else
+    return QCoreApplication::applicationDirPath() + QStringLiteral("/../share/eden/lan-online/init");
+#endif
 }
 
 [[maybe_unused]] QString RuntimeFailure(const QString& directory) {
@@ -125,8 +183,8 @@ QString Prepare(QWidget*, u64 title_id) {
                    ? QObject::tr("Restart Eden to turn LAN Online off.")
                    : QString{};
     }
-#ifndef __linux__
-    return QObject::tr("LAN Online is currently available in the Linux preview.");
+#if !defined(__linux__) && !defined(_WIN32)
+    return QObject::tr("LAN Online is currently available in the Linux and Windows previews.");
 #else
     constexpr u64 SupportedTitle = 0x01006A800016E000;
     if (title_id != SupportedTitle) {
@@ -193,6 +251,19 @@ QString Prepare(QWidget*, u64 title_id) {
             return QObject::tr("Eden could not create the LAN Online rating profile directory.");
         }
     }
+#ifdef _WIN32
+    // Per-user profile data (%LOCALAPPDATA%), kept short because AF_UNIX paths are limited to
+    // 107 bytes. The root gets a protected DACL (this account and SYSTEM only) and each instance
+    // child receives the same DACL. An existing root is verified, never re-permissioned.
+    const auto base = QDir::fromNativeSeparators(qEnvironmentVariable("LOCALAPPDATA"));
+    if (base.isEmpty() || !QDir{base}.exists()) {
+        return QObject::tr("Eden could not find a private runtime directory for LAN Online.");
+    }
+    const auto root = base + QStringLiteral("/eden-lan");
+    if (!Network::NsoLan::EnsurePrivateDirectory(QDir::toNativeSeparators(root).toStdString())) {
+        return QObject::tr("Eden could not create its private LAN Online runtime directory.");
+    }
+#else
     const auto base = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     if (base.isEmpty()) {
         return QObject::tr("Eden could not find a private runtime directory for LAN Online.");
@@ -207,20 +278,44 @@ QString Prepare(QWidget*, u64 title_id) {
         (directory_stat.st_mode & 0777) != 0700) {
         return QObject::tr("Eden could not create its private LAN Online runtime directory.");
     }
+#endif
     runtime->Stop();
-    runtime->directory = std::make_unique<QTemporaryDir>(root + QStringLiteral("/i-XXXXXX"));
+#ifdef _WIN32
+    runtime->directory = std::make_unique<InstanceDirectory>(root);
+#else
+    runtime->directory = std::make_unique<InstanceDirectory>(root + QStringLiteral("/i-XXXXXX"));
+#endif
     if (!runtime->directory->isValid()) {
         return QObject::tr("Eden could not allocate a LAN Online instance.");
     }
-    runtime->starting = true;
+#ifdef _WIN32
+    // The runtime and the guest sockets use native paths. The longest node below the instance
+    // directory is eln-<pid>-<seq>-<16 hex>.sock; the whole path must fit sun_path (107 bytes).
+    const auto instance_dir = QDir::toNativeSeparators(runtime->directory->path());
+    const auto assets_arg = QDir::toNativeSeparators(assets);
+    if (!Network::NsoLan::IsPrivateDirectory(instance_dir.toStdString()) ||
+        instance_dir.toUtf8().size() + 1 + 48 > 107) {
+        runtime->directory.reset();
+        return QObject::tr("Eden could not allocate a private LAN Online instance directory. Check the "
+                           "profile path length and permissions.");
+    }
+#else
     const auto instance_dir = runtime->directory->path();
+    const auto assets_arg = assets;
+#endif
+#ifdef _WIN32
+    const auto profile_arg = QDir::toNativeSeparators(QString::fromStdWString(profile_dir.wstring()));
+#else
+    const auto profile_arg = QString::fromStdString(profile_dir.string());
+#endif
+    runtime->starting = true;
     QStringList arguments{QStringLiteral("--auto"), QStringLiteral("--parent-pid"),
                           QString::number(QCoreApplication::applicationPid()),
                           QStringLiteral("--runtime-dir"), instance_dir,
-                          QStringLiteral("--assets"), assets, QStringLiteral("--title-id"),
+                          QStringLiteral("--assets"), assets_arg, QStringLiteral("--title-id"),
                           QString::number(title_id, 16).rightJustified(16, QLatin1Char('0')),
                           QStringLiteral("--profile-dir"),
-                          QString::fromStdString(profile_dir.string())};
+                          profile_arg};
     const auto interface = Settings::values.network_interface.GetValue();
     runtime->control_tls = UISettings::values.lan_online_tls.GetValue();
     if (runtime->control_tls) {

@@ -1,0 +1,14 @@
+{
+  "NSOLAN_ADVERTISE_HOST": "192.168.10.20",
+  "NSOLAN_BIND_HOST": "192.168.10.20",
+  "NSOLAN_AUTH_PORT": "8443",
+  "NSOLAN_SECURE_PORT": "60005",
+  "NSOLAN_IDENTITIES": "49153,49154",
+  "NSOLAN_SESSION_STATIONS": "lan",
+  "NSOLAN_NATCHECK": "1",
+  "NSOLAN_NATCHECK_ADDRS": "192.168.10.20,192.168.10.21",
+  "NSOLAN_NATCHECK_PORTS": "10025,10125",
+  "NSOLAN_TLS_CERT": "/absolute/private/tls/cert.pem",
+  "NSOLAN_TLS_KEY": "/absolute/private/tls/key.pem",
+  "NSOLAN_REPLAY_DIR": "/absolute/operator-reviewed-init"
+}

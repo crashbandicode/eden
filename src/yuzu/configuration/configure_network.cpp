@@ -57,7 +57,7 @@ void ConfigureNetwork::SetConfiguration() {
     ui->lan_online->setEnabled(runtime_lock);
     ui->lan_online_tls->setChecked(UISettings::values.lan_online_tls.GetValue());
     ui->lan_online_tls->setEnabled(runtime_lock);
-#ifndef __linux__
+#if !defined(__linux__) && !defined(_WIN32)
     ui->lan_online->setEnabled(false);
     ui->lan_online_tls->setEnabled(false);
 #endif

@@ -1,5 +1,10 @@
 # Automatic LAN Online (Linux preview)
 
+The standalone companion source is in [tools/lan-online](../tools/lan-online/README.md).
+Its licensing is separate from Eden; preserve its notices. Public source builds
+still need the external private initialization replies described below. Neither
+those replies nor operational handoff notes are included in Git.
+
 LAN Online is an Eden feature with a bundled companion runtime. It does not require a new NRO. It provides local test services for Smash Ultimate's Online interface; it is separate from local wireless/LDN and does not connect to Nintendo's online service.
 
 The Linux preview has passed the live workflows recorded in [the acceptance report](LAN_ONLINE_ACCEPTANCE.md), with the limits stated there. Windows remains under validation. The older explicit fixture mode has separate instructions in [NSO_LAN_FIXTURE.md](NSO_LAN_FIXTURE.md). Passing configuration or socket tests alone does not establish playable matchmaking.
@@ -30,6 +35,13 @@ Closing Eden stops its owned runtime. Another runtime can take over coordination
 To leave an arena, hold B and confirm Yes. If a token is being picked up or moved, cancel that action and hold B again. The host receives a shutdown prompt; after confirming, a new public search should no longer find the arena. Short B taps can manipulate tokens without leaving.
 
 ### Windows (port under validation)
+
+The published Windows port built successfully with MSVC and passed 27 native
+socket cases and 103 companion tests (two helper skips). Smash 13.0.5 booted in
+isolated tests, but host memory guards ended those runs before a complete LAN
+match, results/rematch and fresh-process rating restoration could be accepted.
+Publishing the port does not mark those gameplay gates complete. Linux's accepted
+workflows do not establish Windows interoperability.
 
 The Windows package places `eden-lan-runtime.exe` beside `eden.exe` and the nine private support replies under `lan-online\init`. Eden keeps each instance's runtime files below `%LOCALAPPDATA%\eden-lan`, a directory it creates with access for the current account and SYSTEM only. Same-PC instances still use Unix sockets: Windows AF_UNIX offers streams only, so each guest socket holds one AF_UNIX stream to its runtime carrying the same 24-byte framed datagrams, and the runtime authenticates every local connection by its peer process. Cross-PC discovery, lobby/control and UDP gameplay retain the Linux wire protocol. Windows/Linux gameplay interoperability remains an acceptance gate until live testing passes; Windows results are recorded separately.
 

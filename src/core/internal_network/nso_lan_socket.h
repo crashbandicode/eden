@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -66,15 +67,21 @@ enum class DecodeStatus {
 
 } // namespace NsoLanWire
 
-/// UDP guest socket carried over a real AF_UNIX/SOCK_DGRAM descriptor to a local LAN broker.
+/// UDP guest socket carried over AF_UNIX to a local LAN broker.
 ///
 /// The guest only ever sees its virtual IPv4 address and guest port. The broker, reached through
 /// a newline-delimited JSON control socket, maps (virtual address, guest port) to the Unix
 /// pathname this socket owns and moves datagrams between instances. Only INET + DGRAM +
 /// UDP/IP/unspecified is supported. Broadcast and multicast are rejected rather than emulated.
 ///
-/// The descriptor is real, so non-blocking mode, receive/send timeouts and Network::Poll work
-/// on it directly. Linux only.
+/// Linux (nso_lan_socket.cpp): the descriptor is a real AF_UNIX/SOCK_DGRAM socket, so
+/// non-blocking mode, receive/send timeouts and Network::Poll work on it directly.
+///
+/// Windows (nso_lan_socket_win.cpp): Windows AF_UNIX has no datagram sockets. One AF_UNIX stream
+/// carries consecutive ELN1 frames to and from the broker; a reader thread reassembles whole
+/// frames into a bounded queue and signals each one on an AF_UNIX pair whose read end is the
+/// pollable descriptor, so WSAPoll reports readable exactly when a whole datagram (or EOF) is
+/// queued. Shutdown and Close wake receivers and pollers through that pair.
 class NsoLanSocket final : public Socket {
 public:
     NsoLanSocket(std::string control_path, std::string datagram_path, IPv4Address virtual_address);
@@ -101,9 +108,26 @@ public:
     /// Guest timeouts are milliseconds; zero disables the timeout.
     Errno SetSndTimeo(u32 value) override;
     Errno SetRcvTimeo(u32 value) override;
+#ifdef _WIN32
+    /// The pollable descriptor stays non-blocking internally; the mode is applied by Recv.
+    Errno SetNonBlock(bool enable) override;
+    /// Closed state is kept in the shared state, not in `fd`, which Close never writes.
+    bool IsOpened() const override;
+    Errno SetLinger(bool enable, u32 linger) override;
+    Errno SetReuseAddr(bool enable) override;
+    Errno SetKeepAlive(bool enable) override;
+    Errno SetBroadcast(bool enable) override;
+    Errno SetSndBuf(u32 value) override;
+    Errno SetRcvBuf(u32 value) override;
+    std::pair<Errno, Errno> GetPendingError() override;
+#endif
 
 private:
+#ifndef _WIN32
     Errno SetTimeout(int option, u32 milliseconds);
+#else
+    bool ClosedLocked() const;
+#endif
     Errno RegisterLocked(u16 requested_port);
     Errno AutoBindLocked();
     void UnregisterLocked();
@@ -117,7 +141,7 @@ private:
     const std::string datagram_path;
     const IPv4Address virtual_address;
 
-    std::mutex state_mutex;
+    mutable std::mutex state_mutex;
     std::string local_path;  ///< Unix pathname this socket created; empty when not created.
     u64 local_device = 0;    ///< Identity of the node we created, checked before unlinking.
     u64 local_inode = 0;
@@ -125,6 +149,16 @@ private:
     std::optional<SockAddrIn> peer;
     bool shutdown_read = false;
     bool shutdown_write = false;
+#ifdef _WIN32
+    struct WindowsState;
+    /// Stream, wake-up pair, reader thread and frame queue. Shared: in-flight Recv/Send copy the
+    /// pointer under state_mutex. Close marks the state closed, wakes waiters, joins the reader and
+    /// closes the stream, but keeps this reference until the socket is destroyed or re-initialized;
+    /// the wake-up pair handles are closed only when the last reference goes away. `fd` keeps the
+    /// wake-up read handle from Initialize until destruction, so Network::Poll (which reads `fd`
+    /// without a lock after taking its descriptor snapshot) never races a write of it.
+    std::shared_ptr<WindowsState> win;
+#endif
 };
 
 } // namespace Network

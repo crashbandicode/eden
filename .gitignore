@@ -70,3 +70,12 @@ externals/generated
 
 # Python control tools
 tools/**/__pycache__/
+
+# Local operational notes and private runtime inputs
+**/*HANDOFF*.md
+**/*handoff*.md
+**/*PROGRESS*.md
+**/prod.keys
+**/title.keys
+**/ratings.json
+/tools/lan-online/init/

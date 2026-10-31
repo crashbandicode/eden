@@ -16,6 +16,7 @@
 #include "hid_core/hid_core.h"
 #include "hid_core/hid_types.h"
 #include "ui_qt_software_keyboard.h"
+#include "yuzu/applets/inline_keyboard_text.h"
 #include "yuzu/applets/qt_software_keyboard.h"
 #include "yuzu/main_window.h"
 #include "yuzu/util/overlay_dialog.h"
@@ -354,6 +355,15 @@ QtSoftwareKeyboardDialog::QtSoftwareKeyboardDialog(
 
     SetTextDrawType();
 
+    if (is_inline) {
+        inline_text_display = new InlineKeyboardText(ui->inputBoxOSK);
+        ui->verticalLayout_6->addWidget(inline_text_display);
+        ui->text_edit_osk->hide();
+        UpdateInlineTextDisplay();
+    }
+
+    connect(&input_timer, &QTimer::timeout, this, &QtSoftwareKeyboardDialog::PollInput);
+
     for (auto* button : all_buttons) {
         connect(button, &QPushButton::clicked, this, [this, button](bool) {
             if (is_inline) {
@@ -371,7 +381,7 @@ QtSoftwareKeyboardDialog::QtSoftwareKeyboardDialog(
 }
 
 QtSoftwareKeyboardDialog::~QtSoftwareKeyboardDialog() {
-    StopInputThread();
+    StopInputPolling();
 }
 
 void QtSoftwareKeyboardDialog::ShowNormalKeyboard(QPoint pos, QSize size) {
@@ -399,22 +409,22 @@ void QtSoftwareKeyboardDialog::ShowTextCheckDialog(
     default:
         break;
     case SwkbdTextCheckResult::Failure: {
-        StopInputThread();
+        StopInputPolling();
 
         OverlayDialog dialog(this, system, QString{}, QString::fromStdU16String(text_check_message),
                              QString{}, tr("OK"), Qt::AlignCenter);
         dialog.exec();
 
-        StartInputThread();
+        StartInputPolling();
         break;
     }
     case SwkbdTextCheckResult::Confirm: {
-        StopInputThread();
+        StopInputPolling();
 
         OverlayDialog dialog(this, system, QString{}, QString::fromStdU16String(text_check_message),
                              tr("Cancel"), tr("OK"), Qt::AlignCenter);
         if (dialog.exec() != QDialog::Accepted) {
-            StartInputThread();
+            StartInputPolling();
             break;
         }
 
@@ -438,7 +448,10 @@ void QtSoftwareKeyboardDialog::ShowInlineKeyboard(
     ui->subOSK->hide();
     ui->inputOSK->hide();
     ui->charactersOSK->hide();
-    ui->inputBoxOSK->hide();
+    // Inline applications need a frontend text view as well as the key buttons.
+    // Use the box layout for both single-line and multiline inline text.
+    ui->topOSK->setCurrentWidget(ui->boxOSK);
+    ui->inputBoxOSK->show();
     ui->charactersBoxOSK->hide();
 
     initialize_parameters.max_text_length = appear_parameters.max_text_length;
@@ -458,7 +471,7 @@ void QtSoftwareKeyboardDialog::ShowInlineKeyboard(
 }
 
 void QtSoftwareKeyboardDialog::HideInlineKeyboard() {
-    StopInputThread();
+    StopInputPolling();
     QDialog::hide();
 }
 
@@ -471,7 +484,7 @@ void QtSoftwareKeyboardDialog::InlineTextChanged(
 }
 
 void QtSoftwareKeyboardDialog::ExitKeyboard() {
-    StopInputThread();
+    StopInputPolling();
     QDialog::done(QDialog::Accepted);
 }
 
@@ -502,7 +515,7 @@ void QtSoftwareKeyboardDialog::open() {
         break;
     }
 
-    StartInputThread();
+    StartInputPolling();
 }
 
 void QtSoftwareKeyboardDialog::reject() {
@@ -602,6 +615,9 @@ void QtSoftwareKeyboardDialog::RescaleKeyboardElements(float width, float height
     ui->label_sub->setFont(sub_font);
     ui->line_edit_osk->setFont(editor_font);
     ui->text_edit_osk->setFont(editor_font);
+    if (inline_text_display) {
+        inline_text_display->setFont(editor_font);
+    }
     ui->label_characters->setFont(sub_font);
     ui->label_characters_box->setFont(sub_font);
 
@@ -955,6 +971,7 @@ void QtSoftwareKeyboardDialog::DisableKeyboardButtons() {
 
 void QtSoftwareKeyboardDialog::SetBackspaceOkEnabled() {
     if (is_inline) {
+        UpdateInlineTextDisplay();
         ui->button_ok->setEnabled(current_text.size() >= initialize_parameters.min_text_length);
         ui->button_ok_shift->setEnabled(current_text.size() >=
                                         initialize_parameters.min_text_length);
@@ -993,6 +1010,12 @@ void QtSoftwareKeyboardDialog::SetBackspaceOkEnabled() {
                                                normal_cursor_position > 0);
         ui->button_backspace_num->setEnabled(initialize_parameters.enable_backspace_button &&
                                              normal_cursor_position > 0);
+    }
+}
+
+void QtSoftwareKeyboardDialog::UpdateInlineTextDisplay() {
+    if (inline_text_display) {
+        inline_text_display->SetText(QString::fromStdU16String(current_text), cursor_position);
     }
 }
 
@@ -1491,37 +1514,43 @@ void QtSoftwareKeyboardDialog::MoveTextCursorDirection(Direction direction) {
     default:
         break;
     }
+    if (is_inline) {
+        SetBackspaceOkEnabled();
+    }
 }
 
-void QtSoftwareKeyboardDialog::StartInputThread() {
-    input_thread = std::jthread([&](std::stop_token stoken) {
-        while (!stoken.stop_requested()) {
-            input_interpreter->PollInput();
-            HandleButtonPressedOnce<
-                Core::HID::NpadButton::A, Core::HID::NpadButton::B, Core::HID::NpadButton::X,
-                Core::HID::NpadButton::Y, Core::HID::NpadButton::StickL,
-                Core::HID::NpadButton::StickR, Core::HID::NpadButton::L, Core::HID::NpadButton::R,
-                Core::HID::NpadButton::Plus, Core::HID::NpadButton::Left, Core::HID::NpadButton::Up,
-                Core::HID::NpadButton::Right, Core::HID::NpadButton::Down,
-                Core::HID::NpadButton::StickLLeft, Core::HID::NpadButton::StickLUp,
-                Core::HID::NpadButton::StickLRight, Core::HID::NpadButton::StickLDown,
-                Core::HID::NpadButton::StickRLeft, Core::HID::NpadButton::StickRUp,
-                Core::HID::NpadButton::StickRRight, Core::HID::NpadButton::StickRDown>();
-            HandleButtonHold<Core::HID::NpadButton::B, Core::HID::NpadButton::L,
-                             Core::HID::NpadButton::R, Core::HID::NpadButton::Left,
-                             Core::HID::NpadButton::Up, Core::HID::NpadButton::Right,
-                             Core::HID::NpadButton::Down, Core::HID::NpadButton::StickLLeft,
-                             Core::HID::NpadButton::StickLUp, Core::HID::NpadButton::StickLRight,
-                             Core::HID::NpadButton::StickLDown, Core::HID::NpadButton::StickRLeft,
-                             Core::HID::NpadButton::StickRUp, Core::HID::NpadButton::StickRRight,
-                             Core::HID::NpadButton::StickRDown>();
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-    });
+void QtSoftwareKeyboardDialog::PollInput() {
+    input_interpreter->PollInput();
+    HandleButtonPressedOnce<
+        Core::HID::NpadButton::A, Core::HID::NpadButton::B, Core::HID::NpadButton::X,
+        Core::HID::NpadButton::Y, Core::HID::NpadButton::StickL, Core::HID::NpadButton::StickR,
+        Core::HID::NpadButton::L, Core::HID::NpadButton::R, Core::HID::NpadButton::Plus,
+        Core::HID::NpadButton::Left, Core::HID::NpadButton::Up, Core::HID::NpadButton::Right,
+        Core::HID::NpadButton::Down, Core::HID::NpadButton::StickLLeft,
+        Core::HID::NpadButton::StickLUp, Core::HID::NpadButton::StickLRight,
+        Core::HID::NpadButton::StickLDown, Core::HID::NpadButton::StickRLeft,
+        Core::HID::NpadButton::StickRUp, Core::HID::NpadButton::StickRRight,
+        Core::HID::NpadButton::StickRDown>();
+    HandleButtonHold<Core::HID::NpadButton::B, Core::HID::NpadButton::L,
+                     Core::HID::NpadButton::R, Core::HID::NpadButton::Left,
+                     Core::HID::NpadButton::Up, Core::HID::NpadButton::Right,
+                     Core::HID::NpadButton::Down, Core::HID::NpadButton::StickLLeft,
+                     Core::HID::NpadButton::StickLUp, Core::HID::NpadButton::StickLRight,
+                     Core::HID::NpadButton::StickLDown, Core::HID::NpadButton::StickRLeft,
+                     Core::HID::NpadButton::StickRUp, Core::HID::NpadButton::StickRRight,
+                     Core::HID::NpadButton::StickRDown>();
 }
 
-void QtSoftwareKeyboardDialog::StopInputThread() {
-    input_thread.request_stop();
+void QtSoftwareKeyboardDialog::StartInputPolling() {
+    // Controller actions mutate widgets and inline text, just like physical-key
+    // events and guest updates. Serialize all three on the GUI thread.
+    if (input_interpreter) {
+        input_timer.start(50);
+    }
+}
+
+void QtSoftwareKeyboardDialog::StopInputPolling() {
+    input_timer.stop();
     if (input_interpreter)
         input_interpreter->ResetButtonStates();
 }

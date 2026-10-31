@@ -143,6 +143,7 @@ private:
     Core::System& system;
     VideoCore::RasterizerInterface* rasterizer = nullptr;
     SynchState state;
+    std::atomic<bool> stopping{false};
     std::jthread thread;
 };
 

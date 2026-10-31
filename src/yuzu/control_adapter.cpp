@@ -295,7 +295,10 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
             {QStringLiteral("game_operation_pending"), game_job_pending},
             {QStringLiteral("powered_on"), powered},
             {QStringLiteral("running"), QtCommon::emu_thread && QtCommon::emu_thread->IsRunning()},
-            {QStringLiteral("shutting_down"), powered && QtCommon::system->IsShuttingDown()},
+            // Power is cleared before teardown joins. Keep reporting shutdown
+            // until the emulation thread has finished and the frontend retires it.
+            {QStringLiteral("shutting_down"),
+             QtCommon::emu_thread && QtCommon::system->IsShuttingDown()},
             {QStringLiteral("loading_complete"), powered && window.render_window->IsLoadingComplete()},
             {QStringLiteral("game_fps"), game_fps},
             {QStringLiteral("system_fps"), system_fps},

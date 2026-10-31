@@ -141,7 +141,10 @@ struct GPU::Impl {
 
     void WaitForSyncOperation(const u64 fence) {
         std::unique_lock lck{sync_request_mutex};
-        sync_request_cv.wait(lck, [this, fence] { return CurrentSyncRequestFence() >= fence; });
+        sync_request_cv.wait(lck, [this, fence] {
+            return CurrentSyncRequestFence() >= fence ||
+                   shutting_down.load(std::memory_order_relaxed);
+        });
     }
 
     void WaitForIdle() {
@@ -182,10 +185,13 @@ struct GPU::Impl {
     }
 
     void NotifyShutdown() {
+        // Join both GPU executors before releasing waiters: queued callbacks can
+        // reference their stack locals. No callback may run after its waiter returns.
         gpu_thread.NotifyShutdown();
-        std::unique_lock lk{sync_mutex};
+        std::scoped_lock lk{sync_mutex, sync_request_mutex};
         shutting_down.store(true, std::memory_order::relaxed);
         sync_cv.notify_all();
+        sync_request_cv.notify_all();
     }
 
     /// Obtain the CPU Context

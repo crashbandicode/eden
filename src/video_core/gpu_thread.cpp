@@ -184,12 +184,16 @@ u64 ThreadManager::PushCommand(CommandData&& command_data, bool block, bool is_a
     }
 
     std::unique_lock lk(state.write_lock);
+    if (stopping.load(std::memory_order_relaxed)) {
+        return state.last_fence;
+    }
     const u64 fence{++state.last_fence};
     state.queue.EmplaceWait(std::move(command_data), fence, block);
 
     if (block) {
-        state.cv.wait(lk, thread.get_stop_token(), [this, fence] {
-            return fence <= state.signaled_fence.load(std::memory_order_relaxed);
+        state.cv.wait(lk, [this, fence] {
+            return stopping.load(std::memory_order_relaxed) ||
+                   fence <= state.signaled_fence.load(std::memory_order_relaxed);
         });
     }
 
@@ -202,6 +206,17 @@ void ThreadManager::NotifyShutdown() {
         thread.join();
     }
     VideoCommon::GpuSplit::Get().Stop();
+
+    // No command callback may run after a synchronous caller is released.
+    stopping.store(true, std::memory_order_relaxed);
+
+    // Both consumers have joined. A producer parked on a full queue holds
+    // write_lock, so drain without that lock first to release its backpressure.
+    CommandDataContainer discarded;
+    while (state.queue.TryPop(discarded)) {
+    }
+    std::scoped_lock lk{state.write_lock};
+    state.cv.notify_all();
 }
 
 } // namespace VideoCommon::GPUThread

@@ -102,7 +102,13 @@ reports. An enabled flag does not establish that profiling output was produced.
 `not_ampere` can be provisional until the guest identifies its GPU; poll the
 latest state instead of treating an early sample as final ineligibility. During
 asynchronous shutdown `powered_on` may become false before split teardown;
-wait for `gpu_split.state == "stopped"` to observe that teardown.
+`gpu_split.state == "stopped"` means its GPU threads have stopped, but CPU and
+service teardown may still be running. Before loading another game, wait for
+`powered_on`, `running`, `shutting_down`, and `modal` all to be false and
+`game_path` to be empty. The `game.stop` job being accepted or completed alone
+does not establish that asynchronous teardown finished.
+`shutting_down` stays true from a confirmed stop until the frontend retires the
+emulation thread, independently of `powered_on`; it is false while idle.
 These fields describe the running process and effective configuration. They do
 not certify that a game renders correctly or that a stubbed service is implemented.
 

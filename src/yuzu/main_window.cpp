@@ -22,6 +22,7 @@
 
 #include "common/fs/ryujinx_compat.h"
 #include "main_window.h"
+#include "yuzu/control_trace.h"
 #include "network/network.h"
 #include "qt_common/discord/discord.h"
 #include "ui_main.h"
@@ -362,7 +363,7 @@ inline static bool isDarkMode() {
 }
 #endif // _WIN32
 
-MainWindow::MainWindow(bool has_broken_vulkan)
+MainWindow::MainWindow(bool has_broken_vulkan, const QString& trace_config)
     : ui{std::make_unique<Ui::MainWindow>()},
       input_subsystem{std::make_shared<InputCommon::InputSubsystem>()}, user_data_migrator{this} {
     QtCommon::Init(this);
@@ -528,6 +529,12 @@ MainWindow::MainWindow(bool has_broken_vulkan)
     // so now we have to make this completely unnecessary call
     // to prevent the UI from blowing up.
     UpdateUITheme();
+
+    // Load before the legacy constructor launch path: plugin entry hooks may
+    // run before a control client can attach or the Qt event loop starts.
+    trace_control = std::make_unique<ControlTrace>(*QtCommon::system, this);
+    connect(this, &MainWindow::EmulationStopping, trace_control.get(), &ControlTrace::BeforeStop);
+    if (!trace_config.isEmpty() && !trace_control->LoadConfig(trace_config)) return;
 
     if (QStringList args = QApplication::arguments(); args.size() >= 2) {
         QList<QByteArray> qba{};
@@ -2001,6 +2008,11 @@ void MainWindow::BootGame(const QString& filename, Service::AM::FrontendAppletPa
     }
 
     QtCommon::system->SetShuttingDown(false);
+    if (!trace_control->ValidateBoot()) {
+        LOG_ERROR(Frontend, "{}", trace_control->StartupError().toStdString());
+        QtCommon::system->ShutdownMainProcess();
+        return;
+    }
     game_list->setDisabled(true);
 
     // Create and start the emulation thread
@@ -2186,6 +2198,7 @@ void MainWindow::OnEmulationStopped() {
         QtCommon::emu_thread->wait();
         QtCommon::emu_thread.reset();
     }
+    if (trace_control) trace_control->AfterStop();
 
     if (shutdown_dialog) {
         shutdown_dialog->deleteLater();

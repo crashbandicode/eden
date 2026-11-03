@@ -6,6 +6,7 @@
 #include <cstring>
 #include "control_adapter.h"
 #include "control_server.h"
+#include "control_trace.h"
 #include "startup_checks.h"
 
 #if YUZU_ROOM
@@ -84,6 +85,7 @@ static Qt::HighDpiScaleFactorRoundingPolicy GetHighDpiRoundingPolicy() {
 int main(int argc, char* argv[]) {
     QString control_socket;
     QString control_log;
+    QString trace_config;
     bool control_verbose = false;
     bool control_background = false;
     // Remove our flags before both Qt and the legacy game launch parser see them.
@@ -93,6 +95,7 @@ int main(int argc, char* argv[]) {
             std::fputs("Eden local automation:\n"
                        "  --control-socket PATH  Enable a same-user local JSON-lines endpoint\n"
                        "  --control-log PATH     Write rotating control diagnostics\n"
+                       "  --trace-config PATH    Load persistent guest trace points before boot\n"
                        "  --control-verbose      Enable Debug emulator logs and console output\n"
                        "  --control-background   Keep agent windows below other apps without desktop input grabs\n"
                        "Attach: python3 tools/edenctl.py --socket PATH schema\n"
@@ -100,13 +103,15 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         if (std::strcmp(argv[i], "--control-socket") == 0 ||
-            std::strcmp(argv[i], "--control-log") == 0) {
+            std::strcmp(argv[i], "--control-log") == 0 ||
+            std::strcmp(argv[i], "--trace-config") == 0) {
             const bool socket = std::strcmp(argv[i], "--control-socket") == 0;
+            const bool tracing = std::strcmp(argv[i], "--trace-config") == 0;
             if (i + 1 >= argc || argv[i + 1][0] == '-') {
                 std::fprintf(stderr, "%s requires a path\n", argv[i]);
                 return 2;
             }
-            auto& value = socket ? control_socket : control_log;
+            auto& value = tracing ? trace_config : socket ? control_socket : control_log;
             if (!value.isEmpty()) {
                 std::fprintf(stderr, "Duplicate %s\n", argv[i]);
                 return 2;
@@ -289,7 +294,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    MainWindow main_window{has_broken_vulkan};
+    MainWindow main_window{has_broken_vulkan, trace_config};
+    if (!main_window.TraceControl().StartupError().isEmpty()) {
+        std::fprintf(stderr, "Trace configuration: %s\n", main_window.TraceControl().StartupError().toLocal8Bit().constData());
+        return 2;
+    }
     std::unique_ptr<ControlAdapter> control_adapter;
     if (control_server) {
         control_adapter = std::make_unique<ControlAdapter>(main_window, *control_server);

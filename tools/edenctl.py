@@ -75,6 +75,17 @@ def main(argv=None):
     call.add_argument("method")
     call.add_argument("params", nargs="?", default="{}", help="JSON object, or - to read stdin")
     commands.add_parser("attach", help="read JSON requests from stdin; one JSON response per line")
+    trace = commands.add_parser("trace", help="persistent guest tracing (use schema for field details)")
+    persistent_commands = trace.add_subparsers(dest="persistent_command", required=True)
+    for name in ("configure", "arm", "disarm", "list", "counters", "read", "clear", "unmapped_access"):
+        command = persistent_commands.add_parser(name)
+        command.add_argument("params", nargs="?", default="{}", help="JSON object, or - for stdin")
+    modules = commands.add_parser("modules", help="list loaded guest modules")
+    modules.add_argument("module_command", choices=["list"])
+    symbols = commands.add_parser("symbols", help="load a matching unstripped ELF")
+    symbols.add_argument("symbol_command", choices=["load"])
+    symbols.add_argument("module")
+    symbols.add_argument("elf")
     tracepoint = commands.add_parser("tracepoint", help="capture one bounded guest instruction hit and automatically continue")
     trace_commands = tracepoint.add_subparsers(dest="trace_command", required=True)
     trace_arm = trace_commands.add_parser("arm")
@@ -200,11 +211,16 @@ def main(argv=None):
         method = {"actions": "ui.actions", "tree": "ui.tree", "settings": "settings.list",
                   "release": "input.reset"}.get(args.command, args.command)
         params = {}
-        if args.command == "call":
-            method = args.method
+        if args.command in ("call", "trace"):
+            method = args.method if args.command == "call" else "trace." + args.persistent_command
             params = json.loads(sys.stdin.read() if args.params == "-" else args.params)
             if not isinstance(params, dict):
                 raise ValueError("params must be a JSON object")
+        elif args.command == "modules":
+            method = "modules.list"
+        elif args.command == "symbols":
+            method = "symbols.load"
+            params = {"module": args.module, "elf": os.path.abspath(args.elf)}
         elif args.command == "tracepoint":
             method = "tracepoint." + args.trace_command
             if args.trace_command == "arm":

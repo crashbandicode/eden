@@ -283,6 +283,9 @@ public:
         m_step_state = state;
     }
 
+    bool IsTracepointStepPending() const { return m_tracepoint_step_pending; }
+    void SetTracepointStepPending(bool pending) { m_tracepoint_step_pending = pending; }
+
     s64 GetLastScheduledTick() const {
         return m_last_scheduled_tick;
     }
@@ -925,6 +928,7 @@ private:
     std::shared_ptr<Common::Fiber> m_host_context{};
     ThreadType m_thread_type{};
     StepState m_step_state{};
+    bool m_tracepoint_step_pending{};
     bool m_dummy_thread_runnable{true};
     std::mutex m_dummy_thread_mutex{};
     std::condition_variable m_dummy_thread_cv{};

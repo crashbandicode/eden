@@ -188,6 +188,8 @@ add_executable(yuzu
     control_adapter.h
     control_tracepoint.cpp
     control_tracepoint.h
+    control_trace.cpp
+    control_trace.h
     control_input.cpp
     control_input.h
 

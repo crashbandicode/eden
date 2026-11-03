@@ -10,6 +10,7 @@
 #include "common/settings.h"
 #include "common/thread.h"
 #include "core/core.h"
+#include "core/debugger/guest_trace.h"
 #include "core/core_timing.h"
 #include "core/hle/service/vi/conductor.h"
 #include "core/hle/service/vi/container.h"
@@ -74,6 +75,7 @@ void Conductor::UnlinkVsyncEvent(u64 display_id, Event* event) {
 }
 
 void Conductor::ProcessVsync() {
+    m_system.GetGuestTrace().AdvanceFrame();
     Common::PollThreadPolicies();
     Common::ADPF::SetTargetWorkDuration(std::chrono::nanoseconds{this->GetFramePeriodNs()});
 

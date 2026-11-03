@@ -351,14 +351,16 @@ struct KernelCore::Impl {
     }
 
     void SetApplicationProcess(KernelCore& kernel, KProcess* process) {
-        if (application_process == process)
-            return;
-
-        KProcess* const previous = application_process;
-        application_process = process;
-
-        if (application_process != nullptr)
-            application_process->Open(kernel);
+        KProcess* previous{};
+        {
+            auto trace_lifetime = system.LockTraceProcessMutation();
+            if (application_process == process)
+                return;
+            previous = application_process;
+            application_process = process;
+            if (application_process != nullptr)
+                application_process->Open(kernel);
+        }
 
         if (previous != nullptr)
             previous->Close(kernel);

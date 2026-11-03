@@ -25,7 +25,7 @@ void Translate(IR::Block& block, LocationDescriptor descriptor, MemoryReadCodeFu
     do {
         const u64 pc = visitor.ir.current_location->PC();
         if (const auto instruction = memory_read_code(pc)) {
-            if (is_tracepoint && is_tracepoint(pc)) {
+            if (!single_step && is_tracepoint && is_tracepoint(pc)) {
                 should_continue = visitor.RaiseException(Exception::Tracepoint);
                 // Include this address in the invalidation range, but do not
                 // charge a guest instruction that has not executed.

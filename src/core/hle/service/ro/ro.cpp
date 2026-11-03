@@ -7,6 +7,10 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
+#include "common/hex_util.h"
+#include "core/core.h"
+#include "core/debugger/trace_modules.h"
+
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/service/ro/ro.h"
 #include "core/hle/service/server_manager.h"
@@ -773,10 +777,13 @@ public:
         nro_info->code_size = rx_size + ro_size;
         nro_info->rw_size = rw_size;
         *out_address = nro_info->base_address;
+        const auto build_id = Common::HexToString(nro_info->module_id.data, false);
+        kernel.System().GetTraceModules().Register({
+            "nro:" + build_id, build_id, nro_info->base_address, total_size, context->GetProcessId()});
         R_SUCCEED();
     }
 
-    Result UnmapManualLoadModuleMemory(size_t context_id, u64 nro_address) {
+    Result UnmapManualLoadModuleMemory(Kernel::KernelCore& kernel, size_t context_id, u64 nro_address) {
         // Get context.
         ProcessContext* context = this->GetContextById(context_id);
         ASSERT(context != nullptr);
@@ -794,6 +801,7 @@ public:
         {
             // Nintendo does this unconditionally, whether or not the actual unmap succeeds.
             context->SetNroInfoInUse(nro_info, false);
+            kernel.System().GetTraceModules().Unregister(context->GetProcessId(), nro_backup.base_address);
             std::memset(nro_info, 0, sizeof(*nro_info));
         }
         R_RETURN(UnmapNro(context->GetProcess(), nro_backup.base_address,
@@ -880,7 +888,7 @@ public:
 
     Result UnmapManualLoadModuleMemory(ClientProcessId client_pid, u64 nro_address) {
         R_TRY(m_ro->ValidateProcess(m_context_id, *client_pid));
-        R_RETURN(m_ro->UnmapManualLoadModuleMemory(m_context_id, nro_address));
+        R_RETURN(m_ro->UnmapManualLoadModuleMemory(system.Kernel(), m_context_id, nro_address));
     }
 
     Result RegisterModuleInfo(ClientProcessId client_pid, u64 nrr_address, u64 nrr_size) {

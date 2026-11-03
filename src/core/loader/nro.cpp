@@ -15,11 +15,13 @@
 #include "common/alignment.h"
 #include "common/common_funcs.h"
 #include "common/common_types.h"
+#include "common/hex_util.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "common/random.h"
 #include "common/swap.h"
 #include "core/core.h"
+#include "core/debugger/trace_modules.h"
 #include "core/file_sys/control_metadata.h"
 #include "core/file_sys/romfs_factory.h"
 #include "core/file_sys/vfs/vfs_offset.h"
@@ -54,7 +56,9 @@ struct NroHeader {
     INSERT_PADDING_BYTES(0x4);
     std::array<NroSegmentHeader, 3> segments; // Text, RoData, Data (in that order)
     u32_le bss_size;
-    INSERT_PADDING_BYTES(0x44);
+    INSERT_PADDING_BYTES(0x4);
+    std::array<u8, 0x20> build_id;
+    INSERT_PADDING_BYTES(0x20);
 };
 static_assert(sizeof(NroHeader) == 0x80, "NroHeader has incorrect size.");
 
@@ -153,7 +157,7 @@ static constexpr u32 PageAlignSize(u32 size) {
 }
 
 static bool LoadNroImpl(Core::System& system, Kernel::KProcess& process,
-                        const std::vector<u8>& data) {
+                        const std::vector<u8>& data, const std::string& module_name) {
     if (data.size() < sizeof(NroHeader)) {
         return {};
     }
@@ -237,6 +241,7 @@ static bool LoadNroImpl(Core::System& system, Kernel::KProcess& process,
         program_image.resize(args_offset_in_image + entries_and_argv);
     }
     size_t image_size = program_image.size();
+    const u64 trace_module_size = image_size;
 
 #ifdef HAS_NCE
     const auto& code = codeset.CodeSegment();
@@ -297,6 +302,9 @@ static bool LoadNroImpl(Core::System& system, Kernel::KProcess& process,
     // Load codeset for current process
     codeset.memory = std::move(program_image);
     process.LoadModule(system.Kernel(), std::move(codeset), process.GetEntryPoint());
+    system.GetTraceModules().Register({module_name, Common::HexToString(nro_header.build_id, false),
+                                       GetInteger(process.GetEntryPoint()), trace_module_size,
+                                       process.GetProcessId()});
     if (!argv_string.empty()) {
         constexpr u32 kEntryEndOfList = 0;
         constexpr u32 kEntryMainThreadHandle = 1;
@@ -329,7 +337,7 @@ static bool LoadNroImpl(Core::System& system, Kernel::KProcess& process,
 
 bool AppLoader_NRO::LoadNro(Core::System& system, Kernel::KProcess& process,
                             const FileSys::VfsFile& nro_file) {
-    return LoadNroImpl(system, process, nro_file.ReadAllBytes());
+    return LoadNroImpl(system, process, nro_file.ReadAllBytes(), nro_file.GetName());
 }
 
 AppLoader_NRO::LoadResult AppLoader_NRO::Load(Kernel::KProcess& process, Core::System& system) {

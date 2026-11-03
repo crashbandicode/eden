@@ -64,7 +64,7 @@ public:
     Memory(const Memory&) = delete;
     Memory& operator=(const Memory&) = delete;
 
-    Memory(Memory&&) = default;
+    Memory(Memory&&) noexcept;
     Memory& operator=(Memory&&) = delete;
 
     static constexpr bool HAS_FLUSH_INVALIDATION = false;
@@ -370,6 +370,14 @@ public:
      *       current process' address space.
      */
     bool ReadBlockUnsafe(Common::ProcessAddress src_addr, void* dest_buffer, std::size_t size);
+
+    static constexpr std::size_t MaxDiagnosticReadBytes = 256;
+    // Bounded, CPU-visible observation for fault frame records. No address masking,
+    // logging, read tracing, watchpoints or GPU synchronization. Unmapped and GPU
+    // cached pages fail. Output may be partially filled on failure; discard it.
+    // Caller must use the owning process's Memory while its mappings are stable.
+    [[nodiscard]] bool ReadBlockForDiagnostic(Common::ProcessAddress address,
+                                             std::span<u8> output) const;
 
     const u8* GetSpan(const VAddr src_addr, const std::size_t size) const;
     u8* GetSpan(const VAddr src_addr, const std::size_t size);

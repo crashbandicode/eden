@@ -92,6 +92,46 @@ TEST_CASE("A64 tracepoint interrupts cached code before the instruction and resu
     REQUIRE(env.code_mem == std::vector<u32>{0xd28000e0, 0x1e211802, 0x91000400, 0xf9000020, 0x14000000});
 }
 
+TEST_CASE("A64 persistent tracepoint executes every loop instruction exactly once", "[a64][tracepoint]") {
+    class TraceEnv final : public A64TestEnv {
+    public:
+        A64::Jit* jit{};
+        unsigned hits{};
+        bool IsTracepoint(u64 pc) override { return pc == 104 || pc == 108; }
+        void ExceptionRaised(u64, A64::Exception exception) override {
+            REQUIRE(exception == A64::Exception::Tracepoint);
+            ++hits;
+            jit->HaltExecution(HaltReason::UserDefined5);
+        }
+    } env;
+    // MOV X0,0; ADD X0,X0,1; STR X0,[X1]; B back to ADD.
+    env.code_mem_start_address = 100;
+    env.code_mem = {0xd2800000, 0x91000400, 0xf9000020, 0x17fffffe};
+    const auto original = env.code_mem;
+    A64::UserConfig config{};
+    config.callbacks = &env;
+    A64::Jit jit{config};
+    env.jit = &jit;
+    jit.SetPC(100);
+    jit.SetRegister(1, 0x2000);
+    for (unsigned hit = 0; hit < 12; ++hit) {
+        env.ticks_left = 100;
+        HaltReason reason{};
+        CheckedRun([&] { reason = jit.Run(); });
+        REQUIRE(Has(reason, HaltReason::UserDefined5));
+        REQUIRE(env.hits == hit + 1);
+        const auto pc = jit.GetPC() - 4;
+        REQUIRE(pc == (hit % 2 ? 108 : 104));
+        jit.SetPC(pc);
+        CheckedRun([&] { reason = jit.Step(); });
+        REQUIRE(Has(reason, HaltReason::Step));
+        REQUIRE(env.hits == hit + 1);
+        REQUIRE(jit.GetRegister(0) == hit / 2 + 1);
+        if (hit % 2) REQUIRE(env.MemoryRead(0x2000, 8) == hit / 2 + 1);
+    }
+    REQUIRE(env.code_mem == original);
+}
+
 TEST_CASE("ensure fast dispatch entry is cleared even when a block does not have any patching requirements", "[a64]") {
     A64TestEnv env;
     A64::UserConfig conf{};

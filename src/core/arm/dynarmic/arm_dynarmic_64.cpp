@@ -14,7 +14,10 @@
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
 #include "core/core_timing.h"
 #include "core/debugger/guest_tracepoint.h"
+#include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_modules.h"
 #include "core/hle/kernel/k_process.h"
+#include "core/hle/kernel/k_thread.h"
 #include "dynarmic/interface/A64/config.h"
 
 namespace Core {
@@ -28,6 +31,7 @@ DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess
 {}
 
 u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     const bool trace = Common::GpuWriteReadTrace::Enabled();
     Common::GpuWriteReadTrace::AccessScope scope{{
         .origin = Common::GpuWriteReadTrace::Origin::GuestA64,
@@ -46,6 +50,7 @@ u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
     }
 }
 Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     const bool trace = Common::GpuWriteReadTrace::Enabled();
     Common::GpuWriteReadTrace::AccessScope scope{{
         .origin = Common::GpuWriteReadTrace::Origin::GuestA64,
@@ -73,10 +78,20 @@ std::optional<u32> DynarmicCallbacks64::MemoryReadCode(u64 vaddr) {
 }
 
 bool DynarmicCallbacks64::IsTracepoint(u64 vaddr) {
-    return m_parent.m_system.GetGuestTracepoint().ShouldInstrument(m_process->GetProcessId(), vaddr);
+    auto& system = m_parent.m_system;
+    auto& trace = system.GetGuestTrace();
+    if (trace.HasPoints()) {
+        auto& modules = system.GetTraceModules();
+        trace.ResolveTargets(m_process->GetProcessId(), modules.Revision(), [&](const auto& target) {
+            return modules.Resolve(m_process->GetProcessId(), target);
+        });
+    }
+    return system.GetGuestTracepoint().ShouldInstrument(m_process->GetProcessId(), vaddr) ||
+           trace.ShouldInstrument(m_process->GetProcessId(), vaddr);
 }
 
 void DynarmicCallbacks64::MemoryWrite(Dynarmic::A64::VAddr vaddr, u64 value, std::size_t size) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     if (CheckMemoryAccess(vaddr, size, Kernel::DebugWatchpointType::Write)) {
         switch (size) {
         case sizeof(u64): return m_memory.Write64(vaddr, u64(value));
@@ -88,6 +103,7 @@ void DynarmicCallbacks64::MemoryWrite(Dynarmic::A64::VAddr vaddr, u64 value, std
     }
 }
 void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     if (CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Write)) {
         m_memory.Write64(vaddr, value[0]);
         m_memory.Write64(vaddr + 8, value[1]);
@@ -95,22 +111,27 @@ void DynarmicCallbacks64::MemoryWrite128(u64 vaddr, Dynarmic::A64::Vector value)
 }
 
 bool DynarmicCallbacks64::MemoryWriteExclusive8(u64 vaddr, std::uint8_t value, std::uint8_t expected) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     return CheckMemoryAccess(vaddr, 1, Kernel::DebugWatchpointType::Write) &&
             m_memory.WriteExclusive8(vaddr, value, expected);
 }
 bool DynarmicCallbacks64::MemoryWriteExclusive16(u64 vaddr, std::uint16_t value, std::uint16_t expected) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     return CheckMemoryAccess(vaddr, 2, Kernel::DebugWatchpointType::Write) &&
             m_memory.WriteExclusive16(vaddr, value, expected);
 }
 bool DynarmicCallbacks64::MemoryWriteExclusive32(u64 vaddr, std::uint32_t value, std::uint32_t expected) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     return CheckMemoryAccess(vaddr, 4, Kernel::DebugWatchpointType::Write) &&
             m_memory.WriteExclusive32(vaddr, value, expected);
 }
 bool DynarmicCallbacks64::MemoryWriteExclusive64(u64 vaddr, std::uint64_t value, std::uint64_t expected) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     return CheckMemoryAccess(vaddr, 8, Kernel::DebugWatchpointType::Write) &&
             m_memory.WriteExclusive64(vaddr, value, expected);
 }
 bool DynarmicCallbacks64::MemoryWriteExclusive128(u64 vaddr, Dynarmic::A64::Vector value, Dynarmic::A64::Vector expected) {
+    const TraceFault::AccessScope fault_scope{FaultContext()};
     return CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Write) &&
             m_memory.WriteExclusive128(vaddr, value, expected);
 }
@@ -190,14 +211,42 @@ u64 DynarmicCallbacks64::GetCNTPCT() {
     return m_parent.m_system.CoreTiming().GetClockTicks();
 }
 
+TraceFault::Context DynarmicCallbacks64::FaultContext() {
+    TraceFault::Context context;
+    context.memory = &m_memory;
+    context.process_id = m_process->GetProcessId();
+    context.thread_id = m_parent.m_running_thread_id;
+    context.core_id = static_cast<u32>(m_parent.m_core_index);
+    context.user = this;
+    context.sample = [](void* user, TraceFault::Context& out) {
+        const auto& self = *static_cast<DynarmicCallbacks64*>(user);
+        out.pc = self.m_parent.m_jit->GetPC();
+        out.lr = self.m_parent.m_jit->GetRegister(30);
+        out.fp = self.m_parent.m_jit->GetRegister(29);
+        out.sp = self.m_parent.m_jit->GetSP();
+        out.pc_quality = out.registers_quality = TraceFault::Quality::Sampled;
+    };
+    context.read = [](void* user, u64 address, std::span<u8> bytes) {
+        return static_cast<DynarmicCallbacks64*>(user)->m_memory.ReadBlockForDiagnostic(address, bytes);
+    };
+    context.resolve = [](void* user, u64 process_id, u64 address) -> std::string {
+        const auto& self = *static_cast<DynarmicCallbacks64*>(user);
+        const auto description = self.m_parent.m_system.GetTraceModules().Describe(process_id, address);
+        return description ? description->text : std::string{};
+    };
+    return context;
+}
+
 bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type) {
     if (!m_check_memory_access) {
         return true;
     }
 
     if (!m_memory.IsValidVirtualAddressRange(addr, size)) {
-        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}",
-                        addr);
+        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}: {}",
+                     addr, TraceFault::DescribeUnmapped(&m_memory,
+                         {addr, size, type == Kernel::DebugWatchpointType::Read
+                                          ? TraceFault::AccessKind::Read : TraceFault::AccessKind::Write}));
         m_parent.m_jit->HaltExecution(PrefetchAbort);
         return false;
     }
@@ -408,11 +457,26 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
 }
 
 HaltReason ArmDynarmic64::RunThread(Kernel::KThread* thread) {
-    m_jit->ClearExclusiveState();
-    return TranslateHaltReason(m_jit->Run());
+    m_running_thread_id = thread->GetThreadId();
+    if (m_trace_continuation != thread) m_jit->ClearExclusiveState();
+    const auto reason = TranslateHaltReason(m_jit->Run());
+    m_trace_continuation = reason == HaltReason::Tracepoint ? thread : nullptr;
+    return reason;
+}
+
+HaltReason ArmDynarmic64::StepTracepointThread(Kernel::KThread* thread) {
+    m_running_thread_id = thread->GetThreadId();
+    // The single-step translation deliberately omits tracepoint instrumentation.
+    // Retain exclusive state across both the trap and its one-instruction resume.
+    if (m_trace_continuation != thread) m_jit->ClearExclusiveState();
+    const auto reason = TranslateHaltReason(m_jit->Step());
+    m_trace_continuation = reason == HaltReason::StepThread ? thread : nullptr;
+    return reason;
 }
 
 HaltReason ArmDynarmic64::StepThread(Kernel::KThread* thread) {
+    m_running_thread_id = thread->GetThreadId();
+    m_trace_continuation = nullptr;
     m_jit->ClearExclusiveState();
     return TranslateHaltReason(m_jit->Step());
 }

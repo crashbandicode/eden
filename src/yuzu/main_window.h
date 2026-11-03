@@ -163,6 +163,7 @@ private:
 class GifRecorder;
 class MacroRecorder;
 class MacroDialog;
+class ControlTrace;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -176,7 +177,8 @@ public:
     bool IsBootInProgress() const { return boot_in_progress; }
     void filterBarSetChecked(bool state);
     void UpdateUITheme();
-    explicit MainWindow(bool has_broken_vulkan);
+    explicit MainWindow(bool has_broken_vulkan, const QString& trace_config = {});
+    ControlTrace& TraceControl() { return *trace_control; }
     ~MainWindow() override;
 
     bool DropAction(QDropEvent* event);
@@ -449,6 +451,7 @@ private slots:
 
 private:
     void RemovePlayTimeData(u64 program_id);
+    std::unique_ptr<ControlTrace> trace_control;
     bool SelectRomFSDumpTarget(const FileSys::ContentProvider&, u64 program_id,
                                u64* selected_title_id, u8* selected_content_record_type);
     ContentManager::InstallResult InstallNCA(const QString& filename);

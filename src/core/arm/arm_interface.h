@@ -63,6 +63,10 @@ public:
     // Runs the CPU for one instruction or until an event happens.
     virtual HaltReason StepThread(Kernel::KThread* thread) = 0;
 
+    // Resume an observation boundary without clearing the exclusive monitor.
+    virtual HaltReason StepTracepointThread(Kernel::KThread* thread) { return StepThread(thread); }
+    virtual void FinishTracepointContinuation() {}
+
     // Admits a backend-specific mechanism to lock the thread context.
     virtual void LockThread(Kernel::KThread* thread) {}
     virtual void UnlockThread(Kernel::KThread* thread) {}

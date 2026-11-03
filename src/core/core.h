@@ -118,6 +118,8 @@ namespace Core {
 class CpuManager;
 class Debugger;
 class GuestTracepoint;
+class GuestTrace;
+class TraceModules;
 class DeviceMemory;
 class ExclusiveMonitor;
 class GPUDirtyMemoryManager;
@@ -381,6 +383,12 @@ public:
     [[nodiscard]] Core::Debugger& GetDebugger();
     [[nodiscard]] const Core::Debugger& GetDebugger() const;
     [[nodiscard]] Core::GuestTracepoint& GetGuestTracepoint();
+    [[nodiscard]] Core::GuestTrace& GetGuestTrace();
+    [[nodiscard]] Core::TraceModules& GetTraceModules();
+    // Pins application-process/ARM-interface lifetime against main-process teardown.
+    // GUI tracing uses try-lock so it cannot block the event loop during shutdown.
+    [[nodiscard]] std::unique_lock<std::mutex> TryLockTraceProcess();
+    [[nodiscard]] std::unique_lock<std::mutex> LockTraceProcessMutation();
 
     [[nodiscard]] Tools::RenderdocAPI& GetRenderdocAPI();
 

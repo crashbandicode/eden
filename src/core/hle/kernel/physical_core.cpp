@@ -5,12 +5,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <limits>
 
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
 #include "core/debugger/debugger.h"
 #include "core/debugger/guest_tracepoint.h"
+#include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_modules.h"
+#include "core/arm/debug.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_thread.h"
 #include "core/hle/kernel/kernel.h"
@@ -32,6 +36,13 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
     auto* interface = process->GetArmInterface(m_core_index);
 
     interface->Initialize();
+    // Retention is valid only inside this dispatch, never across scheduler,
+    // SVC, debugger, migration or other real CPU exits.
+    auto continuation_guard = SCOPE_GUARD { interface->FinishTracepointContinuation(); };
+    const auto finish_before_scheduling = [&] {
+        interface->FinishTracepointContinuation();
+        continuation_guard.Cancel();
+    };
 
     const auto EnterContext = [&]() {
         // Lock the core context.
@@ -76,12 +87,14 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
     while (true) {
         // If the thread is scheduled for termination, exit.
         if (thread->HasDpc() && thread->IsTerminationRequested()) {
+            finish_before_scheduling();
             thread->Exit(kernel);
         }
 
         // Notify the debugger and go to sleep if a step was performed
         // and this thread has been scheduled again.
         if (thread->GetStepState() == StepState::StepPerformed) {
+            finish_before_scheduling();
             system.GetDebugger().NotifyThreadStopped(thread);
             thread->RequestSuspend(kernel, SuspendType::Debug);
             return;
@@ -89,13 +102,27 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
 
         // Otherwise, run the thread.
         Core::HaltReason hr{};
+        const bool trace_step = thread->IsTracepointStepPending();
         {
             // If we were interrupted, exit immediately.
             if (!EnterContext()) {
                 return;
             }
 
-            if (thread->GetStepState() == StepState::StepPending) {
+            if (trace_step) {
+                hr = interface->StepTracepointThread(thread);
+                // An external interrupt may arrive before the instruction ran.
+                // Retain the resume obligation across scheduling in that case.
+                if (True(hr & (Core::HaltReason::StepThread | Core::HaltReason::SupervisorCall |
+                               Core::HaltReason::InstructionBreakpoint | Core::HaltReason::PrefetchAbort |
+                               Core::HaltReason::DataAbort))) {
+                    thread->SetTracepointStepPending(false);
+                }
+                if (True(hr & Core::HaltReason::StepThread) &&
+                    thread->GetStepState() == StepState::StepPending) {
+                    thread->SetStepState(StepState::StepPerformed);
+                }
+            } else if (thread->GetStepState() == StepState::StepPending) {
                 hr = interface->StepThread(thread);
 
                 if (True(hr & Core::HaltReason::StepThread)) {
@@ -124,18 +151,32 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
             registers[31] = context.sp;
             registers[32] = context.pc;
             registers[33] = context.pstate;
-            system.GetGuestTracepoint().Capture(
-                process->GetProcessId(), thread->GetThreadId(), registers,
-                [process](u64 address, std::span<u8> bytes) {
+            const auto read = [process](u64 address, std::span<u8> bytes) {
                     // Deliberately CPU-visible bytes. GPU flushing would turn a
                     // bounded diagnostic into a potentially blocking readback.
                     auto& memory = process->GetMemory();
-                    return memory.IsValidVirtualAddressRange(address, bytes.size()) &&
-                           memory.ReadBlockUnsafe(address, bytes.data(), bytes.size());
+                    if (address > std::numeric_limits<u64>::max() - bytes.size()) return false;
+                    for (size_t offset = 0; offset < bytes.size(); offset += 256) {
+                        if (!memory.ReadBlockForDiagnostic(address + offset,
+                                bytes.subspan(offset, std::min(size_t{256}, bytes.size() - offset)))) return false;
+                    }
+                    return true;
+                };
+            system.GetGuestTracepoint().Capture(process->GetProcessId(), thread->GetThreadId(), registers, read);
+            const auto new_addresses = system.GetGuestTrace().Hit(
+                process->GetProcessId(), thread->GetThreadId(), static_cast<u32>(m_core_index), registers, read,
+                Core::GuestTrace::Clock::now(), [&](u64 address) {
+                    const auto location = system.GetTraceModules().Describe(process->GetProcessId(), address);
+                    return location ? location->text : std::string{};
                 });
-            // Invalidation is queued by Dynarmic and applied before it re-enters
-            // generated code. Stale tracepoints on other cores do the same.
-            interface->InvalidateCacheRange(context.pc, sizeof(u32));
+            for (const auto address : new_addresses) Core::InvalidateInstructionCacheRange(process, address, sizeof(u32));
+            if (!system.GetGuestTrace().ShouldInstrument(process->GetProcessId(), context.pc)) {
+                interface->InvalidateCacheRange(context.pc, sizeof(u32));
+            }
+            // Execute the intercepted instruction through the separate single-step
+            // cache, then return to persistent instrumented code. Never patch code
+            // or temporarily remove a point shared with another core.
+            thread->SetTracepointStepPending(true);
         }
 
         // Determine why we stopped.
@@ -143,7 +184,7 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
         // the step takes priority (e.g. step may also set InstructionBreakpoint
         // if the next instruction happens to be a breakpoint).
         const bool step_completed = True(hr & Core::HaltReason::StepThread)
-                                    && thread->GetStepState() == StepState::StepPerformed;
+                                    && thread->GetStepState() == StepState::StepPerformed && !trace_step;
         const bool supervisor_call = !step_completed && True(hr & Core::HaltReason::SupervisorCall);
         const bool prefetch_abort = !step_completed && True(hr & Core::HaltReason::PrefetchAbort);
         const bool breakpoint = !step_completed && True(hr & Core::HaltReason::InstructionBreakpoint);
@@ -152,6 +193,9 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
 
         // Since scheduling may occur here, we cannot use any cached
         // state after returning from calls we make.
+        if (breakpoint || prefetch_abort || data_abort || supervisor_call) {
+            finish_before_scheduling();
+        }
 
         // Notify the debugger and go to sleep if a breakpoint was hit,
         // or if the thread is unable to continue for any reason.
@@ -190,7 +234,9 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
         }
 
         // Handle external interrupt sources.
-        if (interrupt || m_is_single_core) {
+        const bool observation_boundary = hr == Core::HaltReason::Tracepoint ||
+                                          (trace_step && hr == Core::HaltReason::StepThread);
+        if (interrupt || (m_is_single_core && !observation_boundary)) {
             return;
         }
     }

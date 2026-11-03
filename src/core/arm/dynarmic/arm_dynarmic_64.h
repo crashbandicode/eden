@@ -15,6 +15,7 @@
 #include "common/common_types.h"
 #include "common/hash.h"
 #include "core/arm/arm_interface.h"
+#include "core/debugger/trace_fault.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
 #include "dynarmic/interface/A64/config.h"
 
@@ -59,6 +60,7 @@ public:
     u64 GetCNTPCT() override;
     bool CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type);
     void ReturnException(u64 pc, Dynarmic::HaltReason hr);
+    TraceFault::Context FaultContext();
 
     Dynarmic::CodePage cached_code_page;
     u64 last_code_addr = u64(-1);
@@ -84,6 +86,8 @@ public:
 
     HaltReason RunThread(Kernel::KThread* thread) override;
     HaltReason StepThread(Kernel::KThread* thread) override;
+    HaltReason StepTracepointThread(Kernel::KThread* thread) override;
+    void FinishTracepointContinuation() override { m_trace_continuation = nullptr; }
 
     void GetContext(Kernel::Svc::ThreadContext& ctx) const override;
     void SetContext(const Kernel::Svc::ThreadContext& ctx) override;
@@ -120,6 +124,8 @@ private:
     // Watchpoint info
     const Kernel::DebugWatchpoint* m_halted_watchpoint{};
     Kernel::Svc::ThreadContext m_breakpoint_context{};
+    Kernel::KThread* m_trace_continuation{};
+    u64 m_running_thread_id{};
 };
 
 } // namespace Core

@@ -12,6 +12,7 @@
 #include "common/fs/fs.h"
 #include "common/logging.h"
 #include "common/adpf.h"
+#include "common/scope_exit.h"
 #include "common/settings.h"
 #include "common/settings_enums.h"
 #include "common/string_util.h"
@@ -23,6 +24,8 @@
 #include "core/cpu_manager.h"
 #include "core/debugger/debugger.h"
 #include "core/debugger/guest_tracepoint.h"
+#include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_modules.h"
 #include "core/device_memory.h"
 #include "core/file_sys/fs_filesystem.h"
 #include "core/file_sys/patch_manager.h"
@@ -359,6 +362,7 @@ struct System::Impl {
 
         // Make the process created be the application
         kernel.SetApplicationProcess(process->GetHandle());
+        guest_trace.BeginProcess(kernel.ApplicationProcess()->GetProcessId());
 
         // Set up the rest of the system.
         SystemResultStatus init_result{SetupForApplicationProcess(system, emu_window)};
@@ -413,8 +417,20 @@ struct System::Impl {
     }
 
     void ShutdownMainProcess() {
-        SetShuttingDown(true);
+        {
+            std::scoped_lock trace_lifetime{trace_process_mutex};
+            trace_process_teardown = true;
+            SetShuttingDown(true);
+        }
+        // Existing trace readers have finished. New readers are rejected until
+        // teardown completes; never hold this mutex while joining CPU/services.
+        SCOPE_EXIT {
+            std::scoped_lock trace_lifetime{trace_process_mutex};
+            trace_process_teardown = false;
+        };
         guest_tracepoint.Cancel();
+        guest_trace.EndProcess();
+        trace_modules.Clear();
         Common::ADPF::Shutdown();
 
         // Reset per-game flags
@@ -501,6 +517,10 @@ struct System::Impl {
     std::optional<Service::Services> services;
     std::optional<Core::Debugger> debugger;
     Core::GuestTracepoint guest_tracepoint;
+    Core::GuestTrace guest_trace;
+    Core::TraceModules trace_modules;
+    std::mutex trace_process_mutex;
+    bool trace_process_teardown{}; // protected by trace_process_mutex
     std::optional<Service::KernelHelpers::ServiceContext> general_channel_context;
     std::optional<Service::Event> general_channel_event;
     std::optional<Core::PerfStats> perf_stats;
@@ -952,6 +972,24 @@ const Core::Debugger& System::GetDebugger() const {
 
 Core::GuestTracepoint& System::GetGuestTracepoint() {
     return impl->guest_tracepoint;
+}
+
+Core::GuestTrace& System::GetGuestTrace() {
+    return impl->guest_trace;
+}
+
+Core::TraceModules& System::GetTraceModules() {
+    return impl->trace_modules;
+}
+
+std::unique_lock<std::mutex> System::TryLockTraceProcess() {
+    std::unique_lock lifetime{impl->trace_process_mutex, std::try_to_lock};
+    if (!lifetime.owns_lock() || impl->trace_process_teardown) return {};
+    return lifetime;
+}
+
+std::unique_lock<std::mutex> System::LockTraceProcessMutation() {
+    return std::unique_lock{impl->trace_process_mutex};
 }
 
 Tools::RenderdocAPI& System::GetRenderdocAPI() {

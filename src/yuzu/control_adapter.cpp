@@ -24,6 +24,7 @@
 #include "yuzu/control_input.h"
 #include "yuzu/control_server.h"
 #include "yuzu/control_tracepoint.h"
+#include "yuzu/control_trace.h"
 #include "yuzu/main_window.h"
 #include "yuzu/bootmanager.h"
 #include "video_core/shader_notify.h"
@@ -136,7 +137,7 @@ bool SetValidated(Settings::BasicSetting& setting, const QJsonValue& value, QStr
         const double result = actual.toDouble(&actual_ok);
         matches = requested_ok && actual_ok && std::isfinite(requested) && std::isfinite(result) &&
                   std::abs(requested - result) <= 1e-6 * std::max(1.0, std::abs(requested));
-    } else if (setting.IsIntegral() || setting.IsEnum()) {
+    } else if (setting.TypeId() != "bool" && (setting.IsIntegral() || setting.IsEnum())) {
         // Decimal normalization without lossy JSON double conversion.
         bool requested_ok{}, actual_ok{};
         const auto requested = text.toLongLong(&requested_ok);
@@ -217,6 +218,13 @@ QJsonObject ControlAdapter::QueueGame(const QString& method, std::function<QJson
 }
 
 QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& params) {
+    if (method.startsWith(QStringLiteral("trace.")) || method == QStringLiteral("modules.list") ||
+        method == QStringLiteral("symbols.load")) {
+        if (game_job_pending || window.IsBootInProgress()) {
+            return CS::Error(QStringLiteral("busy"), QStringLiteral("Wait for the game operation to complete"));
+        }
+        return window.TraceControl().Handle(method, params);
+    }
     if (method.startsWith(QStringLiteral("tracepoint."))) {
         if (method == QStringLiteral("tracepoint.arm") &&
             (game_job_pending || window.IsBootInProgress() ||

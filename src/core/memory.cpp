@@ -11,6 +11,7 @@
 #include <span>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "common/assert.h"
@@ -24,6 +25,7 @@
 #include "common/settings.h"
 #include "common/swap.h"
 #include "core/core.h"
+#include "core/debugger/trace_fault.h"
 #include "core/device_memory.h"
 #include "core/gpu_dirty_memory_manager.h"
 #include "core/hardware_properties.h"
@@ -48,7 +50,7 @@ static inline bool AddressSpaceContains(const Common::PageTable& table, const Co
 // from outside classes. This also allows modification to the internals of the memory
 // subsystem without needing to rebuild all files that make use of the memory interface.
 struct Memory::Impl {
-    explicit Impl(Core::System& system_) : system{system_} {}
+    explicit Impl(Core::System& system_, Memory& owner_) : system{system_}, owner{&owner_} {}
 
     void TraceRead(const u8* ptr, u64 va, size_t size, ReadTrace::Origin origin) {
         if (!ReadTrace::Enabled()) {
@@ -656,6 +658,30 @@ struct Memory::Impl {
             GetInteger(vaddr), []() {}, []() {});
     }
 
+    bool ReadBlockForDiagnostic(Common::ProcessAddress address, std::span<u8> output) const {
+        // Do not call GetPointerImpl/ReadN/ReadBlock: even a failed stack walk must
+        // not recurse into diagnostics, trigger a watchpoint, or flush GPU memory.
+        if (output.size() > Memory::MaxDiagnosticReadBytes || !current_page_table ||
+            !AddressSpaceContains(*current_page_table, address, output.size())) {
+            return false;
+        }
+        std::size_t offset{};
+        while (offset < output.size()) {
+            const u64 addr = GetInteger(address) + offset;
+            const auto [pointer, type, _] =
+                current_page_table->entries[addr >> YUZU_PAGEBITS].PointerTypeBlock(true);
+            if (!pointer || (type != Common::PageType::Memory &&
+                             type != Common::PageType::DebugMemory)) {
+                return false;
+            }
+            const auto count = std::min<std::size_t>(YUZU_PAGESIZE - (addr & YUZU_PAGEMASK),
+                                                    output.size() - offset);
+            std::memcpy(output.data() + offset, reinterpret_cast<const u8*>(pointer + addr), count);
+            offset += count;
+        }
+        return true;
+    }
+
     /// @brief Reads a particular data type out of memory at the given virtual address.
     /// @param vaddr The virtual address to read the data type from.
     /// @tparam T The data type to read out of memory.
@@ -663,8 +689,11 @@ struct Memory::Impl {
     template <typename T>
     inline T Read(Common::ProcessAddress vaddr) noexcept requires(std::is_trivially_copyable_v<T>) {
         const u64 addr = GetInteger(vaddr);
-        if (auto const ptr = GetPointerImpl(addr, [addr]() {
-            LOG_ERROR(HW_Memory, "Unmapped Read{} @ {:#016x}", sizeof(T) * 8, addr);
+        if (auto const ptr = GetPointerImpl(addr, [this, addr]() {
+            const auto attribution = TraceFault::DescribeUnmapped(
+                owner, {addr, sizeof(T), TraceFault::AccessKind::Read});
+            LOG_ERROR(HW_Memory, "Unmapped Read{} @ {:#016x} {}", sizeof(T) * 8, addr,
+                      attribution);
         }, [&]() {
             HandleRasterizerDownload(addr, sizeof(T));
         }); ptr) [[likely]] {
@@ -685,8 +714,11 @@ struct Memory::Impl {
     template <typename T>
     inline void Write(Common::ProcessAddress vaddr, const T data) noexcept requires(std::is_trivially_copyable_v<T>) {
         const u64 addr = GetInteger(vaddr);
-        if (auto const ptr = GetPointerImpl(addr, [addr, data]() {
-            LOG_ERROR(HW_Memory, "Unmapped Write{} @ {:#016x} = {:#016x}", sizeof(T) * 8, addr, u64(data));
+        if (auto const ptr = GetPointerImpl(addr, [this, addr, data]() {
+            const auto attribution = TraceFault::DescribeUnmapped(
+                owner, {addr, sizeof(T), TraceFault::AccessKind::Write});
+            LOG_ERROR(HW_Memory, "Unmapped Write{} @ {:#016x} = {:#016x} {}", sizeof(T) * 8,
+                      addr, u64(data), attribution);
         }, [&]() { HandleRasterizerWrite(addr, sizeof(T)); }); ptr) [[likely]] {
             std::memcpy(ptr, &data, sizeof(T));
             TraceOverwrite(ptr, sizeof(T));
@@ -697,9 +729,11 @@ struct Memory::Impl {
     bool WriteExclusive(Common::ProcessAddress vaddr, const T data, const T expected) {
         u8* const ptr = GetPointerImpl(
             GetInteger(vaddr),
-            [vaddr, data]() {
-                LOG_ERROR(HW_Memory, "Unmapped WriteExclusive{} @ {:#016x} = {:#016x}",
-                          sizeof(T) * 8, GetInteger(vaddr), static_cast<u64>(data));
+            [this, vaddr, data]() {
+                const auto attribution = TraceFault::DescribeUnmapped(
+                    owner, {GetInteger(vaddr), sizeof(T), TraceFault::AccessKind::WriteExclusive});
+                LOG_ERROR(HW_Memory, "Unmapped WriteExclusive{} @ {:#016x} = {:#016x} {}",
+                          sizeof(T) * 8, GetInteger(vaddr), static_cast<u64>(data), attribution);
             },
             [&]() { HandleRasterizerWrite(GetInteger(vaddr), sizeof(T)); });
         if (ptr) {
@@ -715,9 +749,12 @@ struct Memory::Impl {
     bool WriteExclusive128(Common::ProcessAddress vaddr, const u128 data, const u128 expected) {
         u8* const ptr = GetPointerImpl(
             GetInteger(vaddr),
-            [vaddr, data]() {
-                LOG_ERROR(HW_Memory, "Unmapped WriteExclusive128 @ {:#016x} = {:#016x}{:016X}",
-                          GetInteger(vaddr), static_cast<u64>(data[1]), static_cast<u64>(data[0]));
+            [this, vaddr, data]() {
+                const auto attribution = TraceFault::DescribeUnmapped(
+                    owner, {GetInteger(vaddr), sizeof(u128), TraceFault::AccessKind::WriteExclusive});
+                LOG_ERROR(HW_Memory, "Unmapped WriteExclusive128 @ {:#016x} = {:#016x}{:016X} {}",
+                          GetInteger(vaddr), static_cast<u64>(data[1]), static_cast<u64>(data[0]),
+                          attribution);
             },
             [&]() { HandleRasterizerWrite(GetInteger(vaddr), sizeof(u128)); });
         if (ptr) {
@@ -813,6 +850,7 @@ struct Memory::Impl {
     }
 
     Core::System& system;
+    Memory* owner;
     Tegra::MaxwellDeviceMemoryManager* gpu_device_memory{};
     Common::PageTable* current_page_table = nullptr;
 
@@ -836,8 +874,14 @@ Memory::Memory(Core::System& system_) : system{system_} {
 
 Memory::~Memory() = default;
 
+Memory::Memory(Memory&& other) noexcept : system{other.system}, impl{std::move(other.impl)} {
+    if (impl) {
+        impl->owner = this;
+    }
+}
+
 void Memory::Reset() {
-    impl = std::make_unique<Impl>(system);
+    impl = std::make_unique<Impl>(system, *this);
 }
 
 void Memory::SetCurrentPageTable(Kernel::KProcess& process) {
@@ -960,6 +1004,10 @@ bool Memory::ReadBlock(const Common::ProcessAddress src_addr, void* dest_buffer,
 bool Memory::ReadBlockUnsafe(const Common::ProcessAddress src_addr, void* dest_buffer,
                              const std::size_t size) {
     return impl->ReadBlockImpl(src_addr, dest_buffer, size, true);
+}
+
+bool Memory::ReadBlockForDiagnostic(Common::ProcessAddress address, std::span<u8> output) const {
+    return impl->ReadBlockForDiagnostic(address, output);
 }
 
 const u8* Memory::GetSpan(const VAddr src_addr, const std::size_t size) const {

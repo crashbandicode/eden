@@ -18,6 +18,7 @@
 #include "common/settings.h"
 #include "common/swap.h"
 #include "core/core.h"
+#include "core/debugger/trace_modules.h"
 #include "core/file_sys/patch_manager.h"
 #include "core/hle/kernel/code_set.h"
 #include "core/hle/kernel/k_page_table.h"
@@ -157,6 +158,7 @@ std::optional<VAddr> AppLoader_NSO::LoadModule(Kernel::KProcess& process, Core::
     codeset.DataSegment().size += nso_header.segments[2].bss_size;
     u32 image_size = PageAlignSize(u32(codeset.memory.size()) + nso_header.segments[2].bss_size);
     codeset.memory.resize(image_size);
+    const u64 trace_module_size = image_size - module_start;
 
     for (std::size_t i = 0; i < nso_header.segments.size(); ++i) {
         codeset.segments[i].size = PageAlignSize(codeset.segments[i].size);
@@ -248,6 +250,9 @@ std::optional<VAddr> AppLoader_NSO::LoadModule(Kernel::KProcess& process, Core::
 
     // Load codeset for current process
     process.LoadModule(system.Kernel(), std::move(codeset), load_base);
+    system.GetTraceModules().Register({name, Common::HexToString(nso_header.build_id, false),
+                                       load_base + module_start, trace_module_size,
+                                       process.GetProcessId()});
     return load_base + image_size;
 }
 

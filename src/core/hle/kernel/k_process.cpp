@@ -10,6 +10,8 @@
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/dynarmic_exclusive_monitor.h"
 #include "core/core.h"
+#include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_modules.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_scoped_resource_reservation.h"
 #include "core/hle/kernel/k_shared_memory.h"
@@ -127,6 +129,8 @@ void GenerateRandom(std::span<u64> out_random) {
 } // namespace
 
 void KProcess::Finalize(KernelCore& kernel) {
+    auto& modules = kernel.System().GetTraceModules();
+    for (const auto& module : modules.List(GetProcessId())) modules.Unregister(GetProcessId(), module.base);
     // Delete the process local region.
     this->DeleteThreadLocalRegion(kernel, m_plr_address);
 
@@ -982,6 +986,9 @@ Result KProcess::Run(KernelCore& kernel, s32 priority, size_t stack_size) {
 
     // Register the thread, and commit our reservation.
     KThread::Register(kernel, main_thread);
+    if (kernel.ApplicationProcess() == this) {
+        kernel.System().GetGuestTrace().SetMainThread(main_thread->GetThreadId());
+    }
     thread_reservation.Commit();
 
     // Add the thread to our handle table.

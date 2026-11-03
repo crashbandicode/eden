@@ -46,6 +46,24 @@ target_include_directories(guest-tracepoint-tests PRIVATE ..)
 target_link_libraries(guest-tracepoint-tests PRIVATE Threads::Threads)
 add_test(NAME guest-tracepoint-tests COMMAND guest-tracepoint-tests)
 
+add_executable(guest-trace-tests core/guest_trace.cpp
+    ../core/debugger/guest_trace.cpp ../core/debugger/trace_expression.cpp)
+target_include_directories(guest-trace-tests PRIVATE ..)
+target_link_libraries(guest-trace-tests PRIVATE Threads::Threads)
+add_test(NAME guest-trace-tests COMMAND guest-trace-tests)
+
+foreach(component IN ITEMS expression modules fault)
+    add_executable(trace-${component}-tests core/trace_${component}.cpp
+        ../core/debugger/trace_${component}.cpp)
+    target_include_directories(trace-${component}-tests PRIVATE ..)
+    target_link_libraries(trace-${component}-tests PRIVATE Threads::Threads)
+    add_test(NAME trace-${component}-tests COMMAND trace-${component}-tests)
+endforeach()
+target_link_libraries(trace-modules-tests PRIVATE OpenSSL::Crypto ${PLATFORM_LIBRARIES})
+if (WIN32)
+    target_link_libraries(trace-modules-tests PRIVATE crypt32)
+endif()
+
 # needed for vma
 if (NOT MSVC)
     target_compile_options(tests PRIVATE

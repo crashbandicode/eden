@@ -13,6 +13,39 @@ spec.loader.exec_module(edenctl)
 
 
 class TracepointCLI(unittest.TestCase):
+    def test_persistent_trace_keeps_large_ids_and_capture_expression(self):
+        import json
+        params = {"target": "libtraining_rooms.nro!hook", "max_hits": "9007199254740993",
+                  "captures": [{"expression": "[[x0+0x10]+8]", "type": "u32"}]}
+        with patch.object(edenctl.Client, "request", return_value={"ok": True}) as request:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(edenctl.main(["--socket", "/tmp/tracepoint-test.sock",
+                                               "trace", "arm", json.dumps(params)]), 0)
+            request.assert_called_once_with("trace.arm", params)
+
+    def test_trace_cursor_does_not_round_and_windows_method_matches(self):
+        with patch.object(edenctl.Client, "request", return_value={"ok": True}) as request:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(edenctl.main(["--socket", "/tmp/tracepoint-test.sock", "trace", "read",
+                                               '{"after":"18446744073709551614","limit":4}']), 0)
+            request.assert_called_once_with("trace.read", {"after": "18446744073709551614", "limit": 4})
+
+    def test_persistent_trace_rejects_nonobject_before_transport(self):
+        with patch.object(edenctl.Client, "request") as request:
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertNotEqual(edenctl.main(["--socket", "/tmp/tracepoint-test.sock", "trace", "arm", "[]"]), 0)
+            request.assert_not_called()
+
+    def test_module_and_symbols_commands(self):
+        for arguments, method, params in (
+                (["modules", "list"], "modules.list", {}),
+                (["symbols", "load", "plugin.nro", "/tmp/plugin.elf"], "symbols.load",
+                 {"module": "plugin.nro", "elf": "/tmp/plugin.elf"})):
+            with self.subTest(method=method), patch.object(edenctl.Client, "request", return_value={"ok": True}) as request:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(edenctl.main(["--socket", "/tmp/tracepoint-test.sock", *arguments]), 0)
+                request.assert_called_once_with(method, params)
+
     def test_exact_addresses_and_register_relative_capture(self):
         with patch.object(edenctl.Client, "request", return_value={"ok": True}) as request:
             with contextlib.redirect_stdout(io.StringIO()):

@@ -212,7 +212,30 @@ python tools/edenctl.py --socket /path/control.sock call trace.unmapped_access '
 python tools/edenctl.py --socket /path/control.sock call trace.unmapped_access '{}'
 ```
 
-The query returns `mode`, `run_mode`, `fault_semantics`, and decimal-string
+To stop only on accesses made by particular modules, add `modules` (fault mode
+only, at most 64 names). A name matches the module containing the faulting PC
+by its `modules.list` name (`main`, `nro:<build-id>`), by a filename alias loaded
+with `symbols.load` (same build ID), or `nro:*` for any runtime NRO such as a
+Skyline plugin. Accesses from other modules are counted, logged with
+`mode=log_module_not_selected`, and continue with zero/discard semantics, exactly
+as in log mode. An empty list selects every module. PCs outside every registered
+module, or inside overlapping modules, never stop. Matching uses the PC of the
+faulting instruction, not its caller: a plugin passing a bad pointer to an SDK
+routine faults in the SDK module. `nro:<build-id>` must be the exact name shown by
+`modules.list`. Filename aliases apply only to runtime `nro:` modules and are
+cleared when the game stops, so load them before each boot.
+
+```sh
+python tools/edenctl.py --socket /path/control.sock call trace.unmapped_access '{"mode":"fault","modules":["nro:*"]}'
+```
+
+In the trace configuration, `unmapped_access` accepts the same object:
+`"unmapped_access": {"mode": "fault", "modules": ["libtraining_rooms.nro"]}`.
+A filename alias only matches after its ELF is loaded through `symbols` or
+`symbols.load`.
+
+The query returns `mode`, `run_mode`, `modules` (configured for the next run),
+`run_modules` (in effect for the current or last run), `fault_semantics`, and decimal-string
 `total`, `emitted`, `suppressed` counters. Output is bounded to the first 16
 accesses and subsequent power-of-two totals; suppressed accesses still count.
 When stopped, `fault` contains address, width, access kind, process/thread/core,
@@ -222,7 +245,8 @@ cores has exited. A latched entry guard and separate diagnostic suspension preve
 ordinary applet/process/debug resume from restarting the faulted process. New
 threads inherit the diagnostic suspension; termination can still unload the run.
 Use `game.stop` to unload a stopped run. The receipt survives unload; the next
-boot clears counters/fault and defaults to log unless explicitly configured again.
+boot clears counters/fault and defaults to log with no module selection unless
+explicitly configured again.
 Frame-pointer walks are bounded and may terminate on an invalid or unreadable frame.
 
 Data watchpoints, allocation accounting, hitch sampling and interactive control

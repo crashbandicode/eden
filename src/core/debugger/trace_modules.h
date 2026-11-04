@@ -8,6 +8,7 @@
 #include <map>
 #include <optional>
 #include <shared_mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,6 +48,12 @@ public:
     // A preboot name can alias an anonymous runtime NRO only through a matching nonzero build ID.
     std::string LoadSymbols(std::string_view module_name, const std::filesystem::path& elf_path);
     [[nodiscard]] std::optional<Description> Describe(u64 process_id, u64 address) const;
+    // True when the unique module containing address is named by a selector: its
+    // registered name, a loaded symbol-set alias with the same build ID, or "nro:*"
+    // for any runtime NRO. Addresses outside every module, or in overlapping
+    // modules, are never selected.
+    [[nodiscard]] bool Selects(u64 process_id, u64 address, std::span<const std::string> selectors) const;
+    [[nodiscard]] static bool ValidSelector(std::string_view selector);
 
 private:
     struct Symbol {

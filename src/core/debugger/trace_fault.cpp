@@ -203,8 +203,20 @@ std::string DescribeUnmapped(const void* memory, const Access& access) {
     return result;
 }
 
-void State::Configure(Mode value) {
+void State::Configure(Mode value, std::vector<std::string> selected) {
+    std::scoped_lock lock{mutex};
+    modules = value == Mode::Fault ? std::move(selected) : std::vector<std::string>{};
     mode.store(value, std::memory_order_relaxed);
+}
+
+std::vector<std::string> State::GetFaultModules() const {
+    std::scoped_lock lock{mutex};
+    return modules;
+}
+
+std::shared_ptr<const std::vector<std::string>> State::RunFaultModules() const {
+    std::scoped_lock lock{mutex};
+    return run_modules;
 }
 
 void State::BeginRun() {
@@ -212,9 +224,13 @@ void State::BeginRun() {
     status = {};
     executing = {};
     status.mode = GetMode();
+    status.fault_modules = modules;
+    run_modules = std::make_shared<const std::vector<std::string>>(modules);
 }
 
 void State::EndRun() {
+    std::scoped_lock lock{mutex};
+    modules.clear();
     mode.store(Mode::Log, std::memory_order_relaxed);
 }
 

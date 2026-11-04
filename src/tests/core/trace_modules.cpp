@@ -261,6 +261,33 @@ int main(int argc, char** argv) {
     {
         Registry registry;
         fixture.Write(Elf());
+        Require(registry.Register({"main", "abcdef00", 0x800000, 0x500, 7}));
+        Require(registry.Register({"nro:12345678", "12345678", 0xa00000, 0x500, 7}));
+        Require(registry.Register({"nro:9abc0000", "9abc0000", 0xc00000, 0x500, 7}));
+        using Names = std::vector<std::string>;
+        const auto selects = [&](u64 address, const Names& names, u64 process = 7) {
+            return registry.Selects(process, address, names);
+        };
+        Require(selects(0x800010, {"main"}) && !selects(0x800010, {"nro:*"}));
+        Require(selects(0xa00010, {"nro:*"}) && selects(0xc004ff, {"nro:*"}) && !selects(0xa00010, {"main"}));
+        Require(selects(0xa00010, {"nro:12345678"}) && !selects(0xc00010, {"nro:12345678"}));
+        Require(!selects(0xa00010, {"plugin.nro"})); // No alias until its ELF is loaded.
+        Require(registry.LoadSymbols("plugin.nro", fixture.path).empty());
+        Require(selects(0xa00010, {"plugin.nro"}) && !selects(0xc00010, {"plugin.nro"}));
+        Require(!selects(0x800010, {"plugin.nro"})); // Aliases name runtime NROs only.
+        Require(selects(0xc00010, {"main", "nro:9abc0000"}));
+        Require(!selects(0xa00500, {"nro:*"}) && !selects(0x21, {"nro:*", "main"}));
+        Require(!selects(0xa00010, {"nro:*"}, 8)); // Process isolation.
+        Require(!selects(0xa00010, {}));
+        Require(registry.Register({"overlap", {}, 0xa00400, 0x200, 7}));
+        Require(!selects(0xa00450, {"nro:*"}) && !selects(0xa00450, {"overlap"}));
+        Require(Registry::ValidSelector("nro:*") && Registry::ValidSelector("libtraining_rooms.nro"));
+        for (const auto* bad : {"", "main+0x10", "a!b", "line\nbreak"}) Require(!Registry::ValidSelector(bad));
+    }
+    std::cout << "PASS fault module selection: names, nro:* wildcard, loaded aliases, outside/overlap refusal\n";
+    {
+        Registry registry;
+        fixture.Write(Elf());
         Require(registry.Register({"main", "12345678", 0x800000, 0x500, 7}));
         Require(registry.LoadSymbols("main", fixture.path).empty());
         auto wrong = Elf();

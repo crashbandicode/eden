@@ -499,4 +499,32 @@ std::optional<TraceModules::Description> TraceModules::Describe(u64 process_id, 
     return result;
 }
 
+bool TraceModules::Selects(u64 process_id, u64 address, std::span<const std::string> selectors) const {
+    std::shared_lock lock{mutex};
+    const Module* found = nullptr;
+    for (const auto& module : modules) {
+        if (module.process_id == process_id && address >= module.base && address - module.base < module.size) {
+            if (found) {
+                return false;
+            }
+            found = &module;
+        }
+    }
+    if (!found) {
+        return false;
+    }
+    const bool runtime_nro = found->name.starts_with("nro:");
+    return std::ranges::any_of(selectors, [&](const std::string& selector) {
+        if (selector == found->name || (selector == "nro:*" && runtime_nro)) {
+            return true;
+        }
+        const auto symbols = symbol_sets.find(selector);
+        return runtime_nro && symbols != symbol_sets.end() && Matches(found->build_id, symbols->second.build_id);
+    });
+}
+
+bool TraceModules::ValidSelector(std::string_view selector) {
+    return ValidName(selector);
+}
+
 } // namespace Core

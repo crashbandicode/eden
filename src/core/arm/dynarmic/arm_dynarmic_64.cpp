@@ -249,7 +249,14 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
     if (!m_memory.IsValidVirtualAddressRange(normalized, size)) {
         auto& state = m_parent.m_system.GetUnmappedAccess();
         const bool emit = state.Count();
-        const bool fault = state.GetMode() == TraceFault::Mode::Fault;
+        const bool fault_mode = state.GetMode() == TraceFault::Mode::Fault;
+        bool fault = fault_mode;
+        if (fault_mode) {
+            // Callback PCs are precise, so this is the faulting instruction, not its caller.
+            const auto selected = state.RunFaultModules();
+            fault = selected->empty() || m_parent.m_system.GetTraceModules().Selects(
+                m_process->GetProcessId(), m_parent.m_jit->GetPC(), *selected);
+        }
         const TraceFault::Access access{addr, size, type == Kernel::DebugWatchpointType::Read
             ? TraceFault::AccessKind::Read : TraceFault::AccessKind::Write};
         if (emit || fault) {
@@ -269,7 +276,8 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
                 const auto counts = state.Inspect();
                 LOG_ERROR(HW_Memory, "Unmapped {}{} @ {:#x} {} mode={} total={} suppressed={}",
                     type == Kernel::DebugWatchpointType::Read ? "Read" : "Write", size * 8,
-                    addr, description, fault ? "diagnostic_stop" : "log", counts.total, counts.suppressed);
+                    addr, description, fault ? "diagnostic_stop" : fault_mode ? "log_module_not_selected" : "log",
+                    counts.total, counts.suppressed);
             }
         }
         if (fault) m_parent.m_jit->HaltExecution(DataAbort | UnmappedStop);

@@ -254,4 +254,26 @@ int main() {
         Require(state.EnterExecution(1, 0));
     }
     std::cout << "PASS concurrent unmapped counts, bounded logs, first-fault retention and fresh-run reset\n";
+    {
+        State state;
+        Require(state.GetFaultModules().empty() && state.RunFaultModules()->empty());
+        state.Configure(Mode::Log, {"main"}); // Selection applies to fault mode only.
+        Require(state.GetFaultModules().empty());
+        state.Configure(Mode::Fault, {"nro:*", "main"});
+        Require(state.RunFaultModules()->empty()); // Not in effect until the run starts.
+        state.BeginRun();
+        const auto run = state.RunFaultModules();
+        Require(*run == std::vector<std::string>{"nro:*", "main"});
+        Require(state.Inspect().fault_modules == *run && state.Inspect().mode == Mode::Fault);
+        state.EndRun();
+        Require(state.GetMode() == Mode::Log && state.GetFaultModules().empty());
+        Require(*run == std::vector<std::string>{"nro:*", "main"}); // Earlier snapshot stays valid.
+        Require(state.Inspect().fault_modules.size() == 2); // Receipt survives unload.
+        state.BeginRun();
+        Require(state.RunFaultModules()->empty() && state.Inspect().fault_modules.empty());
+        state.Configure(Mode::Fault);
+        state.BeginRun();
+        Require(state.RunFaultModules()->empty()); // Unscoped fault mode stops every module.
+    }
+    std::cout << "PASS fault module selection snapshot per run and reset after unload\n";
 }

@@ -264,7 +264,21 @@ QJsonObject ControlTrace::Handle(const QString& method, const QJsonObject& param
                         ? system.ApplicationProcess() : nullptr;
     const u64 pid = process ? process->GetProcessId() : 0;
     if (method == QStringLiteral("trace.unmapped_access")) {
-        if (!Fields(params, {QStringLiteral("mode")}) || (params.contains(QStringLiteral("mode")) && !params.value(QStringLiteral("mode")).isString())) return Error();
+        if (!Fields(params, {QStringLiteral("mode"), QStringLiteral("modules")}) || (params.contains(QStringLiteral("mode")) && !params.value(QStringLiteral("mode")).isString())) return Error();
+        std::vector<std::string> selected;
+        if (params.contains(QStringLiteral("modules"))) {
+            const auto value = params.value(QStringLiteral("modules"));
+            if (!value.isArray() || params.value(QStringLiteral("mode")).toString() != QStringLiteral("fault"))
+                return Error(QStringLiteral("invalid_trace"), QStringLiteral("modules requires mode fault and an array of module names"));
+            const auto names = value.toArray();
+            if (names.size() > 64) return Error(QStringLiteral("invalid_trace"), QStringLiteral("At most 64 fault modules"));
+            for (const auto name : names) {
+                const auto text = name.toString().toStdString();
+                if (!name.isString() || !Core::TraceModules::ValidSelector(text))
+                    return Error(QStringLiteral("invalid_trace"), QStringLiteral("Invalid fault module name"));
+                selected.push_back(text);
+            }
+        }
         auto& state = system.GetUnmappedAccess();
 #ifdef ARCHITECTURE_x86_64
         constexpr bool supported = true;
@@ -277,11 +291,19 @@ QJsonObject ControlTrace::Handle(const QString& method, const QJsonObject& param
             if (mode != QStringLiteral("log") && mode != QStringLiteral("fault")) return Error();
             if (mode == QStringLiteral("fault") && !supported)
                 return Error(QStringLiteral("fault_unsupported"), QStringLiteral("Diagnostic stop requires the x64 Dynarmic AArch64 backend"));
-            state.Configure(mode == QStringLiteral("fault") ? Core::TraceFault::Mode::Fault : Core::TraceFault::Mode::Log);
+            state.Configure(mode == QStringLiteral("fault") ? Core::TraceFault::Mode::Fault : Core::TraceFault::Mode::Log,
+                            std::move(selected));
         }
         const auto status = state.Inspect();
+        const auto names = [](const std::vector<std::string>& values) {
+            QJsonArray array;
+            for (const auto& value : values) array.append(QString::fromStdString(value));
+            return array;
+        };
         QJsonObject result{{QStringLiteral("mode"), state.GetMode() == Core::TraceFault::Mode::Fault ? QStringLiteral("fault") : QStringLiteral("log")},
             {QStringLiteral("run_mode"), status.mode == Core::TraceFault::Mode::Fault ? QStringLiteral("fault") : QStringLiteral("log")},
+            {QStringLiteral("modules"), names(state.GetFaultModules())},
+            {QStringLiteral("run_modules"), names(status.fault_modules)},
             {QStringLiteral("pc_quality"), supported ? QStringLiteral("exact") : QStringLiteral("sampled_not_fault_site")},
             {QStringLiteral("fault_supported"), supported},
             {QStringLiteral("fault_semantics"), QStringLiteral("diagnostic_stop_not_guest_exception")},
@@ -402,7 +424,12 @@ bool ControlTrace::LoadConfig(const QString& path) {
         system.GetGuestTrace().Disarm(0);
         return false;
     };
-    if (object.contains(QStringLiteral("unmapped_access")) && !check(Handle(QStringLiteral("trace.unmapped_access"), {{QStringLiteral("mode"), object.value(QStringLiteral("unmapped_access"))}}))) return false;
+    if (object.contains(QStringLiteral("unmapped_access"))) {
+        // Either "log"/"fault", or the trace.unmapped_access parameters object.
+        const auto value = object.value(QStringLiteral("unmapped_access"));
+        const auto params = value.isObject() ? value.toObject() : QJsonObject{{QStringLiteral("mode"), value}};
+        if (!check(Handle(QStringLiteral("trace.unmapped_access"), params))) return false;
+    }
     if (!check(Configure({{QStringLiteral("run_directory"), object.value(QStringLiteral("run_directory"))}, {QStringLiteral("label"), object.value(QStringLiteral("label"))}}))) return false;
     for (const auto value : object.value(QStringLiteral("symbols")).toArray()) {
         if (!value.isObject() || !check(Handle(QStringLiteral("symbols.load"), value.toObject()))) {

@@ -6,11 +6,13 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "common/common_types.h"
 
@@ -125,11 +127,18 @@ public:
     };
     struct Status {
         Mode mode{Mode::Log};
+        std::vector<std::string> fault_modules; // Selection in effect for this run.
         u64 total{}, emitted{}, suppressed{};
         std::optional<Record> fault;
     };
-    void Configure(Mode value);
+    // An empty module list lets every module stop in fault mode. Otherwise only
+    // accesses whose PC lies in a selected module stop; the rest are logged and
+    // continue as in log mode. Module matching belongs to the caller.
+    void Configure(Mode value, std::vector<std::string> modules = {});
     Mode GetMode() const { return mode.load(std::memory_order_relaxed); }
+    std::vector<std::string> GetFaultModules() const;
+    // Read on the unmapped slow path; the selection is immutable during a run.
+    std::shared_ptr<const std::vector<std::string>> RunFaultModules() const;
     void BeginRun();
     void EndRun();
     // First 16, then powers of two: bounded output with exact suppressed count.
@@ -144,6 +153,8 @@ public:
 private:
     std::atomic<Mode> mode{Mode::Log};
     mutable std::mutex mutex;
+    std::vector<std::string> modules;
+    std::shared_ptr<const std::vector<std::string>> run_modules{std::make_shared<const std::vector<std::string>>()};
     Status status;
     std::array<u64, 4> executing{};
 };

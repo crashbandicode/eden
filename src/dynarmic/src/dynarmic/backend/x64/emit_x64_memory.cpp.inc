@@ -102,8 +102,12 @@ void AxxEmitX64::EmitMemoryRead(AxxEmitContext& ctx, IR::Inst* inst) {
     if (fastmem_marker) {
         // Use fastmem
         bool require_abort_handling = false;
-        EmitDetectMisalignedVAddr(code, ctx, bitsize, *abort, vaddr, ctx.reg_alloc.ScratchGpr(code));
-        const auto src_ptr = EmitFastmemVAddr(code, ctx, *abort, vaddr, require_abort_handling);
+        // Allocate before any slow-path branch: a later allocation can spill a
+        // live value, and a cross-page branch would skip that spill. Both
+        // address checks can reuse the same temporary.
+        const auto tmp = ctx.reg_alloc.ScratchGpr(code);
+        EmitDetectMisalignedVAddr(code, ctx, bitsize, *abort, vaddr, tmp);
+        const auto src_ptr = EmitFastmemVAddr(code, ctx, *abort, vaddr, require_abort_handling, tmp);
 
         const auto location = EmitReadMemoryMov<bitsize>(code, value_idx, src_ptr, ordered);
 
@@ -191,8 +195,10 @@ void AxxEmitX64::EmitMemoryWrite(AxxEmitContext& ctx, IR::Inst* inst) {
     if (fastmem_marker) {
         // Use fastmem
         bool require_abort_handling = false;
-        EmitDetectMisalignedVAddr(code, ctx, bitsize, *abort, vaddr, ctx.reg_alloc.ScratchGpr(code));
-        const auto dest_ptr = EmitFastmemVAddr(code, ctx, *abort, vaddr, require_abort_handling);
+        // Keep spills ahead of the cross-page branch, as on the read path.
+        const auto tmp = ctx.reg_alloc.ScratchGpr(code);
+        EmitDetectMisalignedVAddr(code, ctx, bitsize, *abort, vaddr, tmp);
+        const auto dest_ptr = EmitFastmemVAddr(code, ctx, *abort, vaddr, require_abort_handling, tmp);
 
         const auto location = EmitWriteMemoryMov<bitsize>(code, dest_ptr, value_idx, ordered);
 

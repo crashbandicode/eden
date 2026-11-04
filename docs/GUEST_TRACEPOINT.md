@@ -193,13 +193,37 @@ an explicit loss watermark after clear, even when no records remain.
 
 ### Unmapped access and remaining capabilities
 
-Unmapped scalar/exclusive logs have callback-local process/thread/core and bounded
-module-symbol/backtrace attribution. Current callback JIT PC/LR/FP/SP are labeled
-`sampled_not_fault_site`; non-guest accesses explicitly report unavailable context.
-These samples are **not precise crash attribution**. `trace.unmapped_access`
-reports the capability; `mode:"fault"` (including launch configuration) is rejected
-with `fault_unsupported`. Real abort-before-writeback and Horizon guest exception
-delivery are still required; a debugger suspension is not console-faithful mode.
+On x64 hosts, AArch64 unmapped data accesses (8/16/32/64/128-bit, including fastmem
+and exclusive callbacks) report an exact instruction PC with registered module
+and offset. Log mode continues with zero/discard semantics. Register/backtrace
+samples in log mode remain labeled `sampled_not_fault_site`. Non-guest accesses
+explicitly report unavailable context.
+
+Set `"unmapped_access":"fault"` in the per-run `--trace-config` JSON, or call
+`trace.unmapped_access` with `{"mode":"fault"}` **before boot**. This enables a
+**diagnostic process stop**, not Horizon guest data-abort delivery. The backend
+aborts the invalid access before result/base writeback, preserves the fault-site
+registers and bounded frame-pointer backtrace, and suspends the guest process.
+Fault mode requires an AArch64 guest and the x64 Dynarmic backend; other host
+backends reject the option. Live mode changes return `trace_busy`.
+
+```sh
+python tools/edenctl.py --socket /path/control.sock call trace.unmapped_access '{"mode":"fault"}'
+python tools/edenctl.py --socket /path/control.sock call trace.unmapped_access '{}'
+```
+
+The query returns `mode`, `run_mode`, `fault_semantics`, and decimal-string
+`total`, `emitted`, `suppressed` counters. Output is bounded to the first 16
+accesses and subsequent power-of-two totals; suppressed accesses still count.
+When stopped, `fault` contains address, width, access kind, process/thread/core,
+PC, x0–x30/SP/PC/PSTATE, `stop_requested`, `stopped`, and a description including
+module/backtrace. `stopped` becomes true only after active guest execution on all
+cores has exited. A latched entry guard and separate diagnostic suspension prevent
+ordinary applet/process/debug resume from restarting the faulted process. New
+threads inherit the diagnostic suspension; termination can still unload the run.
+Use `game.stop` to unload a stopped run. The receipt survives unload; the next
+boot clears counters/fault and defaults to log unless explicitly configured again.
+Frame-pointer walks are bounded and may terminate on an invalid or unreadable frame.
 
 Data watchpoints, allocation accounting, hitch sampling and interactive control
 stops remain unimplemented. Backtraces are available as a per-point capture;

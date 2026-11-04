@@ -119,6 +119,7 @@ class CpuManager;
 class Debugger;
 class GuestTracepoint;
 class GuestTrace;
+namespace TraceFault { class State; }
 class TraceModules;
 class DeviceMemory;
 class ExclusiveMonitor;
@@ -384,6 +385,7 @@ public:
     [[nodiscard]] const Core::Debugger& GetDebugger() const;
     [[nodiscard]] Core::GuestTracepoint& GetGuestTracepoint();
     [[nodiscard]] Core::GuestTrace& GetGuestTrace();
+    [[nodiscard]] Core::TraceFault::State& GetUnmappedAccess();
     [[nodiscard]] Core::TraceModules& GetTraceModules();
     // Pins application-process/ARM-interface lifetime against main-process teardown.
     // GUI tracing uses try-lock so it cannot block the event loop during shutdown.

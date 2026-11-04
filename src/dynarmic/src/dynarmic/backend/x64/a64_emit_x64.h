@@ -94,6 +94,8 @@ public:
 
     // Memory access helpers
     void EmitCheckMemoryAbort(A64EmitContext& ctx, IR::Inst* inst, Xbyak::Label* end = nullptr);
+    void EmitMemoryAccessPC(IR::Inst* inst);
+    SharedLabel MemoryCallbackEntry(A64EmitContext& ctx, IR::Inst* inst, void (*callback)());
     template<std::size_t bitsize, auto callback>
     void EmitMemoryRead(A64EmitContext& ctx, IR::Inst* inst);
     template<std::size_t bitsize, auto callback>

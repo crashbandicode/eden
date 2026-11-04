@@ -409,6 +409,15 @@ void A64EmitX64::EmitA64ExclusiveWriteMemory128(A64EmitContext& ctx, IR::Inst* i
     }
 }
 
+void A64EmitX64::EmitMemoryAccessPC(IR::Inst* inst) {
+    if (!conf.precise_memory_callback_pc) return;
+    const A64::LocationDescriptor location{IR::LocationDescriptor{inst->GetArg(0).GetU64()}};
+    // Preserve every host register and flags, including fallback arguments.
+    const u64 pc = location.PC();
+    code.mov(dword[code.ABI_JIT_PTR + offsetof(A64JitState, pc)], u32(pc));
+    code.mov(dword[code.ABI_JIT_PTR + offsetof(A64JitState, pc) + 4], u32(pc >> 32));
+}
+
 void A64EmitX64::EmitCheckMemoryAbort(A64EmitContext&, IR::Inst* inst, Xbyak::Label* end) {
     if (!conf.check_halt_on_memory_access) {
         return;

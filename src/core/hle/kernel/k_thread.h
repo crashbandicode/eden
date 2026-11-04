@@ -69,6 +69,7 @@ enum class SuspendType : u32 {
     Backtrace = 3,
     Init = 4,
     System = 5,
+    Diagnostic = 6, // Host-owned fault stop; ordinary Process/Debug resume cannot clear it.
 
     Count,
 };
@@ -88,8 +89,9 @@ enum class ThreadState : u16 {
     BacktraceSuspended = (1 << (3 + SuspendShift)),
     InitSuspended = (1 << (4 + SuspendShift)),
     SystemSuspended = (1 << (5 + SuspendShift)),
+    DiagnosticSuspended = (1 << (6 + SuspendShift)),
 
-    SuspendFlagMask = ((1 << 6) - 1) << SuspendShift,
+    SuspendFlagMask = ((1 << 7) - 1) << SuspendShift,
 };
 DECLARE_ENUM_FLAG_OPERATORS(ThreadState);
 

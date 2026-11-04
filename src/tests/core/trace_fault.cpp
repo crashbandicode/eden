@@ -219,4 +219,39 @@ int main() {
         Require(fixture.faults == 2);
     }
     std::cout << "PASS unsupported/inexact/missing-hook refusal, rejection and explicit queued-only result\n";
+    {
+        State state;
+        Require(state.GetMode() == Mode::Log);
+        state.Configure(Mode::Fault);
+        state.BeginRun();
+        std::array<std::thread, 4> workers;
+        for (auto& worker : workers) worker = std::thread([&] {
+            for (unsigned i = 0; i < 256; ++i) (void)state.Count();
+        });
+        for (auto& worker : workers) worker.join();
+        auto status = state.Inspect();
+        Require(status.total == 1024 && status.emitted == 22 && status.suppressed == 1002);
+        State::Record first{.access = {0x21, 8, AccessKind::Read}, .process_id = 1, .thread_id = 2, .pc = 0x401004};
+        first.registers[8] = 0xfeed;
+        Require(state.EnterExecution(1, 0));
+        Require(state.EnterExecution(1, 1));
+        state.Capture(first);
+        state.Capture({.access = {0x22, 4, AccessKind::Write}, .process_id = 1, .thread_id = 3});
+        state.LeaveExecution(0);
+        Require(!state.Inspect().fault->stopped); // Sibling is still executing.
+        Require(!state.EnterExecution(1, 2)); // Ordinary resume cannot reopen guest entry.
+        state.LeaveExecution(1);
+        Require(state.Inspect().fault->pc == 0x401004 && state.Inspect().fault->stopped);
+        Require(!state.EnterExecution(1, 0));
+        Require(state.EnterExecution(2, 0)); // Unrelated process is not stopped.
+        state.LeaveExecution(0);
+        Require(state.Inspect().fault->registers[8] == 0xfeed);
+        state.EndRun();
+        Require(state.GetMode() == Mode::Log && state.Inspect().fault.has_value());
+        state.BeginRun();
+        Require(state.Inspect().total == 0 && !state.Inspect().fault);
+        Require(state.Inspect().mode == Mode::Log);
+        Require(state.EnterExecution(1, 0));
+    }
+    std::cout << "PASS concurrent unmapped counts, bounded logs, first-fault retention and fresh-run reset\n";
 }

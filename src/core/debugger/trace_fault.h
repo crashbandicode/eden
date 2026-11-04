@@ -4,7 +4,9 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -108,5 +110,42 @@ struct Backtrace {
 // The Memory API still returns a placeholder on a failed read: only a backend
 // satisfying the contract above may prevent that value being committed by the JIT.
 [[nodiscard]] std::string DescribeUnmapped(const void* memory, const Access& access);
+
+// Per-System diagnostic state. Only invalid CPU callbacks take this lock.
+// Configure before boot; EndRun resets the next run to Log, retaining the receipt.
+class State {
+public:
+    struct Record {
+        Access access;
+        u64 process_id{}, thread_id{}, pc{};
+        u32 core_id{};
+        std::array<u64, 34> registers{}; // x0..x30, SP, PC, PSTATE
+        std::string description;
+        bool stopped{};
+    };
+    struct Status {
+        Mode mode{Mode::Log};
+        u64 total{}, emitted{}, suppressed{};
+        std::optional<Record> fault;
+    };
+    void Configure(Mode value);
+    Mode GetMode() const { return mode.load(std::memory_order_relaxed); }
+    void BeginRun();
+    void EndRun();
+    // First 16, then powers of two: bounded output with exact suppressed count.
+    bool Count();
+    void Capture(Record record);
+    // One entry per physical core, paired at the JIT execution boundary. The
+    // fault latch rejects future entries even if ordinary process resume runs.
+    bool EnterExecution(u64 process, size_t core);
+    void LeaveExecution(size_t core);
+    Status Inspect() const;
+
+private:
+    std::atomic<Mode> mode{Mode::Log};
+    mutable std::mutex mutex;
+    Status status;
+    std::array<u64, 4> executing{};
+};
 
 } // namespace Core::TraceFault

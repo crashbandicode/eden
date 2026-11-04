@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <map>
 
 #include "core/arm/arm_interface.h"
@@ -137,6 +138,7 @@ private:
     bool m_is_application : 1 = false;
     bool m_is_default_application_system_resource : 1 = false;
     bool m_is_suspended : 1 = false;
+    std::atomic_bool m_diagnostic_suspended{};
     bool m_is_immortal : 1 = false;
     bool m_is_handle_table_initialized : 1 = false;
 
@@ -254,6 +256,9 @@ public:
 
     bool IsSuspended() const {
         return m_is_suspended;
+    }
+    bool IsDiagnosticSuspended() const {
+        return m_diagnostic_suspended.load(std::memory_order_relaxed);
     }
     void SetSuspended(bool suspended) {
         m_is_suspended = suspended;
@@ -469,6 +474,7 @@ public:
     }
 
     Result SetActivity(KernelCore& kernel, Svc::ProcessActivity activity);
+    void RequestDiagnosticStop(KernelCore& kernel);
     void PinCurrentThread(KernelCore& kernel);
     void UnpinCurrentThread(KernelCore& kernel);
     void UnpinThread(KernelCore& kernel, KThread* thread);

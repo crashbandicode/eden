@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <span>
 #include <thread>
@@ -130,6 +131,8 @@ struct Memory::Impl {
         for (u64 addr = vaddr; addr < vaddr + size; addr += YUZU_PAGESIZE) {
             const Common::PageType page_type = current_page_table->entries.GetUnchecked(addr >> YUZU_PAGEBITS).Type();
             switch (page_type) {
+            case Common::PageType::Unmapped:
+            case Common::PageType::DebugMemory:
             case Common::PageType::RasterizerCachedMemory:
                 if (protect_bytes > 0) {
                     host_buffer->Protect(protect_begin, protect_bytes, perms);
@@ -916,6 +919,9 @@ bool Memory::IsValidVirtualAddress(const Common::ProcessAddress vaddr) const {
 }
 
 bool Memory::IsValidVirtualAddressRange(Common::ProcessAddress base, u64 size) const {
+    if (size == 0 || GetInteger(base) > std::numeric_limits<u64>::max() - size) {
+        return false;
+    }
     Common::ProcessAddress end = base + size;
     Common::ProcessAddress page = Common::AlignDown(GetInteger(base), YUZU_PAGESIZE);
 

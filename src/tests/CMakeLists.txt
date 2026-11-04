@@ -31,6 +31,12 @@ target_link_libraries(tests PRIVATE ${PLATFORM_LIBRARIES} Catch2::Catch2WithMain
 
 add_test(NAME tests COMMAND tests)
 
+if (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(host-memory-fault-tests common/host_memory_fault.cpp)
+    target_link_libraries(host-memory-fault-tests PRIVATE common Catch2::Catch2WithMain ${PLATFORM_LIBRARIES})
+    add_test(NAME host-memory-fault-tests COMMAND host-memory-fault-tests)
+endif()
+
 # Small standalone diagnostic test: no emulator, renderer or GPU runtime dependency.
 add_executable(gpu-write-read-trace-tests
     common/gpu_write_read_trace.cpp

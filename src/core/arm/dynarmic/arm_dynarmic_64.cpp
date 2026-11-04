@@ -27,7 +27,6 @@ using namespace Common::Literals;
 DynarmicCallbacks64::DynarmicCallbacks64(ArmDynarmic64& parent, Kernel::KProcess* process)
     : m_parent{parent}, m_memory(process->GetMemory())
     , m_process(process), m_debugger_enabled{parent.m_system.DebuggerEnabled()}
-    , m_check_memory_access{m_debugger_enabled || !Settings::values.cpuopt_ignore_memory_aborts.GetValue()}
 {}
 
 u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
@@ -40,7 +39,7 @@ u64 DynarmicCallbacks64::MemoryRead(u64 vaddr, size_t size) {
         .lr = trace ? m_parent.m_jit->GetRegister(30) : 0,
         .process = trace ? m_process->GetProcessId() : 0,
         .core = static_cast<u32>(m_parent.m_core_index)}};
-    CheckMemoryAccess(vaddr, size, Kernel::DebugWatchpointType::Read);
+    if (!CheckMemoryAccess(vaddr, size, Kernel::DebugWatchpointType::Read)) return 0;
     switch (size) {
     case sizeof(u64): return m_memory.Read64(vaddr);
     case sizeof(u32): return m_memory.Read32(vaddr);
@@ -59,7 +58,7 @@ Dynarmic::A64::Vector DynarmicCallbacks64::MemoryRead128(u64 vaddr) {
         .lr = trace ? m_parent.m_jit->GetRegister(30) : 0,
         .process = trace ? m_process->GetProcessId() : 0,
         .core = static_cast<u32>(m_parent.m_core_index)}};
-    CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read);
+    if (!CheckMemoryAccess(vaddr, 16, Kernel::DebugWatchpointType::Read)) return {};
     return {m_memory.Read64(vaddr), m_memory.Read64(vaddr + 8)};
 }
 
@@ -224,7 +223,13 @@ TraceFault::Context DynarmicCallbacks64::FaultContext() {
         out.lr = self.m_parent.m_jit->GetRegister(30);
         out.fp = self.m_parent.m_jit->GetRegister(29);
         out.sp = self.m_parent.m_jit->GetSP();
-        out.pc_quality = out.registers_quality = TraceFault::Quality::Sampled;
+#ifdef ARCHITECTURE_x86_64
+        out.pc_quality = TraceFault::Quality::Exact;
+#else
+        out.pc_quality = TraceFault::Quality::Sampled;
+#endif
+        out.registers_quality = self.m_parent.m_system.GetUnmappedAccess().GetMode() == TraceFault::Mode::Fault
+            ? TraceFault::Quality::Exact : TraceFault::Quality::Sampled;
     };
     context.read = [](void* user, u64 address, std::span<u8> bytes) {
         return static_cast<DynarmicCallbacks64*>(user)->m_memory.ReadBlockForDiagnostic(address, bytes);
@@ -238,16 +243,36 @@ TraceFault::Context DynarmicCallbacks64::FaultContext() {
 }
 
 bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWatchpointType type) {
-    if (!m_check_memory_access) {
-        return true;
-    }
-
-    if (!m_memory.IsValidVirtualAddressRange(addr, size)) {
-        LOG_CRITICAL(Core_ARM, "Stopping execution due to unmapped memory access at {:#x}: {}",
-                     addr, TraceFault::DescribeUnmapped(&m_memory,
-                         {addr, size, type == Kernel::DebugWatchpointType::Read
-                                          ? TraceFault::AccessKind::Read : TraceFault::AccessKind::Write}));
-        m_parent.m_jit->HaltExecution(PrefetchAbort);
+    // Match Memory::GetPointerImpl's existing upper-16-bit normalization. Keep
+    // the supplied address in the receipt; mapped tagged aliases remain valid.
+    const u64 normalized = addr & 0xffffffffffffULL;
+    if (!m_memory.IsValidVirtualAddressRange(normalized, size)) {
+        auto& state = m_parent.m_system.GetUnmappedAccess();
+        const bool emit = state.Count();
+        const bool fault = state.GetMode() == TraceFault::Mode::Fault;
+        const TraceFault::Access access{addr, size, type == Kernel::DebugWatchpointType::Read
+            ? TraceFault::AccessKind::Read : TraceFault::AccessKind::Write};
+        if (emit || fault) {
+            const auto description = TraceFault::DescribeUnmapped(&m_memory, access);
+            if (fault) {
+                TraceFault::State::Record record{.access = access,
+                    .process_id = m_process->GetProcessId(), .thread_id = m_parent.m_running_thread_id,
+                    .pc = m_parent.m_jit->GetPC(), .core_id = static_cast<u32>(m_parent.m_core_index)};
+                for (size_t i = 0; i < 31; ++i) record.registers[i] = m_parent.m_jit->GetRegister(i);
+                record.registers[31] = m_parent.m_jit->GetSP();
+                record.registers[32] = record.pc;
+                record.registers[33] = m_parent.m_jit->GetPstate();
+                record.description = description;
+                state.Capture(std::move(record));
+            }
+            if (emit) {
+                const auto counts = state.Inspect();
+                LOG_ERROR(HW_Memory, "Unmapped {}{} @ {:#x} {} mode={} total={} suppressed={}",
+                    type == Kernel::DebugWatchpointType::Read ? "Read" : "Write", size * 8,
+                    addr, description, fault ? "diagnostic_stop" : "log", counts.total, counts.suppressed);
+            }
+        }
+        if (fault) m_parent.m_jit->HaltExecution(DataAbort | UnmappedStop);
         return false;
     }
 
@@ -255,7 +280,7 @@ bool DynarmicCallbacks64::CheckMemoryAccess(u64 addr, u64 size, Kernel::DebugWat
         return true;
     }
 
-    const auto match{m_parent.MatchingWatchpoint(addr, size, type)};
+    const auto match{m_parent.MatchingWatchpoint(normalized, size, type)};
     if (match) {
         m_parent.m_halted_watchpoint = match;
         m_parent.m_jit->HaltExecution(DataAbort);
@@ -426,6 +451,16 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     if (!Settings::IsFastmemEnabled()) {
         config.fastmem_pointer = std::nullopt;
         config.fastmem_exclusive_access = false;
+    }
+    // Out-of-range addresses and cross-page accesses must reach the callbacks.
+    config.fastmem_address_space_bits = std::uint32_t(address_space_bits);
+    config.precise_memory_callback_pc = true;
+    config.detect_misaligned_access_via_page_table = 16 | 32 | 64 | 128;
+    if (m_system.GetUnmappedAccess().GetMode() == TraceFault::Mode::Fault) {
+        config.check_halt_on_memory_access = true;
+        // Callback exclusive operations release the monitor before the abort check.
+        config.fastmem_exclusive_access = false;
+        config.optimizations &= ~Dynarmic::OptimizationFlag::Unsafe_IgnoreGlobalMonitor;
     }
     // Experimental isolation: force the same callback paths without enabling the recorder.
     const char* callbacks_only_env = std::getenv("EDEN_GNW_CPU_CALLBACKS_ONLY");

@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <optional>
 #include <random>
 #include "common/scope_exit.h"
 #include "common/settings.h"
@@ -253,6 +254,7 @@ Result KProcess::Initialize(KernelCore& kernel, const Svc::CreateProcessParamete
     m_is_signaled = false;
     m_exception_thread = nullptr;
     m_is_suspended = false;
+    m_diagnostic_suspended = false;
     m_memory_release_hint = 0;
     m_schedule_count = 0;
     m_is_handle_table_initialized = false;
@@ -1058,6 +1060,20 @@ Result KProcess::Reset(KernelCore& kernel) {
     // Clear signaled.
     m_is_signaled = false;
     R_SUCCEED();
+}
+
+void KProcess::RequestDiagnosticStop(KernelCore& kernel) {
+    // Blocking light-lock acquisition must retain normal dispatch. Construct
+    // the dispatch guard only afterwards, but destroy it after both locks so a
+    // self-suspend cannot park while retaining either process lock.
+    std::optional<KScopedDisableDispatch> dd;
+    KScopedLightLock lk(m_state_lock);
+    KScopedLightLock list_lk(m_list_lock);
+    dd.emplace(kernel);
+    KScopedSchedulerLock sl(kernel);
+    if (m_state == State::Terminating || m_state == State::Terminated) return;
+    m_diagnostic_suspended = true;
+    for (auto& thread : GetThreadList()) thread.RequestSuspend(kernel, SuspendType::Diagnostic);
 }
 
 Result KProcess::SetActivity(KernelCore& kernel, Svc::ProcessActivity activity) {

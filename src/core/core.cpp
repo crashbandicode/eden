@@ -25,6 +25,7 @@
 #include "core/debugger/debugger.h"
 #include "core/debugger/guest_tracepoint.h"
 #include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_fault.h"
 #include "core/debugger/trace_modules.h"
 #include "core/device_memory.h"
 #include "core/file_sys/fs_filesystem.h"
@@ -338,6 +339,12 @@ struct System::Impl {
             return SystemResultStatus(u32(SystemResultStatus::ErrorLoader) + u32(load_result));
         }
 
+        if (unmapped_access.GetMode() == Core::TraceFault::Mode::Fault && !process->GetHandle()->Is64Bit()) {
+            LOG_ERROR(Core, "unmapped_access=fault diagnostic stop requires an AArch64 guest");
+            ShutdownMainProcess();
+            return SystemResultStatus::ErrorGetLoader;
+        }
+
         if (!app_loader) {
             LOG_CRITICAL(Core, "Failed to obtain loader for {}!", filepath);
             return SystemResultStatus::ErrorGetLoader;
@@ -363,6 +370,7 @@ struct System::Impl {
         // Make the process created be the application
         kernel.SetApplicationProcess(process->GetHandle());
         guest_trace.BeginProcess(kernel.ApplicationProcess()->GetProcessId());
+        unmapped_access.BeginRun();
 
         // Set up the rest of the system.
         SystemResultStatus init_result{SetupForApplicationProcess(system, emu_window)};
@@ -459,6 +467,7 @@ struct System::Impl {
         host1x_core.reset();
         perf_stats.reset();
         cpu_manager.Shutdown();
+        unmapped_access.EndRun();
         debugger.reset();
         kernel.Shutdown();
         stop_event = {};
@@ -518,6 +527,7 @@ struct System::Impl {
     std::optional<Core::Debugger> debugger;
     Core::GuestTracepoint guest_tracepoint;
     Core::GuestTrace guest_trace;
+    Core::TraceFault::State unmapped_access;
     Core::TraceModules trace_modules;
     std::mutex trace_process_mutex;
     bool trace_process_teardown{}; // protected by trace_process_mutex
@@ -976,6 +986,10 @@ Core::GuestTracepoint& System::GetGuestTracepoint() {
 
 Core::GuestTrace& System::GetGuestTrace() {
     return impl->guest_trace;
+}
+
+Core::TraceFault::State& System::GetUnmappedAccess() {
+    return impl->unmapped_access;
 }
 
 Core::TraceModules& System::GetTraceModules() {

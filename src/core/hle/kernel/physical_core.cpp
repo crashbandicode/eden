@@ -13,6 +13,7 @@
 #include "core/debugger/debugger.h"
 #include "core/debugger/guest_tracepoint.h"
 #include "core/debugger/guest_trace.h"
+#include "core/debugger/trace_fault.h"
 #include "core/debugger/trace_modules.h"
 #include "core/arm/debug.h"
 #include "core/hle/kernel/k_process.h"
@@ -109,7 +110,9 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
                 return;
             }
 
-            if (trace_step) {
+            if (!system.GetUnmappedAccess().EnterExecution(process->GetProcessId(), m_core_index)) {
+                hr = Core::HaltReason::UnmappedStop;
+            } else if (trace_step) {
                 hr = interface->StepTracepointThread(thread);
                 // An external interrupt may arrive before the instruction ran.
                 // Retain the resume obligation across scheduling in that case.
@@ -133,6 +136,16 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
             }
 
             ExitContext();
+        }
+
+        if (True(hr & Core::HaltReason::UnmappedStop)) {
+            system.GetUnmappedAccess().LeaveExecution(m_core_index);
+            // Separate from debugger watchpoints: there is no watchpoint object.
+            // The JIT has already aborted before the invalid access commits.
+            interface->GetContext(thread->GetContext());
+            finish_before_scheduling();
+            process->RequestDiagnosticStop(kernel);
+            return;
         }
 
         if (True(hr & Core::HaltReason::Tracepoint)) {
@@ -178,6 +191,10 @@ void PhysicalCore::RunThread(KernelCore& kernel, Kernel::KThread* thread) {
             // or temporarily remove a point shared with another core.
             thread->SetTracepointStepPending(true);
         }
+
+        // Finish observations belonging to the exited instruction before
+        // publishing quiescence; no new guest entry can pass a latched fault.
+        system.GetUnmappedAccess().LeaveExecution(m_core_index);
 
         // Determine why we stopped.
         // If a step completed successfully, skip other halt reason handlers

@@ -302,6 +302,11 @@ struct UserConfig {
     /// for exit after every data memory access by the emulated program.
     bool check_halt_on_memory_access = false;
 
+    // x64: publish the instruction PC immediately before a memory callback,
+    // including host-fault fallback entries. Register precision still requires
+    // check_halt_on_memory_access (GetSetElimination must be disabled).
+    bool precise_memory_callback_pc = false;
+
     /// This option allows you to disable cycle counting. If this is set to false,
     /// AddTicks and GetTicksRemaining are never called, and no cycle counting is done.
     bool enable_cycle_counting = true;

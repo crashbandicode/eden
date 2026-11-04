@@ -70,7 +70,6 @@ public:
     u64 m_tpidr_el0{};
     Kernel::KProcess* m_process{};
     const bool m_debugger_enabled{};
-    const bool m_check_memory_access{};
     static constexpr u64 MinimumRunCycles = 10000U;
 };
 

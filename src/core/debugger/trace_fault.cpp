@@ -203,4 +203,59 @@ std::string DescribeUnmapped(const void* memory, const Access& access) {
     return result;
 }
 
+void State::Configure(Mode value) {
+    mode.store(value, std::memory_order_relaxed);
+}
+
+void State::BeginRun() {
+    std::scoped_lock lock{mutex};
+    status = {};
+    executing = {};
+    status.mode = GetMode();
+}
+
+void State::EndRun() {
+    mode.store(Mode::Log, std::memory_order_relaxed);
+}
+
+bool State::Count() {
+    std::scoped_lock lock{mutex};
+    if (status.total == std::numeric_limits<u64>::max()) return false;
+    ++status.total;
+    const bool emit = status.total <= 16 || (status.total & (status.total - 1)) == 0;
+    if (emit) ++status.emitted;
+    else ++status.suppressed;
+    return emit;
+}
+
+void State::Capture(Record record) {
+    std::scoped_lock lock{mutex};
+    if (!status.fault) status.fault = std::move(record);
+}
+
+bool State::EnterExecution(u64 process, size_t core) {
+    if (GetMode() != Mode::Fault) return true;
+    std::scoped_lock lock{mutex};
+    if (core >= executing.size() || (status.fault && status.fault->process_id == process))
+        return false;
+    executing[core] = process;
+    return true;
+}
+
+void State::LeaveExecution(size_t core) {
+    if (GetMode() != Mode::Fault) return;
+    std::scoped_lock lock{mutex};
+    if (core < executing.size()) executing[core] = 0;
+    if (status.fault) {
+        status.fault->stopped = std::none_of(executing.begin(), executing.end(), [&](u64 process) {
+            return process == status.fault->process_id;
+        });
+    }
+}
+
+State::Status State::Inspect() const {
+    std::scoped_lock lock{mutex};
+    return status;
+}
+
 } // namespace Core::TraceFault

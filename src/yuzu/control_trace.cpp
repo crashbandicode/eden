@@ -265,14 +265,45 @@ QJsonObject ControlTrace::Handle(const QString& method, const QJsonObject& param
     const u64 pid = process ? process->GetProcessId() : 0;
     if (method == QStringLiteral("trace.unmapped_access")) {
         if (!Fields(params, {QStringLiteral("mode")}) || (params.contains(QStringLiteral("mode")) && !params.value(QStringLiteral("mode")).isString())) return Error();
-        const auto mode = params.value(QStringLiteral("mode")).toString(QStringLiteral("log"));
-        if (mode != QStringLiteral("log") && mode != QStringLiteral("fault")) return Error();
-        if (mode == QStringLiteral("fault")) {
-            const auto error = Core::TraceFault::ValidateMode(Core::TraceFault::Mode::Fault, {});
-            return Error(QStringLiteral("fault_unsupported"), QString::fromUtf8(error.data(), static_cast<qsizetype>(error.size())));
+        auto& state = system.GetUnmappedAccess();
+#ifdef ARCHITECTURE_x86_64
+        constexpr bool supported = true;
+#else
+        constexpr bool supported = false;
+#endif
+        if (params.contains(QStringLiteral("mode"))) {
+            if (system.IsPoweredOn()) return Error(QStringLiteral("trace_busy"), QStringLiteral("Select unmapped access mode before boot"));
+            const auto mode = params.value(QStringLiteral("mode")).toString();
+            if (mode != QStringLiteral("log") && mode != QStringLiteral("fault")) return Error();
+            if (mode == QStringLiteral("fault") && !supported)
+                return Error(QStringLiteral("fault_unsupported"), QStringLiteral("Diagnostic stop requires the x64 Dynarmic AArch64 backend"));
+            state.Configure(mode == QStringLiteral("fault") ? Core::TraceFault::Mode::Fault : Core::TraceFault::Mode::Log);
         }
-        return CS::Success(QJsonObject{{QStringLiteral("mode"), QStringLiteral("log")}, {QStringLiteral("pc_quality"), QStringLiteral("sampled_not_fault_site")},
-                            {QStringLiteral("fault_supported"), false}});
+        const auto status = state.Inspect();
+        QJsonObject result{{QStringLiteral("mode"), state.GetMode() == Core::TraceFault::Mode::Fault ? QStringLiteral("fault") : QStringLiteral("log")},
+            {QStringLiteral("run_mode"), status.mode == Core::TraceFault::Mode::Fault ? QStringLiteral("fault") : QStringLiteral("log")},
+            {QStringLiteral("pc_quality"), supported ? QStringLiteral("exact") : QStringLiteral("sampled_not_fault_site")},
+            {QStringLiteral("fault_supported"), supported},
+            {QStringLiteral("fault_semantics"), QStringLiteral("diagnostic_stop_not_guest_exception")},
+            {QStringLiteral("total"), QString::number(status.total)},
+            {QStringLiteral("emitted"), QString::number(status.emitted)},
+            {QStringLiteral("suppressed"), QString::number(status.suppressed)}};
+        if (status.fault) {
+            const auto& fault = *status.fault;
+            QJsonObject registers;
+            for (u8 i = 0; i < fault.registers.size(); ++i) registers.insert(Reg(i), Hex(fault.registers[i]));
+            result.insert(QStringLiteral("fault"), QJsonObject{
+                {QStringLiteral("address"), Hex(fault.access.address)},
+                {QStringLiteral("width"), static_cast<int>(fault.access.size * 8)},
+                {QStringLiteral("access"), fault.access.kind == Core::TraceFault::AccessKind::Read ? QStringLiteral("read") : QStringLiteral("write")},
+                {QStringLiteral("process_id"), QString::number(fault.process_id)},
+                {QStringLiteral("thread_id"), QString::number(fault.thread_id)},
+                {QStringLiteral("core_id"), static_cast<int>(fault.core_id)},
+                {QStringLiteral("pc"), Hex(fault.pc)}, {QStringLiteral("registers"), registers},
+                {QStringLiteral("description"), QString::fromStdString(fault.description)},
+                {QStringLiteral("stop_requested"), true}, {QStringLiteral("stopped"), fault.stopped}});
+        }
+        return CS::Success(result);
     }
     if (method == QStringLiteral("trace.configure")) return Configure(params);
     if (method == QStringLiteral("trace.list") || method == QStringLiteral("trace.counters")) {

@@ -258,6 +258,9 @@ namespace Kernel {
             if (m_parent->IsSuspended()) {
                 RequestSuspend(kernel, SuspendType::Process);
             }
+            if (m_parent->IsDiagnosticSuspended()) {
+                RequestSuspend(kernel, SuspendType::Diagnostic);
+            }
         }
 
         R_SUCCEED();

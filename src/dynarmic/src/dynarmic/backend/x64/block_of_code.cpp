@@ -13,6 +13,7 @@
 #    include <windows.h>
 #else
 #    include <sys/mman.h>
+#    include <unistd.h>
 #endif
 
 #ifdef __APPLE__
@@ -213,6 +214,31 @@ void BlockOfCode::EnsureMemoryCommitted([[maybe_unused]] size_t codesize) {
         VirtualAlloc(top_, committed_size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 #    endif
     }
+#endif
+}
+
+size_t BlockOfCode::PageSize() {
+#ifdef _WIN32
+    static const size_t page_size = [] {
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return size_t(info.dwPageSize);
+    }();
+#else
+    static const size_t page_size = size_t(sysconf(_SC_PAGESIZE));
+#endif
+    return page_size;
+}
+
+void BlockOfCode::ReleaseCode(size_t offset, size_t size) {
+    ASSERT(prelude_complete && offset % PageSize() == 0 && size % PageSize() == 0);
+    u8* const begin = top_ + offset;
+    ASSERT(begin >= static_cast<const u8*>(code_begin) && offset + size <= size_t(getCurr<const u8*>() - top_));
+#ifdef _WIN32
+    // Committed pages whose contents may be discarded; written again only after ClearCache.
+    VirtualAlloc(begin, size, MEM_RESET, PAGE_NOACCESS);
+#else
+    madvise(begin, size, MADV_DONTNEED);
 #endif
 }
 

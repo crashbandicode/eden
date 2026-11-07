@@ -20,6 +20,7 @@
 #include "common/container/unordered_set.h"
 #include <boost/container/stable_vector.hpp>
 #include <boost/container/small_vector.hpp>
+#include <boost/icl/interval_set.hpp>
 
 #include "dynarmic/backend/x64/xbyak.h"
 #include "dynarmic/mcl/bit.hpp"
@@ -91,6 +92,13 @@ public:
     /// Invalidates a selection of basic blocks.
     void InvalidateBasicBlocks(const ::Common::unordered_set<IR::LocationDescriptor>& locations);
 
+    /// Forgets the patch places (and, in ForgetCode, the fastmem entries) inside the code of blocks
+    /// invalidated since the last call and gives the code pages no block uses any more back to the
+    /// OS, once enough code is invalidated. The code space itself is only reused after ClearCache,
+    /// so without this a game that keeps loading and unloading code grows by all of it. Only call
+    /// when no emitted code is running: the fastmem path invalidates the block it is executing.
+    void ReleaseInvalidatedCode();
+
 //protected:
     // Microinstruction emitters
 #define OPCODE(name, type, ...) void Emit##name(EmitContext& ctx, IR::Inst* inst);
@@ -116,24 +124,35 @@ public:
     virtual bool EmitTerminal(IR::Term::Terminal const& terminal, IR::LocationDescriptor initial_location, bool is_single_step) noexcept = 0;
 
     // Patching
+    enum class PatchKind : u32 { Jg, Jz, Jmp, MovRcx };
+    /// Places in emitted code that jump to a block (or load its entrypoint), patched when it is
+    /// compiled or invalidated: each the place's offset in the code space times four plus its
+    /// PatchKind, 0 when unused. Most blocks are linked from one or two places.
     struct PatchInformation {
-        boost::container::small_vector<CodePtr, 4> jg; //4*8=32
-        boost::container::small_vector<CodePtr, 4> jz; //4*8=32
-        boost::container::small_vector<CodePtr, 4> jmp; //4*8=32
-        boost::container::small_vector<CodePtr, 4> mov_rcx; //4*8=32
+        std::array<u32, 2> first{};
+        std::unique_ptr<std::vector<u32>> rest;
     };
+    /// Records that the code about to be emitted at the current position is a patch of `kind`.
+    void AddPatchLocation(const IR::LocationDescriptor& target_desc, PatchKind kind);
     void Patch(const IR::LocationDescriptor& target_desc, CodePtr target_code_ptr);
     virtual void Unpatch(const IR::LocationDescriptor& target_desc);
     virtual void EmitPatchJg(const IR::LocationDescriptor& target_desc, CodePtr target_code_ptr = nullptr) = 0;
     virtual void EmitPatchJz(const IR::LocationDescriptor& target_desc, CodePtr target_code_ptr = nullptr) = 0;
     virtual void EmitPatchJmp(const IR::LocationDescriptor& target_desc, CodePtr target_code_ptr = nullptr) = 0;
     virtual void EmitPatchMovRcx(CodePtr target_code_ptr = nullptr) = 0;
+    /// Drops the frontend's own records of code in `invalidated` (offsets in the code space).
+    virtual void ForgetCode(const boost::icl::interval_set<u32>& /*invalidated*/) {}
 
     // State
     BlockOfCode& code;
     ExceptionHandler exception_handler;
     ::Common::unordered_map<IR::LocationDescriptor, BlockDescriptor> block_descriptors;
     ::Common::unordered_map<IR::LocationDescriptor, PatchInformation> patch_information;
+    /// Code of blocks invalidated since the last ReleaseInvalidatedCode, as offsets in the code space.
+    boost::icl::interval_set<u32> invalidated_code;
+    size_t invalidated_code_bytes = 0;
+    /// Pages of the code space already given back to the OS since the last ClearCache.
+    std::vector<bool> released_pages;
 
     // We need materialized protected members
     friend class A64EmitX64;

@@ -56,6 +56,10 @@ public:
     size_t SpaceRemaining() const;
     /// Ensure at least codesize bytes of code cache memory are committed at the current code_ptr.
     void EnsureMemoryCommitted(size_t codesize);
+    /// Gives the memory of whole pages [offset, offset + size) of emitted code that nothing runs or
+    /// patches any more back to the OS. They stay mapped and are written again after ClearCache.
+    void ReleaseCode(size_t offset, size_t size);
+    static size_t PageSize();
 
     /// Runs emulated code from code_ptr.
     HaltReason RunCode(void* jit_state, CodePtr code_ptr) const;

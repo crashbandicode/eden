@@ -102,7 +102,7 @@ void EmitX64::PushRSBHelper(Xbyak::Reg64 loc_desc_reg, Xbyak::Reg64 index_reg, I
 
     code.mov(index_reg.cvt32(), dword[code.ABI_JIT_PTR + code.GetJitStateInfo().offsetof_rsb_ptr]);
     code.mov(loc_desc_reg, target.Value());
-    patch_information[target].mov_rcx.push_back(code.getCurr());
+    AddPatchLocation(target, PatchKind::MovRcx);
     EmitPatchMovRcx(target_code_ptr);
     code.mov(qword[code.ABI_JIT_PTR + index_reg * 8 + code.GetJitStateInfo().offsetof_rsb_location_descriptors], loc_desc_reg);
     code.mov(qword[code.ABI_JIT_PTR + index_reg * 8 + code.GetJitStateInfo().offsetof_rsb_codeptrs], rcx);
@@ -357,55 +357,144 @@ EmitX64::BlockDescriptor EmitX64::RegisterBlock(const IR::LocationDescriptor& de
     return block_desc;
 }
 
+void EmitX64::AddPatchLocation(const IR::LocationDescriptor& target_desc, PatchKind kind) {
+    const size_t offset = code.getCurr<const u8*>() - static_cast<const u8*>(code.getCode());
+    ASSERT(offset > 0 && offset < (size_t(1) << 30));
+    const u32 entry = u32(offset << 2) | u32(kind);
+    PatchInformation& patch_info = patch_information[target_desc];
+    for (u32& slot : patch_info.first) {
+        if (slot == 0) {
+            slot = entry;
+            return;
+        }
+    }
+    if (!patch_info.rest) {
+        patch_info.rest = std::make_unique<std::vector<u32>>();
+    }
+    patch_info.rest->push_back(entry);
+}
+
 void EmitX64::Patch(const IR::LocationDescriptor& target_desc, CodePtr target_code_ptr) {
+    const auto it = patch_information.find(target_desc);
+    if (it == patch_information.end()) {
+        return;
+    }
     const CodePtr save_code_ptr = code.getCurr();
-    const PatchInformation& patch_info = patch_information[target_desc];
-
-    for (CodePtr location : patch_info.jg) {
-        code.SetCodePtr(location);
-        EmitPatchJg(target_desc, target_code_ptr);
+    const auto patch = [&](u32 entry) {
+        code.SetCodePtr(static_cast<const u8*>(code.getCode()) + (entry >> 2));
+        switch (PatchKind(entry & 3)) {
+        case PatchKind::Jg:
+            EmitPatchJg(target_desc, target_code_ptr);
+            break;
+        case PatchKind::Jz:
+            EmitPatchJz(target_desc, target_code_ptr);
+            break;
+        case PatchKind::Jmp:
+            EmitPatchJmp(target_desc, target_code_ptr);
+            break;
+        case PatchKind::MovRcx:
+            EmitPatchMovRcx(target_code_ptr);
+            break;
+        }
+    };
+    for (const u32 entry : it->second.first) {
+        if (entry != 0) {
+            patch(entry);
+        }
     }
-
-    for (CodePtr location : patch_info.jz) {
-        code.SetCodePtr(location);
-        EmitPatchJz(target_desc, target_code_ptr);
+    if (it->second.rest) {
+        for (const u32 entry : *it->second.rest) {
+            patch(entry);
+        }
     }
-
-    for (CodePtr location : patch_info.jmp) {
-        code.SetCodePtr(location);
-        EmitPatchJmp(target_desc, target_code_ptr);
-    }
-
-    for (CodePtr location : patch_info.mov_rcx) {
-        code.SetCodePtr(location);
-        EmitPatchMovRcx(target_code_ptr);
-    }
-
     code.SetCodePtr(save_code_ptr);
 }
 
 void EmitX64::Unpatch(const IR::LocationDescriptor& target_desc) {
-    if (patch_information.count(target_desc)) {
-        Patch(target_desc, nullptr);
-    }
+    Patch(target_desc, nullptr);
 }
 
 void EmitX64::ClearCache() {
     block_descriptors.clear();
     patch_information.clear();
+    invalidated_code.clear();
+    invalidated_code_bytes = 0;
+    released_pages.clear();
 
     PerfMapClear();
 }
 
 void EmitX64::InvalidateBasicBlocks(const ::Common::unordered_set<IR::LocationDescriptor>& locations) {
+    const auto* const base = static_cast<const u8*>(code.getCode());
     code.EnableWriting();
     for (const auto& descriptor : locations) {
         if (auto const it = block_descriptors.find(descriptor); it != block_descriptors.end()) {
             Unpatch(descriptor);
+            const u32 offset = u32(static_cast<const u8*>(it->second.entrypoint) - base);
+            invalidated_code.add(boost::icl::discrete_interval<u32>::right_open(offset, u32(offset + it->second.size)));
+            invalidated_code_bytes += it->second.size;
             block_descriptors.erase(it);
         }
     }
     code.DisableWriting();
+}
+
+void EmitX64::ReleaseInvalidatedCode() {
+    // Each pass walks every patch record and live block: wait for a worthwhile amount.
+    constexpr size_t RELEASE_THRESHOLD = 2 * 1024 * 1024;
+    if (invalidated_code_bytes < RELEASE_THRESHOLD) {
+        return;
+    }
+    const auto dead = [this](u32 entry) {
+        return entry != 0 && boost::icl::contains(invalidated_code, entry >> 2);
+    };
+    boost::unordered::erase_if(patch_information, [&](auto& item) {
+        PatchInformation& info = item.second;
+        for (u32& slot : info.first) {
+            if (dead(slot)) {
+                slot = 0;
+            }
+        }
+        if (info.rest) {
+            std::erase_if(*info.rest, dead);
+            if (info.rest->empty()) {
+                info.rest.reset();
+            }
+        }
+        return !info.rest && info.first[0] == 0 && info.first[1] == 0;
+    });
+    ForgetCode(invalidated_code);
+    invalidated_code.clear();
+    invalidated_code_bytes = 0;
+
+    // Pages between the start of block code and the page being written that hold no live block.
+    const size_t page = BlockOfCode::PageSize();
+    const auto* const base = static_cast<const u8*>(code.getCode());
+    const size_t first = size_t(static_cast<const u8*>(code.GetCodeBegin()) - base + page - 1) / page;
+    const size_t last = size_t(code.getCurr<const u8*>() - base) / page;
+    if (first >= last) {
+        return;
+    }
+    std::vector<bool> used(last - first);
+    for (const auto& [location, block] : block_descriptors) {
+        const size_t begin = size_t(static_cast<const u8*>(block.entrypoint) - base);
+        const size_t end = begin + block.size;
+        for (size_t p = std::max(begin / page, first); p <= (end - 1) / page && p < last; p++) {
+            used[p - first] = true;
+        }
+    }
+    released_pages.resize(last, false);
+    for (size_t p = first; p < last;) {
+        if (used[p - first] || released_pages[p]) {
+            p++;
+            continue;
+        }
+        const size_t run = p;
+        while (p < last && !used[p - first] && !released_pages[p]) {
+            released_pages[p++] = true;
+        }
+        code.ReleaseCode(run * page, (p - run) * page);
+    }
 }
 
 }  // namespace Dynarmic::Backend::X64

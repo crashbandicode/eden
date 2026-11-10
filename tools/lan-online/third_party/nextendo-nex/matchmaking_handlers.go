@@ -1300,9 +1300,10 @@ func (m *Matchmaking) setParticipation(conn *Connection, req *RMCMessage, open b
 // end-of-session transition Splatoon 2 runs after a Salmon Run co-op result.
 //
 // The request carries an UpdateMatchmakeSessionParam describing the fields the client
-// wants changed. Nothing here reads them: the session is finishing, and every consumer of
-// a gathering (join, browse, the dashboard) is done with it by this point. So the reply is
-// an empty success — an acknowledgement, which is all the client is waiting for.
+// wants changed. They are applied by ModificationFlags (applySessionPartFlags), as the real
+// server does: Smash's Quickplay reopens participation with it when a console answers
+// "Rematch? Yes" and goes back to its waiting area. For a finishing session (Splatoon 2)
+// nothing downstream reads them any more. The reply is an empty success either way.
 //
 // What matters is that it is answered at all. NotImplemented aborts the finish with
 // 2306-0103 immediately after the results screen. This was implemented in the the previous stack stack
@@ -1327,7 +1328,21 @@ func (m *Matchmaking) updateSessionPart(conn *Connection, req *RMCMessage) *RMCM
 		return NewRMCSuccess(conn.Settings, ProtocolMatchmakeExtension, req.Method, req.CallID, nil)
 	}
 
-	fmt.Printf("[MM] UpdateMatchmakeSessionPart pid=%d -> ack (coop finish)\n", conn.PID)
+	// Every other title: apply what the call flags, as the real server does (Smash's
+	// rematch re-entry reopens its gathering here). The reply stays an empty success either
+	// way, so a finishing session (Splatoon 2's coop end) gets the acknowledgement it waits on.
+	var p UpdateMatchmakeSessionParam
+	in := NewStreamIn(req.Body, conn.Settings)
+	in.Extract(&p)
+	if in.Err() != nil {
+		fmt.Printf("[MM] UpdateMatchmakeSessionPart pid=%d unreadable -> ack\n", conn.PID)
+	} else if applied, ok := m.applySessionPartFlags(conn.PID, &p); ok {
+		fmt.Printf("[MM] UpdateMatchmakeSessionPart pid=%d gid=%d flags=%#x -> %s\n", conn.PID, p.GID,
+			p.ModificationFlags, describeSessionPart(applied))
+	} else {
+		fmt.Printf("[MM] UpdateMatchmakeSessionPart pid=%d gid=%d flags=%#x -> ack (not a member or unknown gathering)\n",
+			conn.PID, p.GID, p.ModificationFlags)
+	}
 
 	return NewRMCSuccess(conn.Settings, ProtocolMatchmakeExtension, req.Method, req.CallID, nil)
 }

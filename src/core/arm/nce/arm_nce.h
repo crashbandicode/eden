@@ -36,6 +36,7 @@ public:
 
     void GetSvcArguments(std::span<uint64_t, 8> args) const override;
     void SetSvcArguments(std::span<const uint64_t, 8> args) override;
+    void ClearSvcScratchRegisters() override;
     u32 GetSvcNumber() const override;
 
     void SignalInterrupt(Kernel::KThread* thread) override;

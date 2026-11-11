@@ -269,6 +269,12 @@ void ArmNce::SetSvcArguments(std::span<const uint64_t, 8> args) {
     }
 }
 
+void ArmNce::ClearSvcScratchRegisters() {
+    for (size_t i = 8; i <= 17; i++) {
+        m_guest_ctx.cpu_registers[i] = 0;
+    }
+}
+
 ArmNce::ArmNce(System& system, bool uses_wall_clock, std::size_t core_index)
     : ArmInterface{uses_wall_clock}, m_system{system}, m_core_index{core_index} {
     m_guest_ctx.system = &m_system;

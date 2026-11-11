@@ -92,6 +92,11 @@ public:
     virtual void SetSvcArguments(std::span<const uint64_t, 8> args) = 0;
     virtual u32 GetSvcNumber() const = 0;
 
+    // On returning from an AArch64 SVC, Horizon's kernel sets X8-X17 to zero
+    // (the scratch registers it doesn't restore). Backends for 64-bit guests
+    // override this; AArch32 SVCs return R8-R14 unchanged.
+    virtual void ClearSvcScratchRegisters() {}
+
     void SetWatchpointArray(const WatchpointArray* watchpoints) {
         m_watchpoints = watchpoints;
     }

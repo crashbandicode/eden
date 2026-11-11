@@ -38,6 +38,8 @@ public:
     // Copy context from thread to current core.
     void LoadContext(const KThread* thread);
     void LoadSvcArguments(const KProcess& process, std::span<const uint64_t, 8> args);
+    // Zero X8-X17 of the current core, as Horizon does on an AArch64 SVC return.
+    void ClearSvcScratchRegisters(const KProcess& process);
 
     // Copy context from current core to thread.
     void SaveContext(KThread* thread) const;

@@ -8,6 +8,7 @@
 
 #include <type_traits>
 
+#include "common/settings.h"
 #include "core/arm/arm_interface.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_process.h"
@@ -2512,6 +2513,12 @@ void Call(Core::System& system, u32 imm) {
     }
     //kernel.ExitSVCProfile();
     kernel.CurrentPhysicalCore().LoadSvcArguments(process, args);
+    // Horizon's AArch64 SVC handler returns with X8-X17 set to zero (Atmosphere's
+    // mesosphere SvcHandler64, "Clear registers."), so guest code that keeps a
+    // value there across an svc works only in an emulator that preserves it.
+    if (process.Is64Bit() && Settings::values.svc_clear_scratch_registers.GetValue()) {
+        kernel.CurrentPhysicalCore().ClearSvcScratchRegisters(process);
+    }
 }
 
 } // namespace Kernel::Svc

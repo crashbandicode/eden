@@ -540,6 +540,12 @@ void ArmDynarmic64::SetSvcArguments(std::span<const uint64_t, 8> args) {
         j.SetRegister(i, args[i]);
 }
 
+void ArmDynarmic64::ClearSvcScratchRegisters() {
+    Dynarmic::A64::Jit& j = *m_jit;
+    for (size_t i = 8; i <= 17; i++)
+        j.SetRegister(i, 0);
+}
+
 const Kernel::DebugWatchpoint* ArmDynarmic64::HaltedWatchpoint() const {
     return m_halted_watchpoint;
 }

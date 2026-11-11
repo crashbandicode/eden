@@ -278,6 +278,10 @@ void PhysicalCore::LoadSvcArguments(const KProcess& process, std::span<const uin
     process.GetArmInterface(m_core_index)->SetSvcArguments(args);
 }
 
+void PhysicalCore::ClearSvcScratchRegisters(const KProcess& process) {
+    process.GetArmInterface(m_core_index)->ClearSvcScratchRegisters();
+}
+
 void PhysicalCore::SaveContext(KThread* thread) const {
     auto* const process = thread->GetOwnerProcess();
     if (!process) {

@@ -292,6 +292,11 @@ struct Values {
                                            true,
                                            &use_custom_cpu_ticks};
 
+    // Zero X8-X17 when an AArch64 SVC returns, as the console's kernel does.
+    // Off keeps the old behaviour (the registers survive the svc).
+    Setting<bool> svc_clear_scratch_registers{linkage, true, "svc_clear_scratch_registers",
+                                              Category::CpuDebug};
+
     Setting<bool> cpuopt_page_tables{linkage, true, "cpuopt_page_tables", Category::CpuDebug};
     Setting<bool> cpuopt_block_linking{linkage, true, "cpuopt_block_linking", Category::CpuDebug};
     Setting<bool> cpuopt_return_stack_buffer{linkage, true, "cpuopt_return_stack_buffer",

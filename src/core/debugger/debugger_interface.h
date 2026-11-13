@@ -25,6 +25,7 @@ enum class DebuggerAction {
     ContinueThreads,   ///< Resume only specific threads (listed in frontend).
     StepThread,        ///< Step the active thread and resume only threads listed in frontend.
     ShutdownEmulation, ///< Shut down the emulator.
+    Detach,            ///< Resume all threads and close the client connection.
 };
 
 class DebuggerBackend {

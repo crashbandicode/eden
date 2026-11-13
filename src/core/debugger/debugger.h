@@ -8,6 +8,7 @@
 #include "common/common_types.h"
 
 namespace Kernel {
+class KProcess;
 class KThread;
 struct DebugWatchpoint;
 } // namespace Kernel
@@ -45,6 +46,13 @@ public:
      * Notify the debugger that the given thread has stopped due to hitting a watchpoint.
      */
     bool NotifyThreadWatchpoint(Kernel::KThread* thread, const Kernel::DebugWatchpoint& watch);
+
+    /**
+     * The debugged program's main thread is about to run for the first time. It is held (suspended
+     * for debug) until a client continues or detaches; a connected client sees the launch as a
+     * stop of that thread. Nothing is held when the server could not start listening.
+     */
+    void NotifyProcessLaunch(Kernel::KProcess* process, Kernel::KThread* main_thread);
 
 private:
     std::unique_ptr<DebuggerImpl> impl;

@@ -101,11 +101,38 @@ void GDBStub::Connected() {}
 void GDBStub::ShuttingDown() {}
 
 void GDBStub::Stopped(Kernel::KThread* thread) {
-    SendReply(arch->ThreadStatus(thread, GDB_STUB_SIGTRAP));
+    SendReply(StopReply(thread));
+}
+
+std::string GDBStub::StopReply(const Kernel::KThread* thread) const {
+    // A process that has not started yet has no thread to report.
+    return thread ? arch->ThreadStatus(thread, GDB_STUB_SIGTRAP)
+                  : fmt::format("S{:02x}", GDB_STUB_SIGTRAP);
+}
+
+void GDBStub::SetDebugProcess(Kernel::KProcess* process) {
+    debug_process = process;
+    if (process->Is64Bit()) {
+        arch = std::make_unique<GDBStubA64>();
+    } else {
+        arch = std::make_unique<GDBStubA32>();
+    }
+}
+
+void GDBStub::RemoveBreakpoints() {
+    for (const auto& [addr, original] : replaced_instructions) {
+        debug_process->GetMemory().Write32(addr, original);
+        Core::InvalidateInstructionCacheRange(debug_process, addr, sizeof(u32));
+    }
+    replaced_instructions.clear();
+    for (const auto& [addr, size, type] : watchpoints) {
+        debug_process->RemoveWatchpoint(system.Kernel(), addr, size, type);
+    }
+    watchpoints.clear();
 }
 
 void GDBStub::Watchpoint(Kernel::KThread* thread, const Kernel::DebugWatchpoint& watch) {
-    const auto status{arch->ThreadStatus(thread, GDB_STUB_SIGTRAP)};
+    const auto status{StopReply(thread)};
 
     switch (watch.type) {
     case Kernel::DebugWatchpointType::Read:
@@ -200,7 +227,13 @@ void GDBStub::ExecuteCommand(std::string_view packet, std::vector<DebuggerAction
         HandleQuery(command);
         break;
     case '?':
-        SendReply(arch->ThreadStatus(backend.GetActiveThread(), GDB_STUB_SIGTRAP));
+        SendReply(StopReply(backend.GetActiveThread()));
+        break;
+    case 'D':
+        // Detach: the guest runs on and the connection closes, as with gdbserver.
+        LOG_INFO(Debug_GDBStub, "Detaching");
+        SendReply(GDB_STUB_REPLY_OK);
+        actions.push_back(DebuggerAction::Detach);
         break;
     case 'k':
         LOG_INFO(Debug_GDBStub, "Shutting down emulation");
@@ -338,6 +371,12 @@ void GDBStub::HandleBreakpointInsert(std::string_view command) {
     }
 
     if (success) {
+        if (type != BreakpointType::Software) {
+            const auto watch_type = type == BreakpointType::WriteWatch  ? Kernel::DebugWatchpointType::Write
+                                    : type == BreakpointType::ReadWatch ? Kernel::DebugWatchpointType::Read
+                                                                        : Kernel::DebugWatchpointType::ReadOrWrite;
+            watchpoints.emplace_back(addr, size, watch_type);
+        }
         SendReply(GDB_STUB_REPLY_OK);
     } else {
         SendReply(GDB_STUB_REPLY_ERR);
@@ -380,6 +419,16 @@ void GDBStub::HandleBreakpointRemove(std::string_view sv) {
     default:
         SendReply(GDB_STUB_REPLY_EMPTY);
         return;
+    }
+
+    if (success && type != BreakpointType::Software) {
+        const auto watch_type = type == BreakpointType::WriteWatch  ? Kernel::DebugWatchpointType::Write
+                                : type == BreakpointType::ReadWatch ? Kernel::DebugWatchpointType::Read
+                                                                    : Kernel::DebugWatchpointType::ReadOrWrite;
+        const auto it = std::find(watchpoints.begin(), watchpoints.end(), std::make_tuple(VAddr(addr), size, watch_type));
+        if (it != watchpoints.end()) {
+            watchpoints.erase(it);
+        }
     }
 
     if (success) {

@@ -40,6 +40,7 @@
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_resource_limit.h"
 #include "core/hle/kernel/k_scheduler.h"
+#include "core/hle/kernel/k_thread.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/physical_core.h"
 #include "core/hle/service/acc/profile_manager.h"
@@ -651,6 +652,14 @@ bool System::IsNVDECActiveForProcess(u64 process_id) {
 
 void System::InitializeDebugger() {
     impl->InitializeDebugger(*this, Settings::values.gdbstub_port.GetValue());
+}
+
+void System::HoldLaunchForDebugger(Kernel::KProcess* process, Kernel::KThread* main_thread) {
+    if (impl->debugger) {
+        impl->debugger->NotifyProcessLaunch(process, main_thread);
+    } else {
+        main_thread->RequestSuspend(impl->kernel, Kernel::SuspendType::Debug);
+    }
 }
 
 SystemResultStatus System::Load(Frontend::EmuWindow& emu_window, const std::string& filepath,

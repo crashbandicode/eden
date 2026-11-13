@@ -37,6 +37,7 @@ class KernelCore;
 class PhysicalCore;
 class KProcess;
 class KScheduler;
+class KThread;
 } // namespace Kernel
 
 namespace Loader {
@@ -204,6 +205,13 @@ public:
      * Initialize the debugger.
      */
     void InitializeDebugger();
+
+    /**
+     * Hold the debugged program's main thread at launch for the GDB stub (use_gdbstub): the
+     * debugger releases it when a client continues or detaches. Before the debugger exists the
+     * thread is simply suspended; the first client's continue resumes it.
+     */
+    void HoldLaunchForDebugger(Kernel::KProcess* process, Kernel::KThread* main_thread);
 
     /**
      * Load an executable application.

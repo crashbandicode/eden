@@ -1028,12 +1028,14 @@ Result KProcess::Run(KernelCore& kernel, s32 priority, size_t stack_size) {
         this->ChangeState(kernel, state);
     };
 
-    // Suspend for debug, if we should.
-    if (kernel.System().DebuggerEnabled()) {
+    // Hold the debugged program at launch until a debugger continues. The debugger decides under
+    // its own lock, so a client attached before this point cannot continue ahead of the hold.
+    // Other processes (applets) are not debugged and are not held.
+    if (kernel.System().DebuggerEnabled() && kernel.ApplicationProcess() == this) {
         LOG_INFO(Debug_GDBStub,
-                 "GDB stub enabled; suspending guest process until a debugger continues execution on port {}",
+                 "GDB stub enabled; holding the application at launch until a debugger continues execution on port {}",
                  Settings::values.gdbstub_port.GetValue());
-        main_thread->RequestSuspend(kernel, SuspendType::Debug);
+        kernel.System().HoldLaunchForDebugger(this, main_thread);
     }
 
     // Run our thread.

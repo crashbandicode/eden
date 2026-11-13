@@ -4,9 +4,13 @@
 // SPDX-FileCopyrightText: Copyright 2022 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <memory>
 #include <mutex>
-#include <utility>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <boost/asio.hpp>
 #include <boost/version.hpp>
@@ -29,41 +33,49 @@
 #include "core/hle/kernel/global_scheduler_context.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_scheduler.h"
+#include "core/hle/kernel/k_thread.h"
 
-template <typename Readable, typename Buffer, typename Callback>
-static void AsyncReceiveInto(Readable& r, Buffer& buffer, Callback&& c) {
+/// Reads until an error; `c` gets the data, `on_error` the error that ended the loop (end of file
+/// included). The callbacks may close `r`: the loop then ends with an error instead of reading again.
+template <typename Readable, typename Buffer, typename Callback, typename ErrorCallback>
+static void AsyncReceiveInto(Readable& r, Buffer& buffer, Callback&& c, ErrorCallback&& on_error) {
     static_assert(std::is_trivial_v<Buffer>);
     auto boost_buffer{boost::asio::buffer(&buffer, sizeof(Buffer))};
-    r.async_read_some(
-        boost_buffer, [&, c](const boost::system::error_code& error, size_t bytes_read) {
-            if (!error.failed()) {
-                const u8* buffer_start = reinterpret_cast<const u8*>(&buffer);
-                std::span<const u8> received_data{buffer_start, buffer_start + bytes_read};
-                c(received_data);
-                AsyncReceiveInto(r, buffer, c);
-            }
-        });
-}
-
-template <typename Callback>
-static void AsyncAccept(boost::asio::ip::tcp::acceptor& acceptor, Callback&& c) {
-    acceptor.async_accept([&, c](const boost::system::error_code& error, auto&& peer_socket) {
-        if (!error.failed()) {
-            c(peer_socket);
-            AsyncAccept(acceptor, c);
+    r.async_read_some(boost_buffer, [&, c, on_error](const boost::system::error_code& error,
+                                                     size_t bytes_read) {
+        if (error.failed()) {
+            on_error(error);
+            return;
+        }
+        const u8* buffer_start = reinterpret_cast<const u8*>(&buffer);
+        std::span<const u8> received_data{buffer_start, buffer_start + bytes_read};
+        if (c(received_data)) {
+            AsyncReceiveInto(r, buffer, c, on_error);
         }
     });
 }
 
-template <typename Readable, typename Buffer>
-static std::span<const u8> ReceiveInto(Readable& r, Buffer& buffer) {
-    static_assert(std::is_trivial_v<Buffer>);
-    auto boost_buffer{boost::asio::buffer(&buffer, sizeof(Buffer))};
-    size_t bytes_read = r.read_some(boost_buffer);
-    const u8* buffer_start = reinterpret_cast<const u8*>(&buffer);
-    std::span<const u8> received_data{buffer_start, buffer_start + bytes_read};
-    return received_data;
+/// Accepts connections until the acceptor is closed. A failed accept (for example a peer that
+/// reset before it was accepted) does not stop the server.
+template <typename Callback>
+static void AsyncAccept(boost::asio::ip::tcp::acceptor& acceptor, Callback&& c) {
+    acceptor.async_accept([&, c](const boost::system::error_code& error, auto&& peer_socket) {
+        if (error == boost::asio::error::operation_aborted || !acceptor.is_open()) {
+            return;
+        }
+        if (error.failed()) {
+            LOG_WARNING(Debug_GDBStub, "Accepting a debugger connection failed: {}", error.message());
+        } else {
+            c(peer_socket);
+        }
+        AsyncAccept(acceptor, c);
+    });
 }
+
+/// A failed read or write on the debugger client's socket. Only that client is dropped.
+struct ClientConnectionError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 
 enum class SignalType {
     Stopped,
@@ -94,33 +106,51 @@ public:
 
     bool SignalDebugger(SignalInfo signal_info) {
         std::scoped_lock lk{connection_lock};
+        return SignalLocked(signal_info);
+    }
 
-        if (stopped || !state) {
-            // Do not notify the debugger about another event.
-            // It should be ignored.
-            return false;
+    /// The application's main thread is about to run for the first time. It is held (suspended for
+    /// debug) until a debugger continues or detaches, decided here under the connection lock so a
+    /// client's continue can never land before the hold. A client that is already connected gets
+    /// the launch as a stop of that thread.
+    void ProcessLaunched(Kernel::KProcess* process, Kernel::KThread* main_thread) {
+        std::scoped_lock lk{connection_lock};
+        main_thread->RequestSuspend(system.Kernel(), Kernel::SuspendType::Debug);
+        if (!state) {
+            LOG_INFO(Debug_GDBStub, "Holding the guest at launch until a debugger attaches and continues");
+            return;
         }
-
-        // Set up the state.
-        stopped = true;
-        state->info = signal_info;
-
-        // Write a single byte into the pipe to wake up the debug interface.
-        boost::asio::write(state->signal_pipe, boost::asio::buffer(&stopped, sizeof(stopped)));
-
-        return true;
+        if (debug_process.GetPointerUnsafe() != process) {
+            debug_process = {system.Kernel(), process};
+            static_cast<GDBStub*>(frontend.get())->SetDebugProcess(process);
+        }
+        state->active_thread = {system.Kernel(), main_thread};
+        if (!SignalLocked(SignalInfo{SignalType::Stopped, main_thread, nullptr})) {
+            // Already stopped for this client: its continue resumes the new thread with the rest.
+            LOG_INFO(Debug_GDBStub, "Guest launched while the debugger is stopped; holding it");
+        }
     }
 
     // These functions are callbacks from the frontend, and the lock will be held.
     // There is no need to relock it.
 
     std::span<const u8> ReadFromClient() override {
-        return ReceiveInto(state->client_socket, state->client_data);
+        boost::system::error_code error;
+        auto boost_buffer{boost::asio::buffer(state->client_data)};
+        const size_t bytes_read = state->client_socket.read_some(boost_buffer, error);
+        if (error.failed()) {
+            throw ClientConnectionError(fmt::format("read: {}", error.message()));
+        }
+        return {state->client_data.data(), bytes_read};
     }
 
     void WriteToClient(std::span<const u8> data) override {
-        boost::asio::write(state->client_socket,
-                           boost::asio::buffer(data.data(), data.size_bytes()));
+        boost::system::error_code error;
+        boost::asio::write(state->client_socket, boost::asio::buffer(data.data(), data.size_bytes()),
+                           error);
+        if (error.failed()) {
+            throw ClientConnectionError(fmt::format("write: {}", error.message()));
+        }
     }
 
     void SetActiveThread(Kernel::KThread* thread) override {
@@ -148,7 +178,16 @@ private:
 
                 AsyncAccept(acceptor, [&](auto&& peer) { AcceptConnection(std::move(peer)); });
 
-                while (!stop_token.stop_requested() && io_context.run()) {
+                // A failure while serving one client drops that client; the server keeps listening.
+                while (!stop_token.stop_requested()) {
+                    try {
+                        io_context.run();
+                        break;
+                    } catch (const std::exception& ex) {
+                        LOG_ERROR(Debug_GDBStub, "Debugger connection error: {}", ex.what());
+                        DropClient("connection error");
+                        io_context.restart();
+                    }
                 }
             } catch (const std::exception& ex) {
                 LOG_CRITICAL(Debug_GDBStub, "Stopping server: {}", ex.what());
@@ -161,21 +200,40 @@ private:
 
         std::scoped_lock lk{connection_lock};
 
+        if (state) {
+            // One client at a time: the previous client is detached first.
+            DropClientLocked("replaced by a new connection", false);
+        }
+
         // Find the process we are going to debug.
-        SetDebugProcess();
+        if (!SetDebugProcess()) {
+            LOG_WARNING(Debug_GDBStub, "No guest process to debug yet; closing the connection");
+            boost::system::error_code ignored;
+            peer.close(ignored);
+            return;
+        }
 
         // Ensure everything is stopped.
         PauseEmulation();
+        stopped = true;
 
         // Set up the new frontend.
         frontend = std::make_unique<GDBStub>(*this, system, debug_process.GetPointerUnsafe());
 
-        // Set the new state. This will tear down any existing state.
-        state.emplace(std::move(peer), io_context, system.Kernel());
+        // Set the new state.
+        state = std::make_unique<ConnectionState>(std::move(peer), io_context, system.Kernel());
+        const u64 generation = ++client_generation;
 
         // Set up the client signals for new data.
-        AsyncReceiveInto(state->signal_pipe, state->pipe_data, [&](auto d) { PipeData(d); });
-        AsyncReceiveInto(state->client_socket, state->client_data, [&](auto d) { ClientData(d); });
+        AsyncReceiveInto(
+            state->signal_pipe, state->pipe_data,
+            [this, generation](auto d) { return PipeData(generation, d); }, [](auto) {});
+        AsyncReceiveInto(
+            state->client_socket, state->client_data,
+            [this, generation](auto d) { return ClientData(generation, d); },
+            [this, generation](const boost::system::error_code& error) {
+                ClientEnded(generation, error);
+            });
 
         // Set the active thread.
         UpdateActiveThread();
@@ -184,53 +242,149 @@ private:
         frontend->Connected();
     }
 
+    /// The client's socket ended (closed, reset or failed): detach it, so it never leaves the
+    /// guest stopped.
+    void ClientEnded(u64 generation, const boost::system::error_code& error) {
+        std::scoped_lock lk{connection_lock};
+        if (!state || generation != client_generation) {
+            return; // That client was already detached or replaced.
+        }
+        DropClientLocked(error == boost::asio::error::eof ? "client closed the connection"
+                                                          : "connection " + error.message(),
+                         true);
+    }
+
+    void DropClient(std::string_view reason) {
+        std::scoped_lock lk{connection_lock};
+        if (state) {
+            DropClientLocked(reason, true);
+        }
+    }
+
+    /// Detaches the connected client like a gdbserver detach: removes its breakpoints and
+    /// watchpoints, resumes every thread of the debugged process (when `resume`), and closes the
+    /// connection. The server keeps listening. The connection objects are destroyed only after the
+    /// handler that is running now has returned.
+    void DropClientLocked(std::string_view reason, bool resume) {
+        LOG_WARNING(Debug_GDBStub, "Debugger client detached ({}){}", reason,
+                    resume ? "; resuming the guest" : "");
+        if (frontend) {
+            static_cast<GDBStub*>(frontend.get())->RemoveBreakpoints();
+        }
+        if (resume && debug_process.GetPointerUnsafe() != nullptr) {
+            ResumeEmulation();
+        }
+        stopped = false;
+        ++client_generation;
+
+        boost::system::error_code ignored;
+        state->client_socket.shutdown(boost::asio::socket_base::shutdown_both, ignored);
+        state->client_socket.close(ignored);
+        state->signal_pipe.close(ignored);
+        retired_states.push_back(std::move(state));
+        retired_frontends.push_back(std::move(frontend));
+        boost::asio::post(io_context, [this] {
+            std::scoped_lock lk2{connection_lock};
+            retired_states.clear();
+            retired_frontends.clear();
+        });
+    }
+
     void ShutdownServer() {
         connection_thread.request_stop();
         io_context.stop();
         connection_thread.join();
     }
 
-    void PipeData(std::span<const u8> data) {
+    /// Wakes the debugger thread with a stop or shutdown. Caller holds the connection lock.
+    bool SignalLocked(SignalInfo signal_info) {
+        if (stopped || !state) {
+            // Do not notify the debugger about another event.
+            // It should be ignored.
+            return false;
+        }
+
+        // Set up the state.
+        stopped = true;
+        state->info = signal_info;
+
+        // Write a single byte into the pipe to wake up the debug interface.
+        boost::system::error_code error;
+        boost::asio::write(state->signal_pipe, boost::asio::buffer(&stopped, sizeof(stopped)), error);
+        if (error.failed()) {
+            LOG_ERROR(Debug_GDBStub, "Could not signal the debugger thread: {}", error.message());
+            stopped = false;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// Returns whether to keep reading the signal pipe.
+    bool PipeData(u64 generation, std::span<const u8> data) {
         std::scoped_lock lk{connection_lock};
+        if (!state || generation != client_generation) {
+            return false;
+        }
 
-        switch (state->info.type) {
-        case SignalType::Stopped:
-        case SignalType::Watchpoint:
-            // Stop emulation.
-            PauseEmulation();
+        try {
+            switch (state->info.type) {
+            case SignalType::Stopped:
+            case SignalType::Watchpoint:
+                // Stop emulation.
+                PauseEmulation();
 
-            // Notify the client.
-            state->active_thread = {system.Kernel(), state->info.thread};
-            UpdateActiveThread();
+                // Notify the client.
+                state->active_thread = {system.Kernel(), state->info.thread};
+                UpdateActiveThread();
 
-            if (state->info.type == SignalType::Watchpoint) {
-                frontend->Watchpoint(std::addressof(*state->active_thread),
-                                     *state->info.watchpoint);
-            } else {
-                frontend->Stopped(std::addressof(*state->active_thread));
+                if (state->info.type == SignalType::Watchpoint) {
+                    frontend->Watchpoint(state->active_thread.GetPointerUnsafe(),
+                                         *state->info.watchpoint);
+                } else {
+                    frontend->Stopped(state->active_thread.GetPointerUnsafe());
+                }
+
+                return true;
+            case SignalType::ShuttingDown:
+                frontend->ShuttingDown();
+
+                // Release members.
+                state->active_thread.Reset(nullptr);
+                debug_process.Reset(nullptr);
+
+                // Wait for emulation to shut down gracefully now.
+                {
+                    boost::system::error_code ignored;
+                    state->signal_pipe.close(ignored);
+                    state->client_socket.shutdown(boost::asio::socket_base::shutdown_both, ignored);
+                }
+                LOG_INFO(Debug_GDBStub, "Shut down server");
+                return false;
             }
+        } catch (const ClientConnectionError& ex) {
+            DropClientLocked(ex.what(), state->info.type != SignalType::ShuttingDown);
+        }
+        return false;
+    }
 
-            break;
-        case SignalType::ShuttingDown:
-            frontend->ShuttingDown();
+    /// Returns whether to keep reading the client socket.
+    bool ClientData(u64 generation, std::span<const u8> data) {
+        std::scoped_lock lk{connection_lock};
+        if (!state || generation != client_generation) {
+            return false;
+        }
 
-            // Release members.
-            state->active_thread.Reset(nullptr);
-            debug_process.Reset(nullptr);
-
-            // Wait for emulation to shut down gracefully now.
-            state->signal_pipe.close();
-            state->client_socket.shutdown(boost::asio::socket_base::shutdown_both);
-            LOG_INFO(Debug_GDBStub, "Shut down server");
-
-            break;
+        try {
+            return HandleClientActions(frontend->ClientData(data));
+        } catch (const ClientConnectionError& ex) {
+            DropClientLocked(ex.what(), true);
+            return false;
         }
     }
 
-    void ClientData(std::span<const u8> data) {
-        std::scoped_lock lk{connection_lock};
-
-        const auto actions{frontend->ClientData(data)};
+    /// Returns whether the client stays connected.
+    bool HandleClientActions(const std::vector<DebuggerAction>& actions) {
         for (const auto action : actions) {
             switch (action) {
             case DebuggerAction::Interrupt: {
@@ -240,6 +394,9 @@ private:
                 frontend->Stopped(state->active_thread.GetPointerUnsafe());
                 break;
             }
+            case DebuggerAction::Detach:
+                DropClientLocked("detach requested", true);
+                return false;
             case DebuggerAction::Continue:
                 MarkResumed([&] { ResumeEmulation(); });
                 break;
@@ -253,9 +410,12 @@ private:
             case DebuggerAction::StepThread: {
                 auto* gdb = static_cast<GDBStub*>(frontend.get());
                 MarkResumed([this, threads = std::move(gdb->resume_threads)] {
-                    state->active_thread->SetStepState(Kernel::StepState::StepPending);
-                    state->active_thread->Resume(system.Kernel(), Kernel::SuspendType::Debug);
-                    ResumeThreads(threads, state->active_thread.GetPointerUnsafe());
+                    auto* const thread = state->active_thread.GetPointerUnsafe();
+                    if (thread) {
+                        thread->SetStepState(Kernel::StepState::StepPending);
+                        thread->Resume(system.Kernel(), Kernel::SuspendType::Debug);
+                    }
+                    ResumeThreads(threads, thread);
                 });
                 break;
             }
@@ -269,9 +429,13 @@ private:
             }
             }
         }
+        return true;
     }
 
     void PauseEmulation() {
+        if (debug_process.GetPointerUnsafe() == nullptr) {
+            return;
+        }
         Kernel::KScopedLightLock ll{debug_process->GetListLock()};
         Kernel::KScopedSchedulerLock sl{system.Kernel()};
 
@@ -282,6 +446,9 @@ private:
     }
 
     void ResumeEmulation(Kernel::KThread* except = nullptr) {
+        if (debug_process.GetPointerUnsafe() == nullptr) {
+            return;
+        }
         Kernel::KScopedLightLock ll{debug_process->GetListLock()};
         Kernel::KScopedSchedulerLock sl{system.Kernel()};
 
@@ -298,6 +465,9 @@ private:
 
     void ResumeThreads(const std::vector<Kernel::KThread*>& threads,
                        Kernel::KThread* except = nullptr) {
+        if (debug_process.GetPointerUnsafe() == nullptr) {
+            return;
+        }
         Kernel::KScopedLightLock ll{debug_process->GetListLock()};
         Kernel::KScopedSchedulerLock sl{system.Kernel()};
 
@@ -319,6 +489,10 @@ private:
     }
 
     void UpdateActiveThread() {
+        if (debug_process.GetPointerUnsafe() == nullptr) {
+            state->active_thread = {system.Kernel(), nullptr};
+            return;
+        }
         Kernel::KScopedLightLock ll{debug_process->GetListLock()};
 
         auto& threads{ThreadList()};
@@ -328,12 +502,25 @@ private:
                 return;
             }
         }
-        state->active_thread = {system.Kernel(), std::addressof(threads.front())};
+        // A process that has not started yet has no threads; its launch reports the main thread.
+        state->active_thread = {system.Kernel(),
+                                threads.empty() ? nullptr : std::addressof(threads.front())};
     }
 
 private:
-    void SetDebugProcess() {
-        debug_process = std::move(system.Kernel().GetProcessList().back());
+    /// Debugs the application process. Other processes (applets) are only a fallback: stopping
+    /// or resuming them instead of the game would leave the game held.
+    bool SetDebugProcess() {
+        if (auto* const application = system.ApplicationProcess(); application != nullptr) {
+            debug_process = {system.Kernel(), application};
+            return true;
+        }
+        auto processes = system.Kernel().GetProcessList();
+        if (processes.empty()) {
+            return false;
+        }
+        debug_process = std::move(processes.back());
+        return debug_process.GetPointerUnsafe() != nullptr;
     }
 
     Kernel::KProcess::ThreadList& ThreadList() {
@@ -370,7 +557,12 @@ private:
         bool pipe_data;
     };
 
-    std::optional<ConnectionState> state{};
+    std::unique_ptr<ConnectionState> state{};
+    /// Identifies the current client; handlers of a detached or replaced client see another value.
+    u64 client_generation{};
+    /// Detached clients' objects, destroyed once their handlers can no longer run.
+    std::vector<std::unique_ptr<ConnectionState>> retired_states;
+    std::vector<std::unique_ptr<DebuggerFrontend>> retired_frontends;
     bool stopped{};
 };
 
@@ -397,6 +589,16 @@ void Debugger::NotifyShutdown() {
     if (impl) {
         impl->SignalDebugger(SignalInfo{SignalType::ShuttingDown, nullptr, nullptr});
     }
+}
+
+void Debugger::NotifyProcessLaunch(Kernel::KProcess* process, Kernel::KThread* main_thread) {
+    if (!impl) {
+        // No server is listening (the port could not be opened), so nothing could ever release a
+        // hold: let the guest run.
+        LOG_ERROR(Debug_GDBStub, "GDB stub is not listening; not holding the guest at launch");
+        return;
+    }
+    impl->ProcessLaunched(process, main_thread);
 }
 
 } // namespace Core

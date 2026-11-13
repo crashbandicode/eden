@@ -9,7 +9,9 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include "core/debugger/debugger_interface.h"
@@ -17,6 +19,7 @@
 
 namespace Kernel {
 class KProcess;
+enum class DebugWatchpointType : u8;
 }
 
 namespace Core::Memory {
@@ -47,11 +50,17 @@ struct GDBStub : public DebuggerFrontend {
     Kernel::KThread* GetThreadByID(u64 thread_id);
     void SendReply(std::string_view data);
     void SendStatus(char status);
+    std::string StopReply(const Kernel::KThread* thread) const;
+    /// Debugs another process (the application, once it launches); breakpoints stay with the old one.
+    void SetDebugProcess(Kernel::KProcess* process);
+    /// Restores replaced instructions and removes watchpoints, as a detaching debugger does.
+    void RemoveBreakpoints();
     Core::System& system;
     Kernel::KProcess* debug_process;
     std::unique_ptr<GDBStubArch> arch;
     std::vector<char> current_command;
     std::map<VAddr, u32> replaced_instructions;
+    std::vector<std::tuple<VAddr, size_t, Kernel::DebugWatchpointType>> watchpoints;
     std::vector<Kernel::KThread*> resume_threads;
     bool no_ack{};
 };

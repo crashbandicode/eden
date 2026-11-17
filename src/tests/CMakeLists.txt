@@ -78,3 +78,23 @@ if (NOT MSVC)
         $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-unused-parameter>
         $<$<COMPILE_LANGUAGE:C,CXX>:-Wno-missing-field-initializers>)
 endif()
+
+# LDN LAN wire and socket probes have no renderer/firmware dependency.
+add_executable(ldn-mitm-codec-tests core/ldn_mitm_codec.cpp
+    ../core/hle/service/ldn/ldn_mitm_codec.cpp)
+target_include_directories(ldn-mitm-codec-tests PRIVATE ..)
+add_test(NAME ldn-mitm-codec-tests COMMAND ldn-mitm-codec-tests)
+
+add_executable(ldn-mitm-runtime-tests core/ldn_mitm_runtime.cpp
+    ../core/hle/service/ldn/ldn_mitm_codec.cpp ../core/hle/service/ldn/ldn_mitm_runtime.cpp)
+target_include_directories(ldn-mitm-runtime-tests PRIVATE ..)
+target_link_libraries(ldn-mitm-runtime-tests PRIVATE Threads::Threads)
+if(TARGET Boost::asio)
+    target_link_libraries(ldn-mitm-runtime-tests PRIVATE Boost::asio)
+else()
+    target_link_libraries(ldn-mitm-runtime-tests PRIVATE Boost::headers)
+endif()
+if(WIN32)
+    target_link_libraries(ldn-mitm-runtime-tests PRIVATE ws2_32 mswsock)
+endif()
+add_test(NAME ldn-mitm-runtime-tests COMMAND ldn-mitm-runtime-tests)

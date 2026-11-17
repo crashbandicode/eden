@@ -570,7 +570,7 @@ void IGeneralService::CreateRequest(HLERequestContext& ctx) {
 
 void IGeneralService::GetCurrentNetworkProfile(HLERequestContext& ctx) {
 
-    if (Network::NsoLan::GetAutomaticTransport()) {
+    if (!Settings::values.ldn_mitm.GetValue() && Network::NsoLan::GetAutomaticTransport()) {
         ctx.WriteBuffer(AutomaticNetworkProfile());
         IPC::ResponseBuilder{ctx, 2}.Push(ResultSuccess);
         return;
@@ -601,7 +601,8 @@ void IGeneralService::GetCurrentNetworkProfile(HLERequestContext& ctx) {
         std::strncpy(profile.network_name.data(), st.ssid, sizeof(profile.network_name) - 1);
 
         if (auto room_member = Network::GetRoomMember().lock()) {
-            if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
+            if (!Settings::values.ldn_mitm.GetValue() &&
+                !Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
                 profile.ip_setting_data.ip_address_setting.ip_address =
                     room_member->GetFakeIpAddress();
             }
@@ -657,7 +658,8 @@ void IGeneralService::EnumerateNetworkInterfaces(HLERequestContext& ctx) {
 
 void IGeneralService::EnumerateNetworkProfiles(HLERequestContext& ctx) {
     const auto adapter = Network::GetSelectedNetworkInterface();
-    const bool automatic = Network::NsoLan::GetAutomaticTransport() != nullptr;
+    const bool automatic = !Settings::values.ldn_mitm.GetValue() &&
+                           Network::NsoLan::GetAutomaticTransport() != nullptr;
 
     if (!adapter && !automatic) {
         IPC::ResponseBuilder rb{ctx, 3};
@@ -695,7 +697,7 @@ void IGeneralService::GetNetworkProfile(HLERequestContext& ctx) {
     const auto net_iface = Network::GetSelectedNetworkInterface();
 
     SfNetworkProfileData profile = [&] {
-        if (Network::NsoLan::GetAutomaticTransport()) {
+        if (!Settings::values.ldn_mitm.GetValue() && Network::NsoLan::GetAutomaticTransport()) {
             return AutomaticNetworkProfile();
         }
         if (!net_iface) {
@@ -745,7 +747,8 @@ void IGeneralService::GetNetworkProfile(HLERequestContext& ctx) {
     }();
 
     if (auto room_member = Network::GetRoomMember().lock()) {
-        if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
+        if (!Settings::values.ldn_mitm.GetValue() &&
+                !Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
             profile.ip_setting_data.ip_address_setting.ip_address = room_member->GetFakeIpAddress();
         }
     }
@@ -886,7 +889,8 @@ void IGeneralService::GetCurrentIpAddress(HLERequestContext& ctx) {
     }
 
     if (auto room_member = Network::GetRoomMember().lock()) {
-        if (!Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
+        if (!Settings::values.ldn_mitm.GetValue() &&
+                !Network::NsoLan::GetAutomaticTransport() && room_member->IsConnected()) {
             ipv4 = room_member->GetFakeIpAddress();
         }
     }
@@ -934,10 +938,10 @@ void IGeneralService::GetCurrentIpConfigInfo(HLERequestContext& ctx) {
         info.dns.secondary_dns = {8, 8, 8, 8};
     }
 
-    if (Network::NsoLan::GetAutomaticTransport()) {
+    if (!Settings::values.ldn_mitm.GetValue() && Network::NsoLan::GetAutomaticTransport()) {
         info.dns = AutomaticNetworkProfile().ip_setting_data.dns_setting;
     } else if (auto room_member = Network::GetRoomMember().lock()) {
-        if (room_member->IsConnected()) {
+        if (!Settings::values.ldn_mitm.GetValue() && room_member->IsConnected()) {
             info.ip.ip_address = room_member->GetFakeIpAddress();
         }
         info.dns.is_automatic = true;

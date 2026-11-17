@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstring>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@
 #include "core/hle/result.h"
 #include "core/hle/service/ldn/ldn_results.h"
 #include "core/hle/service/ldn/ldn_types.h"
+#include "core/hle/service/ldn/ldn_mitm_runtime.h"
 #include "network/network.h"
 
 namespace Service::LDN {
@@ -46,11 +48,11 @@ protected:
     LANDiscovery* discovery;
 };
 
-class LANDiscovery {
+class LANDiscovery : public std::enable_shared_from_this<LANDiscovery> {
 public:
     using LanEventFunc = std::function<void()>;
 
-    LANDiscovery();
+    explicit LANDiscovery(Mitm::Runtime* runtime_ = nullptr);
     ~LANDiscovery();
 
     State GetState() const;
@@ -81,10 +83,13 @@ public:
     Result Finalize();
 
     void ReceivePacket(const Network::LDNPacket& packet);
+    void ReceiveMitm(const Mitm::Event& event);
 
 protected:
     friend class LanStation;
 
+    Result DestroyNetworkLocked();
+    Result DisconnectLocked();
     void InitNetworkInfo();
     void InitNodeStateChange();
 
@@ -115,7 +120,11 @@ protected:
     static constexpr Ssid fake_ssid{"YuzuFakeSsidForLdn"};
 
     bool inited{};
-    std::mutex packet_mutex;
+    mutable std::mutex packet_mutex;
+    std::condition_variable state_changed;
+    Mitm::Runtime* runtime{};
+    bool use_mitm{};
+    Network::IPv4Address mitm_address{};
     std::array<LanStation, StationCountMax> stations;
     std::array<NodeLatestUpdate, NodeCountMax> node_changes{};
     std::array<u8, NodeCountMax> node_last_states{};

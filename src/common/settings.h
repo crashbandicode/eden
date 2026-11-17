@@ -940,6 +940,7 @@ struct Values {
                                            Category::Network};
     SwitchableSetting<bool> airplane_mode{linkage, true, "airplane_mode", Category::Network};
     Setting<bool> lan_online{linkage, false, "lan_online", Category::Network};
+    Setting<bool> ldn_mitm{linkage, false, "ldn_mitm", Category::Network};
 
     // WebService
     Setting<std::string> web_api_url{linkage, "api.ynet-fun.xyz", "web_api_url",

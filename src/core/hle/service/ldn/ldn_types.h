@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <type_traits>
 #include <fmt/ranges.h>
 
@@ -267,6 +268,23 @@ struct NetworkInfo {
     LdnNetworkInfo ldn;
 };
 static_assert(sizeof(NetworkInfo) == 0x480, "NetworkInfo is an invalid size");
+// Published ldn_mitm wire offsets; full records (including reserved bytes) cross the LAN.
+static_assert(offsetof(NodeInfo, ipv4_address) == 0x00);
+static_assert(offsetof(NodeInfo, mac_address) == 0x04);
+static_assert(offsetof(NodeInfo, node_id) == 0x0a);
+static_assert(offsetof(NodeInfo, is_connected) == 0x0b);
+static_assert(offsetof(NodeInfo, user_name) == 0x0c);
+static_assert(offsetof(NodeInfo, local_communication_version) == 0x2e);
+static_assert(offsetof(NetworkInfo, common) == 0x20);
+static_assert(offsetof(CommonNetworkInfo, ssid) == 0x06);
+static_assert(offsetof(CommonNetworkInfo, channel) == 0x28);
+static_assert(offsetof(NetworkInfo, ldn) == 0x50);
+static_assert(offsetof(LdnNetworkInfo, security_mode) == 0x10);
+static_assert(offsetof(LdnNetworkInfo, node_count_max) == 0x16);
+static_assert(offsetof(LdnNetworkInfo, nodes) == 0x18);
+static_assert(offsetof(LdnNetworkInfo, advertise_data_size) == 0x21a);
+static_assert(offsetof(LdnNetworkInfo, advertise_data) == 0x21c);
+
 static_assert(std::is_trivial_v<NetworkInfo>, "NetworkInfo type must be trivially copyable.");
 
 struct SecurityConfig {

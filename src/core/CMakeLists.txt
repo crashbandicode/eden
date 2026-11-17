@@ -683,6 +683,11 @@ add_library(core STATIC
     hle/service/kernel_helpers.h
     hle/service/lbl/lbl.cpp
     hle/service/lbl/lbl.h
+    hle/service/ldn/ldn_mitm_codec.cpp
+    hle/service/ldn/ldn_mitm_codec.h
+    hle/service/ldn/ldn_mitm_runtime.cpp
+    hle/service/ldn/ldn_mitm_runtime.h
+    hle/service/ldn/ldn_mitm_network.cpp
     hle/service/ldn/lan_discovery.cpp
     hle/service/ldn/lan_discovery.h
     hle/service/ldn/ldn.cpp

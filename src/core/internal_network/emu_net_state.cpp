@@ -41,7 +41,8 @@ void RefreshFromHost() {
     auto& st = Network::EmuNetState::Get();
     std::scoped_lock lk{st.mtx};
 
-    if (const auto* automatic = NsoLan::GetAutomaticTransport()) {
+    if (const auto* automatic = NsoLan::GetAutomaticTransport();
+        !Settings::values.ldn_mitm.GetValue() && automatic) {
         st.connected = !Settings::values.airplane_mode.GetValue();
         st.via_wifi = false;
         st.wifi_enabled = false;

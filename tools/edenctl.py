@@ -75,6 +75,13 @@ def main(argv=None):
     call.add_argument("method")
     call.add_argument("params", nargs="?", default="{}", help="JSON object, or - to read stdin")
     commands.add_parser("attach", help="read JSON requests from stdin; one JSON response per line")
+    ldn = commands.add_parser("ldn", help="configure and control Local Wireless networking")
+    ldn_commands = ldn.add_subparsers(dest="ldn_command", required=True)
+    ldn_configure = ldn_commands.add_parser("configure", help="select backend before boot; use settings.save to persist")
+    ldn_configure.add_argument("backend", choices=("room", "ldn_mitm"))
+    ldn_configure.add_argument("--interface", help="real interface name; omit to retain selection")
+    for name in ("start", "stop", "status"):
+        ldn_commands.add_parser(name)
     trace = commands.add_parser("trace", help="persistent guest tracing (use schema for field details)")
     persistent_commands = trace.add_subparsers(dest="persistent_command", required=True)
     for name in ("configure", "arm", "disarm", "list", "counters", "read", "clear", "unmapped_access"):
@@ -216,6 +223,12 @@ def main(argv=None):
             params = json.loads(sys.stdin.read() if args.params == "-" else args.params)
             if not isinstance(params, dict):
                 raise ValueError("params must be a JSON object")
+        elif args.command == "ldn":
+            method = "ldn." + args.ldn_command
+            if args.ldn_command == "configure":
+                params = {"backend": args.backend}
+                if args.interface is not None:
+                    params["interface"] = args.interface
         elif args.command == "modules":
             method = "modules.list"
         elif args.command == "symbols":

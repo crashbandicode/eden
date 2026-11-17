@@ -93,7 +93,7 @@ private:
 
     KernelHelpers::ServiceContext service_context;
     Kernel::KEvent* state_change_event;
-    LANDiscovery lan_discovery;
+    std::shared_ptr<LANDiscovery> lan_discovery;
 
     // Callback identifier for the OnLDNPacketReceived event.
     Network::RoomMember::CallbackHandle<Network::LDNPacket> ldn_packet_received;

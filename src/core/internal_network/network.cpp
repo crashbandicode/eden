@@ -30,6 +30,7 @@
 #include "common/common_types.h"
 #include "common/logging.h"
 #include "core/internal_network/network.h"
+#include "common/settings.h"
 #include "core/internal_network/network_interface.h"
 #include "core/internal_network/nso_lan.h"
 #include "core/internal_network/sockets.h"
@@ -719,7 +720,8 @@ void RestartSocketOperations() {
 }
 
 std::optional<IPv4Address> GetHostIPv4Address() {
-    if (const auto* automatic = NsoLan::GetAutomaticTransport()) {
+    if (const auto* automatic = NsoLan::GetAutomaticTransport();
+        !Settings::values.ldn_mitm.GetValue() && automatic) {
         return automatic->instance_address;
     }
     const auto network_interface = Network::GetSelectedNetworkInterface();

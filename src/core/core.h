@@ -50,6 +50,10 @@ struct CheatEntry;
 class Memory;
 } // namespace Core::Memory
 
+namespace Service::LDN::Mitm {
+class Runtime;
+}
+
 namespace Service {
 
 namespace Account {
@@ -465,6 +469,8 @@ public:
     using ApplicationChangedCallback = std::function<void(u64 program_id)>;
     void RegisterApplicationChangedCallback(ApplicationChangedCallback&& callback);
     void NotifyApplicationChanged(u64 program_id);
+
+    Service::LDN::Mitm::Runtime& GetLdnMitm();
 
     /// Applies any changes to settings to this core instance.
     void ApplySettings();

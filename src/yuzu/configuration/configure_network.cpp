@@ -7,8 +7,10 @@
 #include <QtConcurrent/QtConcurrent>
 #include "common/settings.h"
 #include "core/core.h"
+#include "core/hle/service/ldn/ldn_mitm_runtime.h"
 #include "core/internal_network/network_interface.h"
 #include "qt_common/config/uisettings.h"
+#include "qt_common/qt_common.h"
 #include "ui_configure_network.h"
 #include "yuzu/configuration/configure_network.h"
 
@@ -28,7 +30,16 @@ ConfigureNetwork::ConfigureNetwork(const Core::System& system_, QWidget* parent)
 ConfigureNetwork::~ConfigureNetwork() = default;
 
 void ConfigureNetwork::ApplyConfiguration() {
-    Settings::values.network_interface = ui->network_interface->currentText().toStdString();
+    if (!system.IsPoweredOn()) {
+        const auto interface_name = ui->network_interface->currentText().toStdString();
+        const bool mitm = ui->ldn_backend->currentIndex() == 1;
+        if (Settings::values.network_interface.GetValue() != interface_name ||
+            Settings::values.ldn_mitm.GetValue() != mitm) {
+            QtCommon::system->GetLdnMitm().Stop();
+        }
+        Settings::values.network_interface = interface_name;
+        Settings::values.ldn_mitm = mitm;
+    }
     Settings::values.airplane_mode = ui->airplane_mode->isChecked();
     Settings::values.lan_online = ui->lan_online->isChecked();
     UISettings::values.lan_online_tls = ui->lan_online_tls->isChecked();
@@ -52,6 +63,8 @@ void ConfigureNetwork::SetConfiguration() {
     auto const airplane_mode = Settings::values.airplane_mode.GetValue();
     ui->network_interface->setCurrentText(QString::fromStdString(network_interface));
     ui->network_interface->setEnabled(runtime_lock);
+    ui->ldn_backend->setCurrentIndex(Settings::values.ldn_mitm.GetValue() ? 1 : 0);
+    ui->ldn_backend->setEnabled(runtime_lock);
     ui->airplane_mode->setChecked(airplane_mode);
     ui->lan_online->setChecked(Settings::values.lan_online.GetValue());
     ui->lan_online->setEnabled(runtime_lock);

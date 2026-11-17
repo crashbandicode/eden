@@ -14,6 +14,7 @@
 #include "core/core.h"
 #include "core/debugger/guest_tracepoint.h"
 #include "core/hle/service/am/applet_manager.h"
+#include "core/hle/service/ldn/ldn_mitm_runtime.h"
 #include "core/perf_stats.h"
 #include "qt_common/config/uisettings.h"
 #include "qt_common/qt_common.h"
@@ -149,6 +150,34 @@ bool SetValidated(Settings::BasicSetting& setting, const QJsonValue& value, QStr
         error = QStringLiteral("Value is outside the setting's supported range");
     }
     return matches;
+}
+
+QJsonObject LdnStatus() {
+    const auto status = QtCommon::system->GetLdnMitm().GetStatus();
+    const bool selected = Settings::values.ldn_mitm.GetValue();
+    const auto& ip = status.configuration.address;
+    return {
+        {QStringLiteral("configured_backend"), selected ? QStringLiteral("ldn_mitm") : QStringLiteral("room")},
+        {QStringLiteral("active_backend"), status.running ? QStringLiteral("ldn_mitm") :
+             (selected ? QStringLiteral("none") : QStringLiteral("room"))},
+        {QStringLiteral("running"), status.running},
+        {QStringLiteral("configured_interface"), QString::fromStdString(Settings::values.network_interface.GetValue())},
+        {QStringLiteral("interface"), QString::fromStdString(status.configuration.interface_name)},
+        {QStringLiteral("ip"), QStringLiteral("%1.%2.%3.%4")
+             .arg(static_cast<unsigned>(ip[0])).arg(static_cast<unsigned>(ip[1]))
+             .arg(static_cast<unsigned>(ip[2])).arg(static_cast<unsigned>(ip[3]))},
+        {QStringLiteral("port"), status.configuration.port},
+        {QStringLiteral("role"), QString::fromStdString(status.role)},
+        {QStringLiteral("peers"), static_cast<qint64>(status.peers)},
+        {QStringLiteral("pending_commands"), static_cast<qint64>(status.pending_commands)},
+        {QStringLiteral("counters"), QJsonObject{
+             {QStringLiteral("received"), QString::number(static_cast<qulonglong>(status.received))},
+             {QStringLiteral("sent"), QString::number(static_cast<qulonglong>(status.sent))},
+             {QStringLiteral("malformed"), QString::number(static_cast<qulonglong>(status.malformed))}}},
+        {QStringLiteral("last_error"), QString::fromStdString(status.last_error)},
+        {QStringLiteral("airplane_mode"), Settings::values.airplane_mode.GetValue()},
+        {QStringLiteral("lan_online"), Settings::values.lan_online.GetValue()},
+    };
 }
 } // namespace
 
@@ -287,6 +316,65 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
             {QStringLiteral("modal"), QApplication::activeModalWidget() != nullptr},
             {QStringLiteral("program_id"), powered ? QString::number(QtCommon::system->GetApplicationProcessProgramID(), 16) : QString{}}});
     }
+    if (method.startsWith(QStringLiteral("ldn."))) {
+        if (method == QStringLiteral("ldn.configure")) {
+            const auto backend = params.value(QStringLiteral("backend"));
+            const auto interface_name = params.value(QStringLiteral("interface"));
+            if (!backend.isString() ||
+                (backend.toString() != QStringLiteral("room") && backend.toString() != QStringLiteral("ldn_mitm")) ||
+                (!interface_name.isUndefined() && !interface_name.isString())) {
+                return CS::Error(QStringLiteral("invalid_params"),
+                                 QStringLiteral("backend must be room or ldn_mitm; interface must be a string when supplied"));
+            }
+            for (auto it = params.begin(); it != params.end(); ++it) {
+                if (it.key() != QStringLiteral("backend") && it.key() != QStringLiteral("interface")) {
+                    return CS::Error(QStringLiteral("invalid_params"), QStringLiteral("Unknown ldn.configure parameter: ") + it.key());
+                }
+            }
+            if (QApplication::activeModalWidget()) {
+                return CS::Error(QStringLiteral("modal_active"), QStringLiteral("Close or apply the open dialog before changing settings directly"));
+            }
+            // Same setting lock as settings.set and the Network configuration page.
+            if (QtCommon::system->IsPoweredOn()) {
+                return CS::Error(QStringLiteral("not_runtime_modifiable"), QStringLiteral("Stop emulation before changing this setting"));
+            }
+            const bool mitm = backend.toString() == QStringLiteral("ldn_mitm");
+            const auto selected_interface = interface_name.isUndefined() ?
+                Settings::values.network_interface.GetValue() : interface_name.toString().toStdString();
+            if (Settings::values.ldn_mitm.GetValue() != mitm ||
+                Settings::values.network_interface.GetValue() != selected_interface) {
+                QtCommon::system->GetLdnMitm().Stop();
+            }
+            Settings::values.ldn_mitm = mitm;
+            Settings::values.network_interface = selected_interface;
+            QtCommon::system->ApplySettings();
+            window.UpdateStatusButtons();
+        } else if (method == QStringLiteral("ldn.start") || method == QStringLiteral("ldn.stop") ||
+                   method == QStringLiteral("ldn.status")) {
+            if (!params.isEmpty()) {
+                return CS::Error(QStringLiteral("invalid_params"), QStringLiteral("This LDN method takes an empty parameter object"));
+            }
+            if (method == QStringLiteral("ldn.start")) {
+                if (!Settings::values.ldn_mitm.GetValue()) {
+                    return CS::Error(QStringLiteral("ldn_not_selected"),
+                                     QStringLiteral("Select the ldn_mitm backend with ldn.configure before starting it"));
+                }
+                std::string error;
+                const auto configuration = Service::LDN::Mitm::SelectedConfiguration(error);
+                if (!configuration) {
+                    return CS::Error(QStringLiteral("invalid_configuration"), QString::fromStdString(error));
+                }
+                if (!QtCommon::system->GetLdnMitm().Start(*configuration, error)) {
+                    return CS::Error(QStringLiteral("ldn_start_failed"), QString::fromStdString(error));
+                }
+            } else if (method == QStringLiteral("ldn.stop")) {
+                QtCommon::system->GetLdnMitm().Stop();
+            }
+        } else {
+            return CS::Error(QStringLiteral("unknown_method"), QStringLiteral("Unknown LDN control method"));
+        }
+        return CS::Success(LdnStatus());
+    }
     if (method == QStringLiteral("settings.list")) {
         QJsonArray settings;
         for (const auto& [key, setting] : Settings::values.linkage.by_key) {
@@ -314,6 +402,23 @@ QJsonObject ControlAdapter::Handle(const QString& method, const QJsonObject& par
                 return CS::Error(QStringLiteral("invalid_params"), QStringLiteral("value is required"));
             }
             QString error;
+            // These two settings select the running listener's configuration. Validate their
+            // JSON types before stopping it, then use the same normal setter as other settings.
+            if (ref.scope == QStringLiteral("core") &&
+                (ref.key == "ldn_mitm" || ref.key == "network_interface")) {
+                const auto value = params.value(QStringLiteral("value"));
+                const bool valid_type = ref.key == "ldn_mitm" ? value.isBool() : value.isString();
+                if (!valid_type) {
+                    return CS::Error(QStringLiteral("invalid_value"), ref.key == "ldn_mitm" ?
+                        QStringLiteral("This setting requires a JSON boolean") : QStringLiteral("This setting requires a JSON string"));
+                }
+                const bool changed = ref.key == "ldn_mitm" ?
+                    value.toBool() != Settings::values.ldn_mitm.GetValue() :
+                    value.toString().toStdString() != Settings::values.network_interface.GetValue();
+                if (changed) {
+                    QtCommon::system->GetLdnMitm().Stop();
+                }
+            }
             if (!SetValidated(*ref.setting, params.value(QStringLiteral("value")), error)) {
                 return CS::Error(QStringLiteral("invalid_value"), error);
             }

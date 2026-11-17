@@ -56,6 +56,7 @@
 #include "core/hle/service/psc/time/system_clock.h"
 #include "core/hle/service/psc/time/time_zone_service.h"
 #include "core/hle/service/service.h"
+#include "core/hle/service/ldn/ldn_mitm_runtime.h"
 #include "core/hle/service/services.h"
 #include "core/hle/service/set/system_settings_server.h"
 #include "core/hle/service/sm/sm.h"
@@ -453,6 +454,7 @@ struct System::Impl {
 
         stop_event.request_stop();
         core_timing.SyncPause(false);
+        ldn_mitm.Stop();
         Network::CancelPendingSocketOperations();
         kernel.SuspendEmulation(true);
         kernel.CloseServices();
@@ -519,6 +521,7 @@ struct System::Impl {
     Service::Account::ProfileManager profile_manager;
     /// Network instance
     Network::NetworkInstance network_instance;
+    Service::LDN::Mitm::Runtime ldn_mitm;
     Core::SpeedLimiter speed_limiter;
     ExecuteProgramCallback execute_program_callback;
     ExitCallback exit_callback;
@@ -1100,6 +1103,10 @@ void System::NotifyApplicationChanged(u64 program_id) {
     if (impl->application_changed_callback) {
         impl->application_changed_callback(program_id);
     }
+}
+
+Service::LDN::Mitm::Runtime& System::GetLdnMitm() {
+    return impl->ldn_mitm;
 }
 
 void System::ApplySettings() {

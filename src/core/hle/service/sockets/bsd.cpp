@@ -14,6 +14,7 @@
 #include "common/logging.h"
 #include "common/socket_types.h"
 #include "core/core.h"
+#include "core/hle/service/ldn/ldn_backend.h"
 #include "core/hle/kernel/k_thread.h"
 #include "core/hle/service/ipc_helpers.h"
 #include "core/hle/service/sockets/bsd.h"
@@ -550,13 +551,16 @@ std::pair<s32, Errno> BSD_USA::SocketImpl(Domain domain, Type type, Protocol pro
 
     auto room_member = Network::GetRoomMember().lock();
     const auto* automatic = Network::NsoLan::GetAutomaticTransport();
+    const auto backend = Service::LDN::SelectSocketBackend(
+        Settings::values.ldn_mitm.GetValue(), automatic != nullptr,
+        room_member && room_member->IsConnected(), type == Type::DGRAM);
 #ifdef EDEN_LAN_ONLINE_SOCKET
-    if (automatic && type == Type::DGRAM) {
+    if (backend == Service::LDN::SocketBackend::AutomaticLanOnline) {
         descriptor.socket = std::make_shared<Network::NsoLanSocket>(
             automatic->control_socket, automatic->datagram_socket, automatic->instance_address);
     } else
 #endif
-    if (!automatic && room_member && room_member->IsConnected()) {
+    if (backend == Service::LDN::SocketBackend::Room) {
         descriptor.socket = std::make_shared<Network::ProxySocket>();
     } else {
         descriptor.socket = std::make_shared<Network::Socket>();

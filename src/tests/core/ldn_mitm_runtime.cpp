@@ -480,7 +480,11 @@ void UdpDiscovery() {
     udp::socket monitor{io};
     monitor.open(udp::v4());
     monitor.set_option(udp::socket::reuse_address{true});
+#if defined(_WIN32)
+    monitor.bind(udp::endpoint{Address::any(), port});
+#else
     monitor.bind(udp::endpoint{Address{IPv4{127, 255, 255, 255}}, port});
+#endif
     monitor.non_blocking(true);
     std::string scan_error;
     Require(host.runtime.Scan(scan_error), "runtime Scan admission");

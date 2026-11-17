@@ -261,7 +261,12 @@ struct Runtime::Impl::State : std::enable_shared_from_this<Runtime::Impl::State>
         broadcast.bind(udp::endpoint{BroadcastAddress(), config.port});
 #endif
         listener.open(tcp::v4());
+#if defined(_WIN32)
+        listener.set_option(
+            boost::asio::detail::socket_option::boolean<SOL_SOCKET, SO_EXCLUSIVEADDRUSE>{true});
+#else
         listener.set_option(tcp::acceptor::reuse_address{true});
+#endif
         listener.bind(tcp::endpoint{Address{config.address}, config.port});
         listener.listen(7);
     }

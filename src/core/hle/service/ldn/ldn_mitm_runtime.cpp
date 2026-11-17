@@ -449,7 +449,8 @@ struct Runtime::Impl::State : std::enable_shared_from_this<Runtime::Impl::State>
         Leave();
         role = "connecting";
         UpdateStatus();
-        auto peer = std::make_shared<Peer>(shared_from_this(), tcp::socket{io}, 0, host);
+        auto peer = std::make_shared<Peer>(shared_from_this(), tcp::socket{io},
+            std::uint8_t{0}, host);
         peers[0] = peer;
         Error error;
         peer->socket.open(tcp::v4(), error);

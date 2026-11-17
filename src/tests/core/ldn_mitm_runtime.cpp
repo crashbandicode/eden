@@ -763,6 +763,38 @@ void RuntimeLifecycle() {
     runtime.Stop();
 }
 
+void ListenerPortConflict() {
+    const auto port = AvailablePort();
+    Host first{port};
+    int second_owner = 0;
+    Runtime second;
+    std::string error;
+    RequireResult(second.Attach(&second_owner, {}, error), error);
+    Require(!second.Start(Config(port), error) && !error.empty() && !second.GetStatus().running &&
+                second.GetStatus().last_error == error,
+            "second runtime on a listening port must fail Start");
+    second.Detach(&second_owner);
+    Require(first.runtime.GetStatus().running && first.runtime.GetStatus().role == "host",
+            "refused second start leaves the first runtime running");
+    boost::asio::io_context io;
+    auto client = Dial(io, port);
+    Send(client, CompressedConnect());
+    Require(first.events.Wait(Event::Kind::Message, 1).message.type == PacketType::Connect,
+            "the first runtime still accepts on its port");
+    Close(client);
+
+    const auto plain_port = AvailablePort();
+    tcp::acceptor plain{io, tcp::endpoint{Address{HostIp}, plain_port}, false};
+    Runtime third;
+    RequireResult(third.Attach(&second_owner, {}, error), error);
+    Require(!third.Start(Config(plain_port), error) && !error.empty() && !third.GetStatus().running,
+            "a listener without SO_REUSEADDR also blocks Start");
+    plain.close();
+    RequireResult(third.Start(Config(plain_port), error), error);
+    third.Stop();
+    third.Detach(&second_owner);
+}
+
 struct Gate {
     std::mutex mutex;
     std::condition_variable changed;
@@ -972,11 +1004,12 @@ void TeardownAndCommandBounds() {
 } // namespace
 
 int main() {
-    constexpr std::array<std::pair<std::string_view, void (*)()>, 8> groups{{
+    constexpr std::array<std::pair<std::string_view, void (*)()>, 9> groups{{
         {"BackendSelection", BackendSelection}, {"RecordBounds", RecordBounds},
         {"UdpDiscovery", UdpDiscovery}, {"TcpStationFrames", TcpStationFrames},
         {"StableSlots", StableSlots}, {"FullCapacity", FullCapacity},
-        {"RuntimeLifecycle", RuntimeLifecycle}, {"TeardownAndCommandBounds", TeardownAndCommandBounds},
+        {"RuntimeLifecycle", RuntimeLifecycle}, {"ListenerPortConflict", ListenerPortConflict},
+        {"TeardownAndCommandBounds", TeardownAndCommandBounds},
     }};
     std::size_t passed = 0;
     for (const auto& [name, run] : groups) {
@@ -992,6 +1025,6 @@ int main() {
         std::cerr << "FAIL " << (groups.size() - passed) << " of " << groups.size() << " groups\n";
         return 1;
     }
-    std::cout << "PASS 8 groups; same-process IPv4 loopback only\n";
+    std::cout << "PASS " << groups.size() << " groups; same-process IPv4 loopback only\n";
     return 0;
 }
